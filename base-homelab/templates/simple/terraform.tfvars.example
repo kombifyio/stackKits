@@ -1,0 +1,26 @@
+# Base Homelab - Example Variables
+# Copy this file to terraform.tfvars and customize
+
+# Required - Your domain name
+domain = "homelab.example.com"
+
+# Required - Email for Let's Encrypt certificates
+acme_email = "admin@example.com"
+
+# Service variant - Choose your stack
+# "default" - Dokploy + Uptime Kuma (recommended PaaS)
+# "beszel"  - Dokploy + Beszel monitoring
+# "minimal" - Dockge + Portainer + Netdata (classic stack)
+variant = "default"
+
+# Compute tier (affects memory allocation)
+# "high"     - 8+ CPU cores, 16GB+ RAM
+# "standard" - 4-7 CPU cores, 8-15GB RAM
+# "low"      - <4 CPU cores or <8GB RAM
+compute_tier = "standard"
+
+# Optional - Enable insecure Traefik dashboard (only for local networks)
+traefik_dashboard_insecure = false
+
+# Optional - Directory for Docker Compose stacks (minimal variant only)
+stacks_dir = "/opt/stacks"

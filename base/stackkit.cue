@@ -1,0 +1,318 @@
+// Package base - Main StackKit composition schema
+package base
+
+// #BaseStackKit is the foundation that all StackKits extend.
+// It composes all the base configurations into a single structure.
+#BaseStackKit: {
+	// StackKit metadata (required)
+	metadata: #StackKitMetadata
+
+	// System configuration (host-level)
+	system: #SystemConfig
+
+	// Base package set (system tooling)
+	packages: #BasePackages
+
+	// User accounts
+	users: #SystemUsers
+
+	// Container runtime
+	container: #ContainerRuntime
+
+	// Security settings
+	security: {
+		ssh:       #SSHHardening
+		firewall:  #FirewallPolicy
+		container: #ContainerSecurityContext
+		secrets:   #SecretsPolicy
+		tls:       #TLSPolicy
+		audit:     #AuditConfig
+	}
+
+	// Network configuration
+	network: {
+		defaults: #NetworkDefaults
+		dns:      #DNSConfig
+		ntp:      #NTPConfig
+		vpn:      #VPNConfig
+		proxy:    #ProxyConfig
+	}
+
+	// Observability
+	observability: {
+		logging:  #LoggingConfig
+		health:   #HealthCheck
+		metrics:  #MetricsConfig
+		alerting: #AlertingConfig
+		backup:   #BackupConfig
+	}
+
+	// Service definitions (to be extended by specific StackKits)
+	services: [...#ServiceDefinition]
+
+	// Node definitions (to be provided by user spec)
+	nodes: [...#NodeDefinition]
+}
+
+// #StackKitMetadata provides information about the StackKit
+#StackKitMetadata: {
+	// StackKit identifier (lowercase, hyphenated)
+	name: =~"^[a-z][a-z0-9-]+$"
+
+	// Display name for UI
+	displayName: string
+
+	// Semantic version
+	version: =~"^[0-9]+\\.[0-9]+\\.[0-9]+(-[a-z0-9.]+)?$"
+
+	// Short description (one line)
+	description: string
+
+	// Long description (Markdown, optional)
+	longDescription?: string
+
+	// Author information
+	author?: string
+
+	// License identifier
+	license: string | *"MIT"
+
+	// Homepage URL
+	homepage?: string
+
+	// Minimum KombiStack version required
+	minKombiStackVersion: string | *"1.0.0"
+
+	// Tags for categorization
+	tags: [...string] | *[]
+
+	// Deprecated flag
+	deprecated: bool | *false
+
+	// Deprecation message (if deprecated)
+	deprecationMessage?: string
+}
+
+// #ServiceDefinition defines a deployable service
+#ServiceDefinition: {
+	// Service identifier (DNS-compatible)
+	name: =~"^[a-z][a-z0-9-]+$"
+
+	// Display name
+	displayName?: string
+
+	// Service type
+	type: #ServiceType
+
+	// Container image
+	image: string
+
+	// Image tag
+	tag: string | *"latest"
+
+	// Service description
+	description?: string
+
+	// Service dependencies (other service names)
+	needs: [...string] | *[]
+
+	// Target node (optional, defaults to "main")
+	node?: string
+
+	// Network configuration
+	network: #ServiceNetworkConfig
+
+	// Health check (overrides default)
+	healthCheck?: #HealthCheck
+
+	// Resource limits
+	resources?: #ResourceLimits
+
+	// Security context (overrides default)
+	securityContext?: #ContainerSecurityContext
+
+	// Environment variables
+	environment?: [string]: string
+
+	// Environment from secrets
+	environmentSecrets?: [string]: =~"^secret://"
+
+	// Volume mounts
+	volumes?: [...#VolumeMount]
+
+	// Service-specific configuration (varies by service)
+	config?: [string]: _
+
+	// Restart policy
+	restartPolicy: "always" | "unless-stopped" | "on-failure" | "no" | *"unless-stopped"
+
+	// Logging override
+	logging?: #LoggingConfig
+
+	// Labels for service discovery
+	labels?: [string]: string
+
+	// Whether service is enabled
+	enabled: bool | *true
+}
+
+// #ServiceType categorizes services
+#ServiceType: "reverse-proxy" | "database" | "cache" | "backend" | "frontend" |
+	"monitoring" | "logging" | "management" | "storage" | "media" |
+	"auth" | "vpn" | "dns" | "observability" | "custom"
+
+// #ServiceNetworkConfig defines service networking
+#ServiceNetworkConfig: {
+	// Port mappings
+	ports?: [...#PortMapping]
+
+	// Traefik integration
+	traefik?: {
+		enabled: bool | *false
+		rule?:   string
+		tls?:    bool | *true
+	}
+
+	// Network mode
+	mode: "bridge" | "host" | "none" | *"bridge"
+
+	// Networks to join
+	networks?: [...string]
+}
+
+// #PortMapping defines a port mapping
+#PortMapping: {
+	host:      uint16 & >0 & <=65535
+	container: uint16 & >0 & <=65535
+	protocol:  "tcp" | "udp" | *"tcp"
+}
+
+// #ResourceLimits defines container resource constraints
+#ResourceLimits: {
+	// Memory limit (e.g., "512m", "2g")
+	memory?: string
+
+	// Memory reservation
+	memoryReservation?: string
+
+	// CPU limit (e.g., 0.5, 2.0)
+	cpus?: number
+
+	// CPU shares
+	cpuShares?: int
+
+	// Storage limit
+	storage?: string
+}
+
+// #VolumeMount defines a volume mount
+#VolumeMount: {
+	// Source (host path or volume name)
+	source: string
+
+	// Container path
+	target: string
+
+	// Volume type
+	type: "bind" | "volume" | "tmpfs" | *"volume"
+
+	// Read-only mount
+	readOnly: bool | *false
+
+	// Backup this volume
+	backup: bool | *true
+
+	// Volume driver options
+	driverOpts?: [string]: string
+}
+
+// #NodeDefinition defines a managed node
+#NodeDefinition: {
+	// Node identifier
+	name: =~"^[a-z][a-z0-9-]+$"
+
+	// Display name
+	displayName?: string
+
+	// Node role
+	role: "main" | "worker" | "edge" | *"main"
+
+	// Node type
+	type: "local" | "cloud" | "hybrid" | *"local"
+
+	// Operating system
+	os: #SupportedOS
+
+	// Cloud provider (if cloud type)
+	provider?: #Provider
+
+	// SSH configuration
+	ssh?: #SSHConfig
+
+	// Node resources
+	resources: #NodeResources
+
+	// Node labels
+	labels?: [string]: string
+
+	// Node tags
+	tags?: [...string]
+
+	// Whether node is enabled
+	enabled: bool | *true
+}
+
+// #SupportedOS lists supported operating systems
+#SupportedOS: "ubuntu-24" | "ubuntu-22" | "debian-12" | "debian-11" |
+	"rocky-9" | "alma-9" | "raspbian-12"
+
+// #Provider lists supported cloud providers
+#Provider: "local" | "hetzner" | "docker" | "proxmox" | "aws" | "gcp" | "azure" | "digitalocean"
+
+// #SSHConfig defines SSH connection parameters
+#SSHConfig: {
+	// Target host (IP or hostname)
+	host: string
+
+	// SSH port
+	port: uint16 & >0 & <=65535 | *22
+
+	// SSH user
+	user: =~"^[a-z_][a-z0-9_-]*$" | *"ubuntu"
+
+	// Path to private key
+	privateKeyPath?: string
+
+	// Private key content (secret reference)
+	privateKey?: =~"^secret://"
+}
+
+// #NodeResources defines node hardware specifications
+#NodeResources: {
+	// CPU cores
+	cpu: int & >=1
+
+	// Memory in GB
+	memory: int & >=1
+
+	// Disk in GB
+	disk: int & >=10
+
+	// Architecture
+	arch: "amd64" | "arm64" | *"amd64"
+
+	// GPU available
+	gpu?: #GPUSpec
+}
+
+// #GPUSpec defines GPU specifications
+#GPUSpec: {
+	// GPU vendor
+	vendor: "nvidia" | "amd" | "intel"
+
+	// GPU model
+	model?: string
+
+	// VRAM in GB
+	vram?: int
+}

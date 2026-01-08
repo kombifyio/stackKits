@@ -1,0 +1,1192 @@
+// Package modern_homelab - Service Definitions
+// 
+// Status: ALPHA - Core services implemented
+//
+// Default Stack: k3s + FluxCD + Prometheus/Grafana + Longhorn
+// This file contains service definitions for the Modern Homelab StackKit.
+
+package modern_homelab
+
+import "github.com/kombihq/stackkits/base"
+
+// =============================================================================
+// KUBERNETES CORE
+// =============================================================================
+
+// #K3sService - Lightweight Kubernetes
+#K3sService: base.#ServiceDefinition & {
+	name:        "k3s"
+	displayName: "k3s Kubernetes"
+	category:    "kubernetes"
+	type:        "cluster"
+	required:    true
+	status:      "implemented"
+	description: "Lightweight, certified Kubernetes distribution"
+	priority:    0 // P0 - Core infrastructure
+
+	// k3s specific configuration
+	config: {
+		// Cluster configuration
+		cluster: {
+			// k3s version to install
+			version: string | *"v1.30.2+k3s1"
+
+			// Cluster name for kubeconfig
+			name: string | *"homelab"
+
+			// Token for node join (auto-generated if empty)
+			token: string | *""
+
+			// TLS Subject Alternative Names
+			tlsSan: [...string] | *[]
+		}
+
+		// Server (control plane) configuration
+		server: {
+			// Datastore backend
+			datastore: "embedded-etcd" | "sqlite" | "external-etcd" | "mysql" | "postgres" | *"embedded-etcd"
+
+			// External datastore endpoint (if not embedded)
+			datastoreEndpoint?: string
+
+			// Disable bundled components
+			disable: [...("coredns" | "servicelb" | "traefik" | "local-storage" | "metrics-server")] | *["traefik", "local-storage"]
+
+			// Kubelet arguments
+			kubeletArgs: [...string] | *[]
+
+			// Additional arguments
+			extraArgs: [...string] | *[]
+		}
+
+		// Agent (worker) configuration
+		agent: {
+			// Server URL to join (populated during deployment)
+			serverUrl: string | *""
+
+			// Additional agent arguments
+			extraArgs: [...string] | *[]
+
+			// Kubelet arguments
+			kubeletArgs: [...string] | *[]
+		}
+
+		// CNI configuration
+		cni: {
+			// CNI plugin
+			plugin: "flannel" | "calico" | "cilium" | *"flannel"
+
+			// Flannel backend (if flannel)
+			flannelBackend: "vxlan" | "wireguard-native" | "host-gw" | *"vxlan"
+		}
+
+		// Networking
+		network: {
+			// Service CIDR
+			serviceCIDR: string | *"10.43.0.0/16"
+
+			// Cluster (Pod) CIDR
+			clusterCIDR: string | *"10.42.0.0/16"
+
+			// Cluster DNS
+			clusterDNS: string | *"10.43.0.10"
+		}
+	}
+
+	// Installation script template
+	install: {
+		server: """
+			#!/bin/bash
+			set -euo pipefail
+			
+			K3S_VERSION="${K3S_VERSION:-{{.config.cluster.version}}}"
+			K3S_TOKEN="${K3S_TOKEN:-{{.config.cluster.token}}}"
+			K3S_DATASTORE="${K3S_DATASTORE:-{{.config.server.datastore}}}"
+			
+			curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="$K3S_VERSION" sh -s - server \\
+				--cluster-init \\
+				--token="$K3S_TOKEN" \\
+				--disable=traefik \\
+				--disable=local-storage \\
+				--flannel-backend={{.config.cni.flannelBackend}} \\
+				--service-cidr={{.config.network.serviceCIDR}} \\
+				--cluster-cidr={{.config.network.clusterCIDR}} \\
+				--cluster-dns={{.config.network.clusterDNS}}
+			"""
+
+		agent: """
+			#!/bin/bash
+			set -euo pipefail
+			
+			K3S_VERSION="${K3S_VERSION:-{{.config.cluster.version}}}"
+			K3S_URL="${K3S_URL:-{{.config.agent.serverUrl}}}"
+			K3S_TOKEN="${K3S_TOKEN:-{{.config.cluster.token}}}"
+			
+			curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="$K3S_VERSION" sh -s - agent \\
+				--server="$K3S_URL" \\
+				--token="$K3S_TOKEN"
+			"""
+	}
+
+	// Health checks
+	healthCheck: {
+		type:     "command"
+		command:  "kubectl get nodes"
+		interval: "30s"
+		timeout:  "10s"
+		retries:  3
+	}
+}
+
+// =============================================================================
+// GITOPS
+// =============================================================================
+
+// #FluxService - GitOps Toolkit
+#FluxService: base.#ServiceDefinition & {
+	name:        "flux"
+	displayName: "FluxCD"
+	category:    "gitops"
+	type:        "controller"
+	required:    false
+	status:      "implemented"
+	description: "GitOps toolkit for Kubernetes"
+	needs:       ["k3s"]
+	priority:    1 // P1 - Core GitOps
+
+	config: {
+		// Git repository
+		repository: {
+			url:    string | *""
+			branch: string | *"main"
+			path:   string | *"clusters/homelab"
+		}
+
+		// Flux components
+		components: [...string] | *[
+			"source-controller",
+			"kustomize-controller",
+			"helm-controller",
+			"notification-controller",
+		]
+
+		// Reconciliation settings
+		reconciliation: {
+			interval: string | *"5m"
+			timeout:  string | *"3m"
+			retry:    int | *3
+		}
+
+		// Image automation (optional)
+		imageAutomation: {
+			enabled:  bool | *false
+			interval: string | *"1m"
+		}
+
+		// Notification settings
+		notifications: {
+			enabled: bool | *false
+			providers: [...{
+				type:   "slack" | "discord" | "msteams" | "github"
+				url:    string
+				events: [...string]
+			}]
+		}
+	}
+
+	// Bootstrap command
+	install: {
+		bootstrap: """
+			#!/bin/bash
+			set -euo pipefail
+			
+			# Install Flux CLI
+			curl -s https://fluxcd.io/install.sh | sudo bash
+			
+			# Bootstrap Flux (GitHub example)
+			flux bootstrap github \\
+				--owner={{.repository.owner}} \\
+				--repository={{.repository.name}} \\
+				--branch={{.config.repository.branch}} \\
+				--path={{.config.repository.path}} \\
+				--personal
+			"""
+	}
+
+	healthCheck: {
+		type:     "command"
+		command:  "flux check"
+		interval: "60s"
+		timeout:  "30s"
+		retries:  3
+	}
+}
+
+// #ArgoCDService - GitOps Alternative
+#ArgoCDService: base.#ServiceDefinition & {
+	name:        "argocd"
+	displayName: "ArgoCD"
+	category:    "gitops"
+	type:        "controller"
+	required:    false
+	status:      "implemented"
+	description: "Declarative GitOps CD for Kubernetes"
+	needs:       ["k3s"]
+	priority:    1
+
+	config: {
+		// Helm chart configuration
+		chart: {
+			repository: "https://argoproj.github.io/argo-helm"
+			name:       "argo-cd"
+			version:    string | *"6.7.3"
+			namespace:  string | *"argocd"
+		}
+
+		// Server configuration
+		server: {
+			// Enable insecure mode (behind Traefik)
+			insecure: bool | *true
+
+			// Replicas
+			replicas: int | *1
+
+			// Resource limits
+			resources: {
+				requests: {
+					cpu:    string | *"100m"
+					memory: string | *"256Mi"
+				}
+				limits: {
+					cpu:    string | *"500m"
+					memory: string | *"512Mi"
+				}
+			}
+		}
+
+		// Dex SSO configuration
+		dex: {
+			enabled: bool | *true
+		}
+
+		// Application controller
+		controller: {
+			replicas: int | *1
+			resources: {
+				requests: {
+					cpu:    string | *"250m"
+					memory: string | *"512Mi"
+				}
+				limits: {
+					cpu:    string | *"1"
+					memory: string | *"1Gi"
+				}
+			}
+		}
+
+		// Repo server
+		repoServer: {
+			replicas: int | *1
+		}
+
+		// Additional repositories
+		repositories: [...{
+			url:  string
+			type: "git" | "helm"
+			name: string
+		}]
+	}
+
+	install: {
+		helm: """
+			helm repo add argo https://argoproj.github.io/argo-helm
+			helm repo update
+			helm install argocd argo/argo-cd \\
+				--namespace argocd \\
+				--create-namespace \\
+				--version {{.config.chart.version}} \\
+				--set server.insecure={{.config.server.insecure}} \\
+				--set dex.enabled={{.config.dex.enabled}}
+			"""
+	}
+
+	healthCheck: {
+		type:     "http"
+		path:     "/healthz"
+		port:     8080
+		interval: "30s"
+		timeout:  "10s"
+	}
+}
+
+// =============================================================================
+// INGRESS & NETWORKING
+// =============================================================================
+
+// #TraefikIngressService - Kubernetes Ingress
+#TraefikIngressService: base.#ServiceDefinition & {
+	name:        "traefik-ingress"
+	displayName: "Traefik Ingress"
+	category:    "networking"
+	type:        "ingress-controller"
+	required:    true
+	status:      "implemented"
+	description: "Kubernetes Ingress Controller with auto-SSL"
+	needs:       ["k3s"]
+	priority:    1 // P1 - Required for service exposure
+
+	config: {
+		// Helm chart configuration
+		chart: {
+			repository: "https://traefik.github.io/charts"
+			name:       "traefik"
+			version:    string | *"26.0.0"
+			namespace:  string | *"traefik-system"
+		}
+
+		// Deployment configuration
+		deployment: {
+			replicas: int | *1
+
+			// Pod anti-affinity for HA
+			podAntiAffinity: bool | *false
+
+			// Resources
+			resources: {
+				requests: {
+					cpu:    string | *"100m"
+					memory: string | *"128Mi"
+				}
+				limits: {
+					cpu:    string | *"500m"
+					memory: string | *"256Mi"
+				}
+			}
+		}
+
+		// Entrypoints
+		entrypoints: {
+			web: {
+				port:     80
+				expose:   true
+				protocol: "TCP"
+			}
+			websecure: {
+				port:     443
+				expose:   true
+				protocol: "TCP"
+				tls:      true
+			}
+		}
+
+		// TLS / Let's Encrypt
+		tls: {
+			enabled: bool | *true
+
+			// Certificate resolver
+			resolver: "letsencrypt" | "letsencrypt-staging" | "none" | *"letsencrypt"
+
+			// Let's Encrypt email
+			email: string | *""
+
+			// ACME challenge type
+			challenge: "http" | "dns" | *"http"
+		}
+
+		// Logging
+		accessLog: {
+			enabled: bool | *false
+			format:  "json" | "common" | *"json"
+		}
+
+		// Metrics
+		metrics: {
+			prometheus: {
+				enabled: bool | *true
+				port:    9100
+			}
+		}
+
+		// Dashboard
+		dashboard: {
+			enabled: bool | *true
+			// Expose via IngressRoute
+			expose: bool | *false
+		}
+	}
+
+	install: {
+		helm: """
+			helm repo add traefik https://traefik.github.io/charts
+			helm repo update
+			helm install traefik traefik/traefik \\
+				--namespace {{.config.chart.namespace}} \\
+				--create-namespace \\
+				--version {{.config.chart.version}} \\
+				--set deployment.replicas={{.config.deployment.replicas}} \\
+				--set ports.web.expose=true \\
+				--set ports.websecure.expose=true \\
+				--set metrics.prometheus.enabled={{.config.metrics.prometheus.enabled}}
+			"""
+	}
+
+	healthCheck: {
+		type:     "http"
+		path:     "/ping"
+		port:     9000
+		interval: "15s"
+		timeout:  "5s"
+	}
+}
+
+// #MetalLBService - Bare-metal Load Balancer
+#MetalLBService: base.#ServiceDefinition & {
+	name:        "metallb"
+	displayName: "MetalLB"
+	category:    "networking"
+	type:        "load-balancer"
+	required:    false
+	status:      "implemented"
+	description: "Load balancer for bare-metal Kubernetes"
+	needs:       ["k3s"]
+	priority:    1
+
+	config: {
+		chart: {
+			repository: "https://metallb.github.io/metallb"
+			name:       "metallb"
+			version:    string | *"0.14.3"
+			namespace:  string | *"metallb-system"
+		}
+
+		// IP address pool
+		addressPool: {
+			name:      string | *"default"
+			protocol:  "layer2" | "bgp" | *"layer2"
+			addresses: [...string] | *[]
+		}
+	}
+
+	install: {
+		helm: """
+			helm repo add metallb https://metallb.github.io/metallb
+			helm repo update
+			helm install metallb metallb/metallb \\
+				--namespace {{.config.chart.namespace}} \\
+				--create-namespace \\
+				--version {{.config.chart.version}}
+			"""
+	}
+}
+
+// =============================================================================
+// MONITORING STACK
+// =============================================================================
+
+// #PrometheusService - Metrics
+#PrometheusService: base.#ServiceDefinition & {
+	name:        "prometheus"
+	displayName: "Prometheus"
+	category:    "monitoring"
+	type:        "metrics"
+	required:    false
+	status:      "implemented"
+	description: "Metrics collection and alerting via kube-prometheus-stack"
+	needs:       ["k3s"]
+	priority:    2 // P2 - Observability
+
+	config: {
+		// Using kube-prometheus-stack for full integration
+		chart: {
+			repository: "https://prometheus-community.github.io/helm-charts"
+			name:       "kube-prometheus-stack"
+			version:    string | *"57.2.0"
+			namespace:  string | *"monitoring"
+		}
+
+		// Prometheus configuration
+		prometheus: {
+			enabled:  bool | *true
+			replicas: int | *1
+
+			// Retention settings
+			retention:     string | *"15d"
+			retentionSize: string | *"10GB"
+
+			// Storage
+			storage: {
+				enabled:         bool | *true
+				size:            string | *"20Gi"
+				storageClass:    string | *"longhorn"
+				accessModes:     [...string] | *["ReadWriteOnce"]
+			}
+
+			// Scrape interval
+			scrapeInterval: string | *"30s"
+
+			// Resources
+			resources: {
+				requests: {
+					cpu:    string | *"200m"
+					memory: string | *"512Mi"
+				}
+				limits: {
+					cpu:    string | *"1"
+					memory: string | *"2Gi"
+				}
+			}
+
+			// ServiceMonitor selector
+			serviceMonitorSelector: {}
+		}
+
+		// Alertmanager configuration
+		alertmanager: {
+			enabled:  bool | *true
+			replicas: int | *1
+
+			// Storage
+			storage: {
+				enabled:      bool | *true
+				size:         string | *"5Gi"
+				storageClass: string | *"longhorn"
+			}
+
+			// Alert receivers
+			receivers: [...{
+				name:    string
+				type:    "email" | "slack" | "discord" | "webhook" | "pagerduty"
+				config?: _
+			}]
+		}
+
+		// Grafana configuration (included in kube-prometheus-stack)
+		grafana: {
+			enabled:       bool | *true
+			adminPassword: string | *""
+
+			// Persistence
+			persistence: {
+				enabled:      bool | *true
+				size:         string | *"5Gi"
+				storageClass: string | *"longhorn"
+			}
+
+			// Default dashboards
+			defaultDashboards: bool | *true
+
+			// Additional datasources
+			additionalDatasources: [...{
+				name:   string
+				type:   string
+				url:    string
+				access: string | *"proxy"
+			}]
+
+			// Plugins
+			plugins: [...string] | *[]
+
+			// Ingress
+			ingress: {
+				enabled: bool | *false
+				host:    string | *""
+			}
+		}
+
+		// Node Exporter
+		nodeExporter: {
+			enabled: bool | *true
+		}
+
+		// kube-state-metrics
+		kubeStateMetrics: {
+			enabled: bool | *true
+		}
+	}
+
+	install: {
+		helm: """
+			helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+			helm repo update
+			helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \\
+				--namespace {{.config.chart.namespace}} \\
+				--create-namespace \\
+				--version {{.config.chart.version}} \\
+				--set prometheus.prometheusSpec.retention={{.config.prometheus.retention}} \\
+				--set prometheus.prometheusSpec.scrapeInterval={{.config.prometheus.scrapeInterval}} \\
+				--set alertmanager.enabled={{.config.alertmanager.enabled}} \\
+				--set grafana.enabled={{.config.grafana.enabled}}
+			"""
+	}
+
+	healthCheck: {
+		type:     "http"
+		path:     "/-/healthy"
+		port:     9090
+		interval: "30s"
+		timeout:  "10s"
+	}
+}
+
+// #GrafanaService - Dashboards (standalone, if not using kube-prometheus-stack)
+#GrafanaService: base.#ServiceDefinition & {
+	name:        "grafana"
+	displayName: "Grafana"
+	category:    "monitoring"
+	type:        "dashboards"
+	required:    false
+	status:      "implemented"
+	description: "Observability and dashboard platform"
+	needs:       ["k3s", "prometheus"]
+	priority:    2
+
+	config: {
+		chart: {
+			repository: "https://grafana.github.io/helm-charts"
+			name:       "grafana"
+			version:    string | *"7.3.7"
+			namespace:  string | *"monitoring"
+		}
+
+		// Admin credentials
+		adminUser:     string | *"admin"
+		adminPassword: string | *""
+
+		// Persistence
+		persistence: {
+			enabled:      bool | *true
+			size:         string | *"5Gi"
+			storageClass: string | *"longhorn"
+		}
+
+		// Pre-installed plugins
+		plugins: [...string] | *[
+			"grafana-piechart-panel",
+			"grafana-clock-panel",
+		]
+
+		// Datasources
+		datasources: [...{
+			name:      string
+			type:      string
+			url:       string
+			isDefault: bool | *false
+			access:    string | *"proxy"
+		}] | *[{
+			name:      "Prometheus"
+			type:      "prometheus"
+			url:       "http://prometheus-kube-prometheus-prometheus.monitoring:9090"
+			isDefault: true
+		}]
+
+		// Dashboard providers
+		dashboardProviders: [...{
+			name:            string
+			folder:          string
+			type:            string | *"file"
+			disableDeletion: bool | *false
+			editable:        bool | *true
+			options: {
+				path: string
+			}
+		}]
+	}
+
+	healthCheck: {
+		type:     "http"
+		path:     "/api/health"
+		port:     3000
+		interval: "30s"
+		timeout:  "10s"
+	}
+}
+
+// #LokiService - Logs
+#LokiService: base.#ServiceDefinition & {
+	name:        "loki"
+	displayName: "Loki"
+	category:    "monitoring"
+	type:        "logs"
+	required:    false
+	status:      "implemented"
+	description: "Log aggregation system with Promtail"
+	needs:       ["k3s"]
+	priority:    2
+
+	config: {
+		chart: {
+			repository: "https://grafana.github.io/helm-charts"
+			name:       "loki-stack"
+			version:    string | *"2.10.2"
+			namespace:  string | *"monitoring"
+		}
+
+		// Loki configuration
+		loki: {
+			enabled: bool | *true
+
+			// Persistence
+			persistence: {
+				enabled:      bool | *true
+				size:         string | *"20Gi"
+				storageClass: string | *"longhorn"
+			}
+
+			// Retention
+			retention: {
+				enabled: bool | *true
+				period:  string | *"168h" // 7 days
+			}
+
+			// Resources
+			resources: {
+				requests: {
+					cpu:    string | *"100m"
+					memory: string | *"256Mi"
+				}
+				limits: {
+					cpu:    string | *"500m"
+					memory: string | *"1Gi"
+				}
+			}
+		}
+
+		// Promtail configuration
+		promtail: {
+			enabled: bool | *true
+
+			// Resources
+			resources: {
+				requests: {
+					cpu:    string | *"50m"
+					memory: string | *"64Mi"
+				}
+				limits: {
+					cpu:    string | *"200m"
+					memory: string | *"128Mi"
+				}
+			}
+		}
+	}
+
+	install: {
+		helm: """
+			helm repo add grafana https://grafana.github.io/helm-charts
+			helm repo update
+			helm install loki-stack grafana/loki-stack \\
+				--namespace {{.config.chart.namespace}} \\
+				--create-namespace \\
+				--version {{.config.chart.version}} \\
+				--set loki.enabled={{.config.loki.enabled}} \\
+				--set promtail.enabled={{.config.promtail.enabled}}
+			"""
+	}
+
+	healthCheck: {
+		type:     "http"
+		path:     "/ready"
+		port:     3100
+		interval: "30s"
+		timeout:  "10s"
+	}
+}
+
+// =============================================================================
+// STORAGE
+// =============================================================================
+
+// #LonghornService - Distributed Storage
+#LonghornService: base.#ServiceDefinition & {
+	name:        "longhorn"
+	displayName: "Longhorn"
+	category:    "storage"
+	type:        "block-storage"
+	required:    false
+	status:      "implemented"
+	description: "Cloud-native distributed block storage"
+	needs:       ["k3s"]
+	priority:    1 // P1 - Required for persistent storage
+
+	config: {
+		chart: {
+			repository: "https://charts.longhorn.io"
+			name:       "longhorn"
+			version:    string | *"1.6.1"
+			namespace:  string | *"longhorn-system"
+		}
+
+		// Default settings
+		defaults: {
+			// Number of replicas
+			replicas: int & >=1 & <=3 | *2
+
+			// Data locality
+			dataLocality: "disabled" | "best-effort" | "strict-local" | *"best-effort"
+
+			// StorageClass name
+			storageClassName: string | *"longhorn"
+
+			// Make default StorageClass
+			defaultClass: bool | *true
+		}
+
+		// Backup configuration
+		backup: {
+			// Backup target (S3, NFS, etc.)
+			target: string | *""
+
+			// Backup target credentials secret
+			credentialSecret: string | *""
+
+			// Recurring backup job
+			recurringJob: {
+				enabled:  bool | *false
+				schedule: string | *"0 3 * * *"
+				retain:   int | *7
+				labels: [string]: string
+			}
+		}
+
+		// Snapshot configuration
+		snapshot: {
+			// Recurring snapshot job
+			recurringJob: {
+				enabled:  bool | *true
+				schedule: string | *"0 */6 * * *"
+				retain:   int | *4
+			}
+		}
+
+		// Resource limits for Longhorn manager
+		resources: {
+			requests: {
+				cpu:    string | *"100m"
+				memory: string | *"128Mi"
+			}
+			limits: {
+				cpu:    string | *"500m"
+				memory: string | *"512Mi"
+			}
+		}
+
+		// Volume encryption
+		encryption: {
+			enabled:       bool | *false
+			keyProvider:   string | *""
+			cipherSuite:   string | *"aes-xts-plain64"
+			keySize:       int | *256
+		}
+
+		// UI
+		ui: {
+			enabled: bool | *true
+		}
+	}
+
+	install: {
+		// Prerequisites
+		prereq: """
+			#!/bin/bash
+			# Install open-iscsi on all nodes
+			sudo apt-get update
+			sudo apt-get install -y open-iscsi nfs-common
+			sudo systemctl enable --now iscsid
+			"""
+
+		helm: """
+			helm repo add longhorn https://charts.longhorn.io
+			helm repo update
+			helm install longhorn longhorn/longhorn \\
+				--namespace {{.config.chart.namespace}} \\
+				--create-namespace \\
+				--version {{.config.chart.version}} \\
+				--set defaultSettings.defaultReplicaCount={{.config.defaults.replicas}} \\
+				--set defaultSettings.defaultDataLocality={{.config.defaults.dataLocality}}
+			"""
+	}
+
+	healthCheck: {
+		type:     "http"
+		path:     "/"
+		port:     80
+		interval: "30s"
+		timeout:  "10s"
+	}
+}
+
+// #CertManagerService - Certificate Management
+#CertManagerService: base.#ServiceDefinition & {
+	name:        "cert-manager"
+	displayName: "cert-manager"
+	category:    "security"
+	type:        "certificates"
+	required:    false
+	status:      "implemented"
+	description: "Automatic TLS certificate management"
+	needs:       ["k3s"]
+	priority:    1
+
+	config: {
+		chart: {
+			repository: "https://charts.jetstack.io"
+			name:       "cert-manager"
+			version:    string | *"1.14.4"
+			namespace:  string | *"cert-manager"
+		}
+
+		// Install CRDs
+		installCRDs: bool | *true
+
+		// ClusterIssuer configuration
+		clusterIssuer: {
+			// Let's Encrypt production
+			production: {
+				enabled: bool | *true
+				email:   string | *""
+				server:  string | *"https://acme-v02.api.letsencrypt.org/directory"
+			}
+
+			// Let's Encrypt staging
+			staging: {
+				enabled: bool | *true
+				email:   string | *""
+				server:  string | *"https://acme-staging-v02.api.letsencrypt.org/directory"
+			}
+		}
+
+		// DNS challenge configuration (for wildcard certs)
+		dns01: {
+			enabled:  bool | *false
+			provider: string | *""
+			config?:  _
+		}
+
+		// Resources
+		resources: {
+			requests: {
+				cpu:    string | *"50m"
+				memory: string | *"64Mi"
+			}
+			limits: {
+				cpu:    string | *"200m"
+				memory: string | *"256Mi"
+			}
+		}
+	}
+
+	install: {
+		helm: """
+			helm repo add jetstack https://charts.jetstack.io
+			helm repo update
+			helm install cert-manager jetstack/cert-manager \\
+				--namespace {{.config.chart.namespace}} \\
+				--create-namespace \\
+				--version {{.config.chart.version}} \\
+				--set installCRDs={{.config.installCRDs}}
+			"""
+	}
+
+	healthCheck: {
+		type:     "command"
+		command:  "kubectl -n cert-manager get pods -l app=cert-manager -o jsonpath='{.items[0].status.phase}'"
+		interval: "60s"
+		timeout:  "10s"
+	}
+}
+
+// #VeleroService - Backup and Disaster Recovery
+#VeleroService: base.#ServiceDefinition & {
+	name:        "velero"
+	displayName: "Velero"
+	category:    "backup"
+	type:        "disaster-recovery"
+	required:    false
+	status:      "implemented"
+	description: "Backup and disaster recovery for Kubernetes"
+	needs:       ["k3s"]
+	priority:    2
+
+	config: {
+		chart: {
+			repository: "https://vmware-tanzu.github.io/helm-charts"
+			name:       "velero"
+			version:    string | *"6.0.0"
+			namespace:  string | *"velero"
+		}
+
+		// Backup storage location
+		backupStorageLocation: {
+			provider: "aws" | "gcp" | "azure" | *"aws"
+			bucket:   string | *""
+			region:   string | *"us-east-1"
+			config?:  _
+		}
+
+		// Volume snapshot location
+		volumeSnapshotLocation: {
+			provider: string | *""
+			config?:  _
+		}
+
+		// Credentials secret
+		credentials: {
+			existingSecret: string | *""
+		}
+
+		// Schedule
+		schedules: [...{
+			name:     string
+			schedule: string
+			template: {
+				ttl:                     string | *"720h"
+				includedNamespaces:      [...string] | *["*"]
+				excludedNamespaces:      [...string] | *["kube-system"]
+				storageLocation:         string | *"default"
+				volumeSnapshotLocations: [...string] | *[]
+			}
+		}]
+
+		// Resources
+		resources: {
+			requests: {
+				cpu:    string | *"100m"
+				memory: string | *"128Mi"
+			}
+			limits: {
+				cpu:    string | *"500m"
+				memory: string | *"512Mi"
+			}
+		}
+	}
+
+	install: {
+		helm: """
+			helm repo add vmware-tanzu https://vmware-tanzu.github.io/helm-charts
+			helm repo update
+			helm install velero vmware-tanzu/velero \\
+				--namespace {{.config.chart.namespace}} \\
+				--create-namespace \\
+				--version {{.config.chart.version}}
+			"""
+	}
+
+	healthCheck: {
+		type:     "command"
+		command:  "velero backup get"
+		interval: "60s"
+		timeout:  "15s"
+	}
+}
+
+// =============================================================================
+// SERVICE COLLECTIONS
+// =============================================================================
+
+// #DefaultServices - Standard deployment (k3s + FluxCD + full observability)
+#DefaultServices: [
+	#K3sService,
+	#FluxService,
+	#TraefikIngressService,
+	#MetalLBService,
+	#CertManagerService,
+	#LonghornService,
+	#PrometheusService, // Includes Grafana via kube-prometheus-stack
+	#LokiService,
+	#VeleroService,
+]
+
+// #MinimalServices - Lightweight setup (k3s + basic monitoring)
+#MinimalServices: [
+	#K3sService,
+	#TraefikIngressService,
+	#CertManagerService,
+	#PrometheusService & {
+		config: grafana: enabled: false
+		config: alertmanager: enabled: false
+	},
+]
+
+// #ArgoCDServices - ArgoCD variant (k3s + ArgoCD + observability)
+#ArgoCDServices: [
+	#K3sService,
+	#ArgoCDService,
+	#TraefikIngressService,
+	#MetalLBService,
+	#CertManagerService,
+	#LonghornService,
+	#PrometheusService,
+	#LokiService,
+]
+
+// #ProductionServices - Full production setup with HA
+#ProductionServices: [
+	#K3sService & {
+		config: server: datastore: "embedded-etcd"
+	},
+	#FluxService,
+	#TraefikIngressService & {
+		config: deployment: replicas:        2
+		config: deployment: podAntiAffinity: true
+	},
+	#MetalLBService,
+	#CertManagerService,
+	#LonghornService & {
+		config: defaults: replicas: 3
+	},
+	#PrometheusService & {
+		config: prometheus: replicas:           2
+		config: alertmanager: replicas:         2
+		config: prometheus: storage: size:      "50Gi"
+	},
+	#LokiService & {
+		config: loki: persistence: size: "50Gi"
+	},
+	#VeleroService,
+]
+
+// =============================================================================
+// HELPER DEFINITIONS
+// =============================================================================
+
+// #ServicesByPriority groups services by implementation priority
+#ServicesByPriority: {
+	// P0 - Core infrastructure (must deploy first)
+	p0: [#K3sService]
+
+	// P1 - Essential services (required for operation)
+	p1: [
+		#TraefikIngressService,
+		#CertManagerService,
+		#LonghornService,
+		#FluxService,
+		#ArgoCDService,
+		#MetalLBService,
+	]
+
+	// P2 - Observability (highly recommended)
+	p2: [
+		#PrometheusService,
+		#GrafanaService,
+		#LokiService,
+	]
+
+	// P3 - Nice to have
+	p3: [
+		#VeleroService,
+	]
+}
+
+// #ServiceDependencyGraph shows deployment order
+#ServiceDependencyGraph: {
+	"k3s":            []
+	"traefik-ingress": ["k3s"]
+	"metallb":        ["k3s"]
+	"cert-manager":   ["k3s"]
+	"longhorn":       ["k3s"]
+	"flux":           ["k3s"]
+	"argocd":         ["k3s"]
+	"prometheus":     ["k3s"]
+	"grafana":        ["k3s", "prometheus"]
+	"loki":           ["k3s"]
+	"velero":         ["k3s", "longhorn"]
+}

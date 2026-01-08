@@ -1,0 +1,149 @@
+# StackKit Metadata - Modern Homelab
+apiVersion: stackkit/v1
+kind: StackKit
+
+metadata:
+  name: modern-homelab
+  version: "1.0.0-alpha"
+  description: "Multi-node homelab with Kubernetes (k3s) and GitOps"
+  author: "KombiStack Team"
+  license: "MIT"
+  repository: "https://github.com/kombihq/stackkits"
+  status: alpha  # Options: scaffolding, alpha, beta, stable
+  tags:
+    - homelab
+    - multi-node
+    - kubernetes
+    - k3s
+    - gitops
+    - advanced
+
+# Supported operating systems
+supportedOS:
+  - ubuntu-24
+  - ubuntu-22
+  - debian-12
+
+# Resource requirements (per node)
+requirements:
+  minimum:
+    nodes: 2
+    cpu: 2
+    memory: 4
+    disk: 50
+  recommended:
+    nodes: 3
+    cpu: 4
+    memory: 8
+    disk: 100
+
+# Deployment modes (inherited from base)
+modes:
+  simple:
+    description: "OpenTofu-only deployment via KombiStack Core"
+    templateDir: "templates/simple"
+    engine: "opentofu"
+    features:
+      - "Direct OpenTofu execution"
+      - "Go-based state management"
+
+  advanced:
+    description: "Terramate-orchestrated deployment with drift detection"
+    templateDir: "templates/advanced"
+    engine: "terramate"
+    requires:
+      - "terramate >= 0.5.0"
+    features:
+      - "Drift detection on schedule"
+      - "Granular stack orchestration"
+
+# Feature flags
+features:
+  multiNode: true
+  cloudProviders: false
+  vpnOverlay: true
+  gpuSupport: false
+  highAvailability: false
+  kubernetes: true
+  gitops: true
+
+# Planned variants
+variants:
+  default:
+    name: "Standard"
+    description: "k3s + FluxCD + Prometheus stack"
+    services:
+      - k3s
+      - flux
+      - traefik-ingress
+      - prometheus
+      - grafana
+      - loki
+      - longhorn
+
+  minimal:
+    name: "Minimal"
+    description: "k3s with basic monitoring"
+    services:
+      - k3s
+      - traefik-ingress
+      - kube-prometheus-stack
+
+  argocd:
+    name: "ArgoCD Variant"
+    description: "k3s + ArgoCD + monitoring"
+    services:
+      - k3s
+      - argocd
+      - traefik-ingress
+      - prometheus
+      - grafana
+
+# Service definitions (placeholder)
+services:
+  - name: k3s
+    required: true
+    description: "Lightweight Kubernetes distribution"
+    status: planned
+  - name: flux
+    required: false
+    description: "GitOps toolkit for Kubernetes"
+    status: planned
+  - name: traefik-ingress
+    required: true
+    description: "Kubernetes Ingress Controller"
+    status: planned
+  - name: prometheus
+    required: false
+    description: "Metrics collection and alerting"
+    status: planned
+  - name: grafana
+    required: false
+    description: "Observability dashboards"
+    status: planned
+  - name: loki
+    required: false
+    description: "Log aggregation"
+    status: planned
+  - name: longhorn
+    required: false
+    description: "Distributed block storage"
+    status: planned
+
+# Outputs (planned)
+outputs:
+  format: "markdown"
+  include:
+    - serviceUrls
+    - kubeconfig
+    - fluxStatus
+    - healthEndpoints
+
+# Changelog
+changelog:
+  - version: "0.1.0-alpha"
+    date: "2025-01-27"
+    changes:
+      - "Initial scaffolding"
+      - "Architecture planning"
+      - "Variant definitions"

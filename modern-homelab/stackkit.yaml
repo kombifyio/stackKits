@@ -1,0 +1,202 @@
+# StackKit Metadata - Modern Homelab
+apiVersion: stackkit/v1
+kind: StackKit
+
+metadata:
+  name: modern-homelab
+  version: "0.1.0-alpha"
+  description: "Multi-server hybrid homelab with Docker, Coolify, and public/remote access"
+  author: "KombiStack Team"
+  license: "MIT"
+  repository: "https://github.com/kombihq/stackkits"
+  status: scaffolding  # Options: scaffolding, alpha, beta, stable
+  tags:
+    - homelab
+    - multi-node
+    - docker
+    - coolify
+    - hybrid
+    - public-access
+    - advanced
+
+# Supported operating systems
+supportedOS:
+  - ubuntu-24
+  - ubuntu-22
+  - debian-12
+
+# Resource requirements
+requirements:
+  minimum:
+    nodes: 2  # At least 2 nodes for hybrid setup
+    cpu: 2
+    memory: 4
+    disk: 50
+  recommended:
+    nodes: 3
+    cpu: 4
+    memory: 8
+    disk: 100
+
+# =============================================================================
+# DEPLOYMENT MODES
+# =============================================================================
+modes:
+  simple:
+    description: "OpenTofu-only deployment via KombiStack Core"
+    templateDir: "templates/simple"
+    engine: "opentofu"
+    features:
+      - "Direct OpenTofu execution"
+      - "Go-based state management"
+      - "Simple rollback via state"
+    recommended_for:
+      - "Initial setup"
+      - "Development environments"
+
+  advanced:
+    description: "Terramate-orchestrated deployment with drift detection"
+    templateDir: "templates/advanced"
+    engine: "terramate"
+    requires:
+      - "terramate >= 0.5.0"
+    features:
+      - "Drift detection on schedule"
+      - "Granular stack orchestration"
+      - "Day-2 operations support"
+    recommended_for:
+      - "Production environments"
+      - "Multi-node coordination"
+    stacks:
+      - name: network
+        order: 1
+        description: "VPN overlay, DNS, firewall"
+      - name: platform
+        order: 2
+        after: [network]
+        description: "Docker on all nodes"
+      - name: services
+        order: 3
+        after: [platform]
+        description: "Coolify, monitoring, storage"
+
+# =============================================================================
+# FEATURE FLAGS
+# =============================================================================
+features:
+  multiNode: true
+  cloudProviders: true      # Can include cloud VPS nodes
+  vpnOverlay: true          # Headscale/Tailscale for node communication
+  publicAccess: true        # Services accessible from internet
+  remoteAccess: true        # SSH/management from outside
+  gpuSupport: false         # Future: GPU scheduling
+  highAvailability: false   # Not HA, but multi-node
+  kubernetes: false         # Docker-based, NOT k8s
+  gitops: false             # Manual deployments via Coolify
+
+# =============================================================================
+# NODE TYPES
+# =============================================================================
+nodeTypes:
+  # Local nodes (on-premises)
+  local:
+    description: "On-premises server in local network"
+    access: "vpn"  # Accessed via VPN overlay
+    requirements:
+      minMemory: 4
+      minDisk: 50
+
+  # Cloud nodes (VPS)
+  cloud:
+    description: "Cloud VPS (Hetzner, DigitalOcean, etc.)"
+    access: "public"  # Has public IP
+    requirements:
+      minMemory: 2
+      minDisk: 20
+    providers:
+      - hetzner
+      - digitalocean
+      - vultr
+      - linode
+
+# =============================================================================
+# NETWORK MODES
+# =============================================================================
+network:
+  # Hybrid mode: Mix of local and cloud nodes
+  mode: "hybrid"  # local | public | hybrid
+  
+  # VPN overlay for node-to-node communication
+  vpn:
+    enabled: true
+    provider: "headscale"  # headscale | tailscale | wireguard
+    
+  # Public access configuration
+  public:
+    enabled: true
+    entrypoint: "cloud"  # cloud node acts as entry point
+    
+  # DNS configuration
+  dns:
+    provider: "cloudflare"  # cloudflare | manual | none
+    domain: null  # User must configure
+
+# =============================================================================
+# VARIANTS (Service Set Choices)
+# =============================================================================
+variants:
+  # Default: Full-featured hybrid setup
+  default:
+    name: "Standard"
+    description: "Coolify PaaS with Headscale VPN and full monitoring"
+    services:
+      - coolify          # PaaS platform (replaces Dokploy for multi-node)
+      - traefik          # Reverse proxy with TLS
+      - headscale        # VPN overlay for node communication
+      - prometheus       # Metrics collection
+      - grafana          # Dashboards
+      - loki             # Log aggregation
+      - uptime-kuma      # Status monitoring
+
+  # Minimal: Basic hybrid setup
+  minimal:
+    name: "Minimal"
+    description: "Coolify with basic VPN, minimal monitoring"
+    services:
+      - coolify
+      - traefik
+      - headscale
+      - uptime-kuma
+
+  # Beszel: Alternative monitoring
+  beszel:
+    name: "Beszel Monitoring"
+    description: "Coolify with Beszel for lightweight monitoring"
+    services:
+      - coolify
+      - traefik
+      - headscale
+      - beszel
+
+# =============================================================================
+# KEY DIFFERENCES FROM BASE-HOMELAB
+# =============================================================================
+# 
+# | Aspect          | base-homelab        | modern-homelab           |
+# |-----------------|---------------------|--------------------------|
+# | Nodes           | Single              | Multiple (2+)            |
+# | Platform        | Dokploy             | Coolify                  |
+# | Network         | Local only          | Hybrid (local + cloud)   |
+# | VPN             | None                | Headscale/Tailscale      |
+# | Public Access   | Optional add-on     | Default enabled          |
+# | DNS             | Optional            | Required for public      |
+# | Monitoring      | Basic (Uptime Kuma) | Full stack (Prometheus)  |
+# | Complexity      | Beginner            | Advanced                 |
+# =============================================================================
+
+# Auto-selection rules
+autoSelect:
+  advancedWhen:
+    - "driftDetection.enabled == true"
+    - "nodes.count > 3"
+  default: simple

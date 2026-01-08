@@ -1,0 +1,167 @@
+# StackKit Metadata - High Availability Homelab
+apiVersion: stackkit/v1
+kind: StackKit
+
+metadata:
+  name: ha-homelab
+  version: "0.1.0-alpha"
+  description: "Enterprise-grade homelab with high availability and automatic failover"
+  author: "KombiStack Team"
+  license: "MIT"
+  repository: "https://github.com/kombihq/stackkits"
+  status: scaffolding
+  tags:
+    - homelab
+    - multi-node
+    - kubernetes
+    - high-availability
+    - enterprise
+    - advanced
+
+# Extends Modern Homelab
+extends: modern-homelab
+
+# Supported operating systems
+supportedOS:
+  - ubuntu-24
+  - ubuntu-22
+  - debian-12
+
+# Resource requirements (per node)
+requirements:
+  minimum:
+    masterNodes: 3
+    workerNodes: 2
+    cpu: 4
+    memory: 8
+    disk: 100
+    diskType: ssd
+  recommended:
+    masterNodes: 5
+    workerNodes: 3
+    cpu: 8
+    memory: 16
+    disk: 256
+    diskType: nvme
+
+# Deployment modes (inherited from base)
+modes:
+  simple:
+    description: "OpenTofu-only deployment via KombiStack Core"
+    templateDir: "templates/simple"
+    engine: "opentofu"
+    recommended: false  # Not recommended for HA
+
+  advanced:
+    description: "Terramate-orchestrated deployment with drift detection"
+    templateDir: "templates/advanced"
+    engine: "terramate"
+    requires:
+      - "terramate >= 0.5.0"
+    recommended: true  # Recommended for HA deployments
+    features:
+      - "Drift detection for compliance"
+      - "Rolling updates"
+      - "Canary deployments"
+
+# Feature flags
+features:
+  multiNode: true
+  cloudProviders: true  # For hybrid setups
+  vpnOverlay: true
+  gpuSupport: false
+  highAvailability: true
+  kubernetes: true
+  gitops: true
+  multiSite: true
+
+# Planned variants
+variants:
+  default:
+    name: "Standard HA"
+    description: "3 masters + HA monitoring + Longhorn storage"
+    services:
+      - k3s-ha
+      - etcd-embedded
+      - flux
+      - traefik-ingress-ha
+      - prometheus-ha
+      - thanos
+      - grafana
+      - loki
+      - longhorn
+      - metallb
+      - velero
+
+  enterprise:
+    name: "Enterprise"
+    description: "Full stack with Ceph and advanced observability"
+    services:
+      - k3s-ha
+      - etcd-embedded
+      - argocd
+      - traefik-ingress-ha
+      - prometheus-ha
+      - thanos
+      - grafana-enterprise
+      - loki
+      - tempo
+      - ceph
+      - metallb
+      - haproxy
+      - velero
+      - external-secrets
+
+# HA-specific service definitions (planned)
+services:
+  - name: k3s-ha
+    required: true
+    description: "k3s with HA control plane (embedded etcd)"
+    status: planned
+  - name: etcd-embedded
+    required: true
+    description: "Embedded etcd for k3s HA"
+    status: planned
+  - name: metallb
+    required: true
+    description: "Bare-metal load balancer"
+    status: planned
+  - name: haproxy
+    required: false
+    description: "External load balancer for API server"
+    status: planned
+  - name: prometheus-ha
+    required: true
+    description: "Prometheus with HA configuration"
+    status: planned
+  - name: thanos
+    required: false
+    description: "Long-term metrics storage and querying"
+    status: planned
+  - name: velero
+    required: true
+    description: "Backup and disaster recovery"
+    status: planned
+  - name: ceph
+    required: false
+    description: "Distributed storage system (enterprise)"
+    status: planned
+
+# Outputs (planned)
+outputs:
+  format: "markdown"
+  include:
+    - serviceUrls
+    - kubeconfig
+    - clusterHealth
+    - replicationStatus
+    - backupStatus
+
+# Changelog
+changelog:
+  - version: "0.1.0-alpha"
+    date: "2025-01-27"
+    changes:
+      - "Initial scaffolding"
+      - "HA architecture planning"
+      - "Enterprise variant definition"
