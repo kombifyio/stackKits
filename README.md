@@ -1,6 +1,6 @@
-# StackKits - Infrastructure Blueprints for KombiStack
+# StackKits - Declarative Infrastructure Blueprints
 
-> **Production-Ready Infrastructure Templates with CUE Validation**
+> **IaC-First Infrastructure Templates with CUE Validation and OpenTofu Execution**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![CUE](https://img.shields.io/badge/CUE-v0.9-blue)](https://cuelang.org/)
@@ -8,12 +8,23 @@
 
 ## 🎯 Overview
 
-**StackKits** are infrastructure-as-code blueprints designed for homelab deployments. Each StackKit provides:
+**StackKits** are declarative infrastructure blueprints for homelab and self-hosted deployments. They combine the power of **CUE** for validation with **OpenTofu** for provisioning, delivering safe and reproducible infrastructure.
 
-- **CUE Schemas** for configuration validation
-- **OpenTofu Templates** for infrastructure provisioning
-- **OS Variants** for different operating systems
-- **Compute Variants** for adaptive resource allocation
+### Key Features
+
+- **Validated Configuration** - CUE schemas catch errors before deployment
+- **IaC-First Architecture** - OpenTofu as execution engine, not custom scripts
+- **Multi-OS Support** - Ubuntu, Debian, and more via variants
+- **Standalone or Integrated** - Use via CLI or with KombiStack Web UI
+
+### Prerequisites
+
+| Tool | Version | Purpose |
+|------|---------|---------|
+| **Docker** | 24.0+ | Container runtime |
+| **OpenTofu** | 1.6+ | Infrastructure provisioning |
+
+Optional: Terramate (0.6+) for multi-node orchestration, CUE (0.9+) for development
 
 ## 📦 Available StackKits
 
@@ -37,6 +48,11 @@ StackKits/
 ├── base-homelab/           # Single-server StackKit
 │   ├── stackkit.yaml       # Metadata
 │   ├── stackfile.cue       # Main schema
+│   ├── default-spec.yaml   # CLI-ready template (⭐ START HERE)
+│   ├── services.cue        # Service definitions
+│   ├── defaults.cue        # Smart defaults
+│   ├── templates/          # OpenTofu templates
+│   └── variants/           # OS/Compute variants
 │   ├── services.cue        # Service definitions
 │   ├── defaults.cue        # Smart defaults
 │   ├── variants/           # OS & compute variants
@@ -53,34 +69,66 @@ StackKits/
 
 ## 🚀 Quick Start
 
+### CLI-Only (Standalone)
+
+**Start with a ready-to-use template:**
+
+```bash
+# 1. Copy default spec
+cd StackKits
+cp base-homelab/default-spec.yaml ~/my-homelab-spec.yaml
+
+# 2. Edit configuration (IPs, SSH, Secrets)
+nano ~/my-homelab-spec.yaml
+
+# 3. Validate
+stackkit validate ~/my-homelab-spec.yaml
+
+# 4. Deploy
+stackkit apply ~/my-homelab-spec.yaml
+```
+
+See [DEFAULT_SPECS_README.md](./DEFAULT_SPECS_README.md) for detailed customization guide.
+
 ### Using with KombiStack
 
 StackKits are automatically loaded by KombiStack. Simply specify your intent:
 
 ```yaml
-# kombination.yaml
+# kombination.yaml (User Intent - created via UI Wizard)
 name: my-homelab
-goals:
-  storage: true
-  media: true
+kit: base-homelab
+
 nodes:
   - name: server-1
-    os: ubuntu-24
-    resources:
-      cpu: 4
-      memory: 8
+    type: main
+    provider: local
+    ssh:
+      host: 192.168.1.100
+      user: admin
+
+services:
+  - name: traefik
+    type: reverse-proxy
 ```
 
 KombiStack will automatically:
-1. Select the appropriate StackKit (`base-homelab`)
-2. Apply OS variant (`ubuntu-24`)
-3. Select compute tier (`standard`)
-4. Generate infrastructure code
+1. Validate via Unifier Pipeline
+2. Resolve StackKit (`base-homelab`)
+3. Apply OS variant (auto-detect)
+4. Generate `stack-spec.yaml` (standardized)
+5. Provision via OpenTofu
 
-### Manual Validation
+**Important:** KombiStack uses a two-file system:
+- `kombination.yaml` - User intent (from UI)
+- `stack-spec.yaml` - Unifier output (StackKit input)
+
+See [Spec-File Separation](../KombiStack/docs/architecture/spec-file-separation.md) for details.
+
+### Manual Validation (Development)
 
 ```bash
-# Validate a spec against a StackKit
+# Validate spec against StackKit schema
 cue vet ./base-homelab/... my-spec.cue
 
 # Export resolved configuration
@@ -107,6 +155,30 @@ modes:
     description: "Terramate-orchestrated"
 ```
 
+### default-spec.yaml - CLI Template
+
+Ready-to-use deployment template (see [DEFAULT_SPECS_README.md](./DEFAULT_SPECS_README.md)):
+
+```yaml
+version: "1.0"
+stack:
+  name: my-homelab
+  kit: base-homelab
+  variant: os/ubuntu-24
+
+nodes:
+  - name: homelab-server
+    ip: 192.168.1.100  # ⚠️ ANPASSEN
+    ssh:
+      user: admin      # ⚠️ ANPASSEN
+
+services:
+  - name: traefik
+    type: reverse-proxy
+  - name: dokploy
+    type: deployment-platform
+```
+
 ### stackfile.cue - Main Schema
 
 ```cue
@@ -119,7 +191,7 @@ import "github.com/kombihq/stackkits/base"
         name: "base-homelab"
     }
     nodes: [#MainNode]
-    services: [#TraefikService, #DockgeService, ...]
+    services: [#TraefikService, #DokployService, ...]
 }
 ```
 
@@ -148,12 +220,63 @@ make test-integration
 
 ## 📖 Documentation
 
-- [Architecture Overview](docs/architecture.md)
-- [Creating a StackKit](docs/creating-stackkits.md)
-- [Variant System](docs/variants.md)
-- [Template Reference](docs/templates.md)
+### Getting Started
+- **[Default Specs Guide](DEFAULT_SPECS_README.md)** - CLI templates for base/ha/modern-homelab ⭐
+- **[stack-spec.yaml Reference](docs/stack-spec-reference.md)** - Standardized spec format
+- [CLI Reference](docs/cli-reference.md) - Command-line tool (planned)
+
+### Core Concepts
+- [Architecture Overview](docs/architecture.md) - System design, IaC-first principles, layer architecture
+- [Creating a StackKit](docs/creating-stackkits.md) - Build custom StackKits step-by-step
+- [Variant System](docs/variants.md) - OS variants (Ubuntu, Debian) and compute tiers
+- [Template Reference](docs/templates.md) - OpenTofu template patterns and best practices
+
+### Operations
+- [CLI Reference](docs/cli-reference.md) - Command-line usage (planned)
+- [Existing Systems](docs/existing-systems.md) - Adopt StackKits on running systems
+
+### Ecosystem
+- [Registry Integration](docs/registry-integration.md) - Provider and StackKit registries
+- [Roadmap](docs/ROADMAP.md) - Development roadmap and future plans
+
+### Internal
+- [Architecture Plan](docs/ARCHITECTURE_PLAN.md) - Detailed technical architecture
+- [IaC-First Architecture](docs/IAC_FIRST_ARCHITECTURE.md) - Why IaC-first, not agent-first
+
+## 🔧 Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  User Config (kombination.yaml)                         │
+└───────────────────────┬─────────────────────────────────┘
+                        │
+                        ▼
+┌─────────────────────────────────────────────────────────┐
+│  CUE Validation Layer                                    │
+│  • Schema validation  • Type checking  • Defaults       │
+└───────────────────────┬─────────────────────────────────┘
+                        │
+                        ▼
+┌─────────────────────────────────────────────────────────┐
+│  OpenTofu Generation                                     │
+│  • HCL templates  • Provider configuration               │
+└───────────────────────┬─────────────────────────────────┘
+                        │
+                        ▼
+┌─────────────────────────────────────────────────────────┐
+│  Execution (tofu init → plan → apply)                   │
+│  • Docker containers  • Networks  • Volumes             │
+└─────────────────────────────────────────────────────────┘
+```
 
 ## 🤝 Contributing
+
+We welcome contributions! Priority areas:
+
+1. **Documentation** - Improve guides and examples
+2. **StackKits** - Create new StackKits for common use cases
+3. **Variants** - Add support for additional operating systems
+4. **CLI** - Help build the `stackkit` command-line tool
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
@@ -163,4 +286,4 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ---
 
-**Part of the KombiStack ecosystem** - [kombistack.dev](https://kombistack.dev)
+**StackKits** works standalone or as part of the [KombiStack](https://kombistack.dev) ecosystem.

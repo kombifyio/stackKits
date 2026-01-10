@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  stackkits-website:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: stackkits-website
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+    labels:
+      - "com.stackkits.description=StackKits Marketing Website"

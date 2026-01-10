@@ -1,0 +1,56 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --border: 214.3 31.8% 91.4%;
+  }
+
+  body {
+    @apply bg-white text-gray-900;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+  
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+@layer components {
+  .container-custom {
+    @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+  }
+  
+  .section-padding {
+    @apply py-20 md:py-28;
+  }
+  
+  .gradient-text {
+    @apply bg-gradient-to-r from-orange-600 to-orange-400 bg-clip-text text-transparent;
+  }
+  
+  .gradient-text-orange {
+    @apply bg-gradient-to-r from-orange-500 to-orange-300 bg-clip-text text-transparent;
+  }
+  
+  .card-hover {
+    @apply transition-all duration-300 hover:shadow-xl hover:-translate-y-1;
+  }
+  
+  .btn-primary {
+    @apply px-6 py-3 bg-orange-500 text-white rounded-lg font-medium transition-all duration-300 hover:bg-orange-600 hover:shadow-lg;
+  }
+  
+  .btn-secondary {
+    @apply px-6 py-3 bg-white text-gray-700 rounded-lg font-medium transition-all duration-300 hover:bg-gray-100 border border-gray-300;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
