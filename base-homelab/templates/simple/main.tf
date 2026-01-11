@@ -31,13 +31,54 @@ terraform {
 # =============================================================================
 
 variable "domain" {
-  description = "Primary domain for the homelab"
+  description = "Optional base domain for proxy hostnames (e.g. homelab.example.com). Not required for ports mode."
   type        = string
+  default     = ""
 }
 
 variable "acme_email" {
-  description = "Email for ACME/Let's Encrypt certificates"
+  description = "Optional email for ACME/Let's Encrypt (only used when enable_letsencrypt=true)"
   type        = string
+  default     = ""
+}
+
+variable "access_mode" {
+  description = "Access mode: 'ports' (zero-config, direct ports) or 'proxy' (Traefik routing with optional TLS)"
+  type        = string
+  default     = "ports"
+  validation {
+    condition     = contains(["ports", "proxy"], var.access_mode) && (var.access_mode != "proxy" || var.domain != "")
+    error_message = "access_mode must be 'ports' or 'proxy'. If access_mode='proxy', you must set a real 'domain' (subdomains under .local are not reliable)."
+  }
+}
+
+variable "enable_https" {
+  description = "Enable HTTPS on Traefik (proxy mode). Without enable_letsencrypt, Traefik uses a default/self-signed certificate."
+  type        = bool
+  default     = false
+}
+
+variable "enable_letsencrypt" {
+  description = "Enable Let's Encrypt via ACME (proxy mode only). Requires a real, resolvable domain and open ports 80/443."
+  type        = bool
+  default     = false
+}
+
+variable "_validate_letsencrypt" {
+  description = "Internal validation helper"
+  type        = bool
+  default     = true
+  validation {
+    condition = (
+      !var.enable_letsencrypt || (
+        var.access_mode == "proxy" &&
+        var.domain != "" &&
+        var.enable_https &&
+        var.acme_email != ""
+      )
+    )
+    error_message = "enable_letsencrypt requires: access_mode='proxy', domain set, enable_https=true, and acme_email set."
+  }
 }
 
 variable "variant" {
@@ -60,10 +101,70 @@ variable "compute_tier" {
   }
 }
 
-variable "traefik_dashboard_insecure" {
-  description = "Enable insecure dashboard access (dev only)"
-  type        = bool
-  default     = false
+variable "bind_address" {
+  description = "IP address to bind service ports on (0.0.0.0 = LAN)"
+  type        = string
+  default     = "0.0.0.0"
+}
+
+variable "advertise_host" {
+  description = "Hostname/IP to use in printed links (defaults to <hostname>.local). Set this if your clients don't resolve mDNS .local names."
+  type        = string
+  default     = ""
+}
+
+variable "traefik_dashboard_port" {
+  description = "Host port for Traefik dashboard"
+  type        = number
+  default     = 8080
+}
+
+variable "dozzle_port" {
+  description = "Host port for Dozzle (logs) in ports mode"
+  type        = number
+  default     = 8888
+}
+
+variable "dokploy_port" {
+  description = "Host port for Dokploy in ports mode"
+  type        = number
+  default     = 3000
+}
+
+variable "uptime_kuma_port" {
+  description = "Host port for Uptime Kuma in ports mode"
+  type        = number
+  default     = 3001
+}
+
+variable "beszel_port" {
+  description = "Host port for Beszel in ports mode"
+  type        = number
+  default     = 8090
+}
+
+variable "dockge_port" {
+  description = "Host port for Dockge in ports mode"
+  type        = number
+  default     = 5001
+}
+
+variable "portainer_port" {
+  description = "Host port for Portainer in ports mode"
+  type        = number
+  default     = 9000
+}
+
+variable "netdata_port" {
+  description = "Host port for Netdata in ports mode"
+  type        = number
+  default     = 19999
+}
+
+variable "whoami_port" {
+  description = "Host port for Whoami (test service) in ports mode"
+  type        = number
+  default     = 9080
 }
 
 variable "stacks_dir" {
@@ -77,15 +178,30 @@ variable "stacks_dir" {
 # =============================================================================
 
 locals {
-  # Service URLs
-  traefik_url     = "traefik.${var.domain}"
-  deploy_url      = "deploy.${var.domain}"
-  status_url      = "status.${var.domain}"
-  monitor_url     = "monitor.${var.domain}"
-  logs_url        = "logs.${var.domain}"
-  whoami_url      = "whoami.${var.domain}"
-  dockge_url      = "dockge.${var.domain}"
-  portainer_url   = "portainer.${var.domain}"
+  # Zero-config naming standard:
+  # - Prefer direct ports (access_mode=ports)
+  # - mDNS gives you a single stable name: HOSTNAME.local
+  # - Proxy mode is only supported with a real DNS domain (not .local subdomains)
+  hostname  = try(trimspace(file("/etc/hostname")), "homelab")
+  mdns_host = "${local.hostname}.local"
+  advertise = var.advertise_host != "" ? var.advertise_host : local.mdns_host
+
+  domain_enabled = var.domain != ""
+  base_domain    = var.domain
+
+  # Proxy hostnames (proxy mode, requires real domain)
+  traefik_host   = "traefik.${local.base_domain}"
+  deploy_host    = "deploy.${local.base_domain}"
+  status_host    = "status.${local.base_domain}"
+  monitor_host   = "monitor.${local.base_domain}"
+  logs_host      = "logs.${local.base_domain}"
+  whoami_host    = "whoami.${local.base_domain}"
+  dockge_host    = "dockge.${local.base_domain}"
+  portainer_host = "portainer.${local.base_domain}"
+
+  use_proxy       = var.access_mode == "proxy"
+  proxy_entrypoint = local.use_proxy && var.enable_https ? "websecure" : "web"
+  proxy_scheme     = local.use_proxy && var.enable_https ? "https" : "http"
 
   # Variant flags
   is_default  = var.variant == "default"
@@ -209,19 +325,26 @@ resource "docker_container" "traefik" {
 
   restart = "unless-stopped"
 
-  ports {
-    internal = 80
-    external = 80
+  dynamic "ports" {
+    for_each = local.use_proxy ? [1] : []
+    content {
+      internal = 80
+      external = 80
+    }
   }
 
-  ports {
-    internal = 443
-    external = 443
+  dynamic "ports" {
+    for_each = local.use_proxy && var.enable_https ? [1] : []
+    content {
+      internal = 443
+      external = 443
+    }
   }
 
   ports {
     internal = 8080
-    external = 8080
+    external = var.traefik_dashboard_port
+    ip       = var.bind_address
   }
 
   volumes {
@@ -244,31 +367,50 @@ resource "docker_container" "traefik" {
     name = docker_network.traefik.name
   }
 
-  command = [
-    "--api.dashboard=true",
-    "--api.insecure=${var.traefik_dashboard_insecure}",
-    "--providers.docker=true",
-    "--providers.docker.exposedbydefault=false",
-    "--providers.docker.network=traefik",
-    "--entrypoints.web.address=:80",
-    "--entrypoints.web.http.redirections.entrypoint.to=websecure",
-    "--entrypoints.web.http.redirections.entrypoint.scheme=https",
-    "--entrypoints.websecure.address=:443",
-    "--certificatesresolvers.letsencrypt.acme.email=${var.acme_email}",
-    "--certificatesresolvers.letsencrypt.acme.storage=/certs/acme.json",
-    "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web",
-    "--ping=true",
-    "--log.level=INFO",
-  ]
+  command = concat(
+    [
+      "--api.dashboard=true",
+      "--api.insecure=true",
+      "--providers.docker=true",
+      "--providers.docker.exposedbydefault=false",
+      "--providers.docker.network=traefik",
+      "--entrypoints.web.address=:80",
+    ],
+    (local.use_proxy && var.enable_https) ? [
+      "--entrypoints.web.http.redirections.entrypoint.to=websecure",
+      "--entrypoints.web.http.redirections.entrypoint.scheme=https",
+      "--entrypoints.websecure.address=:443",
+    ] : [],
+    (local.use_proxy && var.enable_https && var.enable_letsencrypt) ? [
+      "--certificatesresolvers.letsencrypt.acme.email=${var.acme_email}",
+      "--certificatesresolvers.letsencrypt.acme.storage=/certs/acme.json",
+      "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web",
+    ] : [],
+    [
+      "--ping=true",
+      "--log.level=INFO",
+    ]
+  )
 
   dynamic "labels" {
-    for_each = merge(local.common_labels, {
-      "traefik.enable"                            = "true"
-      "traefik.http.routers.traefik.entrypoints"  = "websecure"
-      "traefik.http.routers.traefik.rule"         = "Host(`${local.traefik_url}`)"
-      "traefik.http.routers.traefik.service"      = "api@internal"
-      "traefik.http.routers.traefik.tls.certresolver" = "letsencrypt"
-    })
+    for_each = merge(
+      local.common_labels,
+      local.use_proxy ? merge(
+        {
+          "traefik.enable"                           = "true"
+          "traefik.http.routers.traefik.entrypoints" = local.proxy_entrypoint
+          "traefik.http.routers.traefik.rule"        = "Host(`${local.traefik_host}`)"
+          "traefik.http.routers.traefik.service"     = "api@internal"
+        },
+        (var.enable_https ? (var.enable_letsencrypt ? {
+          "traefik.http.routers.traefik.tls.certresolver" = "letsencrypt"
+        } : {
+          "traefik.http.routers.traefik.tls" = "true"
+        }) : {})
+      ) : {
+        "traefik.enable" = "false"
+      }
+    )
     content {
       label = labels.key
       value = labels.value
@@ -303,6 +445,11 @@ resource "docker_container" "dokploy" {
   restart    = "unless-stopped"
   depends_on = [docker_container.traefik]
 
+  ports {
+    internal = 3000
+    external = var.dokploy_port
+  }
+
   volumes {
     host_path      = "/var/run/docker.sock"
     container_path = "/var/run/docker.sock"
@@ -320,13 +467,24 @@ resource "docker_container" "dokploy" {
   env = ["NODE_ENV=production"]
 
   dynamic "labels" {
-    for_each = merge(local.common_labels, {
-      "traefik.enable"                                          = "true"
-      "traefik.http.routers.dokploy.entrypoints"                = "websecure"
-      "traefik.http.routers.dokploy.rule"                       = "Host(`${local.deploy_url}`)"
-      "traefik.http.routers.dokploy.tls.certresolver"           = "letsencrypt"
-      "traefik.http.services.dokploy.loadbalancer.server.port"  = "3000"
-    })
+    for_each = merge(
+      local.common_labels,
+      local.use_proxy ? merge(
+        {
+          "traefik.enable"                                         = "true"
+          "traefik.http.routers.dokploy.entrypoints"               = local.proxy_entrypoint
+          "traefik.http.routers.dokploy.rule"                      = "Host(`${local.deploy_host}`)"
+          "traefik.http.services.dokploy.loadbalancer.server.port" = "3000"
+        },
+        (var.enable_https ? (var.enable_letsencrypt ? {
+          "traefik.http.routers.dokploy.tls.certresolver" = "letsencrypt"
+        } : {
+          "traefik.http.routers.dokploy.tls" = "true"
+        }) : {})
+      ) : {
+        "traefik.enable" = "false"
+      }
+    )
     content {
       label = labels.key
       value = labels.value
@@ -355,6 +513,11 @@ resource "docker_container" "uptime_kuma" {
   restart    = "unless-stopped"
   depends_on = [docker_container.traefik]
 
+  ports {
+    internal = 3001
+    external = var.uptime_kuma_port
+  }
+
   volumes {
     volume_name    = docker_volume.uptime_kuma_data[0].name
     container_path = "/app/data"
@@ -365,13 +528,24 @@ resource "docker_container" "uptime_kuma" {
   }
 
   dynamic "labels" {
-    for_each = merge(local.common_labels, {
-      "traefik.enable"                                             = "true"
-      "traefik.http.routers.uptime-kuma.entrypoints"               = "websecure"
-      "traefik.http.routers.uptime-kuma.rule"                      = "Host(`${local.status_url}`)"
-      "traefik.http.routers.uptime-kuma.tls.certresolver"          = "letsencrypt"
-      "traefik.http.services.uptime-kuma.loadbalancer.server.port" = "3001"
-    })
+    for_each = merge(
+      local.common_labels,
+      local.use_proxy ? merge(
+        {
+          "traefik.enable"                                                = "true"
+          "traefik.http.routers.uptime-kuma.entrypoints"                  = local.proxy_entrypoint
+          "traefik.http.routers.uptime-kuma.rule"                         = "Host(`${local.status_host}`)"
+          "traefik.http.services.uptime-kuma.loadbalancer.server.port"    = "3001"
+        },
+        (var.enable_https ? (var.enable_letsencrypt ? {
+          "traefik.http.routers.uptime-kuma.tls.certresolver" = "letsencrypt"
+        } : {
+          "traefik.http.routers.uptime-kuma.tls" = "true"
+        }) : {})
+      ) : {
+        "traefik.enable" = "false"
+      }
+    )
     content {
       label = labels.key
       value = labels.value
@@ -400,6 +574,11 @@ resource "docker_container" "beszel" {
   restart    = "unless-stopped"
   depends_on = [docker_container.traefik]
 
+  ports {
+    internal = 8090
+    external = var.beszel_port
+  }
+
   volumes {
     volume_name    = docker_volume.beszel_data[0].name
     container_path = "/beszel_data"
@@ -410,13 +589,24 @@ resource "docker_container" "beszel" {
   }
 
   dynamic "labels" {
-    for_each = merge(local.common_labels, {
-      "traefik.enable"                                        = "true"
-      "traefik.http.routers.beszel.entrypoints"               = "websecure"
-      "traefik.http.routers.beszel.rule"                      = "Host(`${local.monitor_url}`)"
-      "traefik.http.routers.beszel.tls.certresolver"          = "letsencrypt"
-      "traefik.http.services.beszel.loadbalancer.server.port" = "8090"
-    })
+    for_each = merge(
+      local.common_labels,
+      local.use_proxy ? merge(
+        {
+          "traefik.enable"                                        = "true"
+          "traefik.http.routers.beszel.entrypoints"               = local.proxy_entrypoint
+          "traefik.http.routers.beszel.rule"                      = "Host(`${local.monitor_host}`)"
+          "traefik.http.services.beszel.loadbalancer.server.port" = "8090"
+        },
+        (var.enable_https ? (var.enable_letsencrypt ? {
+          "traefik.http.routers.beszel.tls.certresolver" = "letsencrypt"
+        } : {
+          "traefik.http.routers.beszel.tls" = "true"
+        }) : {})
+      ) : {
+        "traefik.enable" = "false"
+      }
+    )
     content {
       label = labels.key
       value = labels.value
@@ -442,6 +632,11 @@ resource "docker_container" "dozzle" {
   restart    = "unless-stopped"
   depends_on = [docker_container.traefik]
 
+  ports {
+    internal = 8080
+    external = var.dozzle_port
+  }
+
   volumes {
     host_path      = "/var/run/docker.sock"
     container_path = "/var/run/docker.sock"
@@ -453,13 +648,24 @@ resource "docker_container" "dozzle" {
   }
 
   dynamic "labels" {
-    for_each = merge(local.common_labels, {
-      "traefik.enable"                                        = "true"
-      "traefik.http.routers.dozzle.entrypoints"               = "websecure"
-      "traefik.http.routers.dozzle.rule"                      = "Host(`${local.logs_url}`)"
-      "traefik.http.routers.dozzle.tls.certresolver"          = "letsencrypt"
-      "traefik.http.services.dozzle.loadbalancer.server.port" = "8080"
-    })
+    for_each = merge(
+      local.common_labels,
+      local.use_proxy ? merge(
+        {
+          "traefik.enable"                                        = "true"
+          "traefik.http.routers.dozzle.entrypoints"               = local.proxy_entrypoint
+          "traefik.http.routers.dozzle.rule"                      = "Host(`${local.logs_host}`)"
+          "traefik.http.services.dozzle.loadbalancer.server.port" = "8080"
+        },
+        (var.enable_https ? (var.enable_letsencrypt ? {
+          "traefik.http.routers.dozzle.tls.certresolver" = "letsencrypt"
+        } : {
+          "traefik.http.routers.dozzle.tls" = "true"
+        }) : {})
+      ) : {
+        "traefik.enable" = "false"
+      }
+    )
     content {
       label = labels.key
       value = labels.value
@@ -488,18 +694,34 @@ resource "docker_container" "whoami" {
   restart    = "unless-stopped"
   depends_on = [docker_container.traefik]
 
+  ports {
+    internal = 80
+    external = var.whoami_port
+  }
+
   networks_advanced {
     name = docker_network.traefik.name
   }
 
   dynamic "labels" {
-    for_each = merge(local.common_labels, {
-      "traefik.enable"                                        = "true"
-      "traefik.http.routers.whoami.entrypoints"               = "websecure"
-      "traefik.http.routers.whoami.rule"                      = "Host(`${local.whoami_url}`)"
-      "traefik.http.routers.whoami.tls.certresolver"          = "letsencrypt"
-      "traefik.http.services.whoami.loadbalancer.server.port" = "80"
-    })
+    for_each = merge(
+      local.common_labels,
+      local.use_proxy ? merge(
+        {
+          "traefik.enable"                                        = "true"
+          "traefik.http.routers.whoami.entrypoints"               = local.proxy_entrypoint
+          "traefik.http.routers.whoami.rule"                      = "Host(`${local.whoami_host}`)"
+          "traefik.http.services.whoami.loadbalancer.server.port" = "80"
+        },
+        (var.enable_https ? (var.enable_letsencrypt ? {
+          "traefik.http.routers.whoami.tls.certresolver" = "letsencrypt"
+        } : {
+          "traefik.http.routers.whoami.tls" = "true"
+        }) : {})
+      ) : {
+        "traefik.enable" = "false"
+      }
+    )
     content {
       label = labels.key
       value = labels.value
@@ -528,6 +750,11 @@ resource "docker_container" "dockge" {
   restart    = "unless-stopped"
   depends_on = [docker_container.traefik]
 
+  ports {
+    internal = 5001
+    external = var.dockge_port
+  }
+
   volumes {
     host_path      = "/var/run/docker.sock"
     container_path = "/var/run/docker.sock"
@@ -550,13 +777,24 @@ resource "docker_container" "dockge" {
   env = ["DOCKGE_STACKS_DIR=/opt/stacks"]
 
   dynamic "labels" {
-    for_each = merge(local.common_labels, {
-      "traefik.enable"                                        = "true"
-      "traefik.http.routers.dockge.entrypoints"               = "websecure"
-      "traefik.http.routers.dockge.rule"                      = "Host(`${local.dockge_url}`)"
-      "traefik.http.routers.dockge.tls.certresolver"          = "letsencrypt"
-      "traefik.http.services.dockge.loadbalancer.server.port" = "5001"
-    })
+    for_each = merge(
+      local.common_labels,
+      local.use_proxy ? merge(
+        {
+          "traefik.enable"                                        = "true"
+          "traefik.http.routers.dockge.entrypoints"               = local.proxy_entrypoint
+          "traefik.http.routers.dockge.rule"                      = "Host(`${local.dockge_host}`)"
+          "traefik.http.services.dockge.loadbalancer.server.port" = "5001"
+        },
+        (var.enable_https ? (var.enable_letsencrypt ? {
+          "traefik.http.routers.dockge.tls.certresolver" = "letsencrypt"
+        } : {
+          "traefik.http.routers.dockge.tls" = "true"
+        }) : {})
+      ) : {
+        "traefik.enable" = "false"
+      }
+    )
     content {
       label = labels.key
       value = labels.value
@@ -585,6 +823,11 @@ resource "docker_container" "portainer" {
   restart    = "unless-stopped"
   depends_on = [docker_container.traefik]
 
+  ports {
+    internal = 9000
+    external = var.portainer_port
+  }
+
   volumes {
     host_path      = "/var/run/docker.sock"
     container_path = "/var/run/docker.sock"
@@ -600,13 +843,24 @@ resource "docker_container" "portainer" {
   }
 
   dynamic "labels" {
-    for_each = merge(local.common_labels, {
-      "traefik.enable"                                           = "true"
-      "traefik.http.routers.portainer.entrypoints"               = "websecure"
-      "traefik.http.routers.portainer.rule"                      = "Host(`${local.portainer_url}`)"
-      "traefik.http.routers.portainer.tls.certresolver"          = "letsencrypt"
-      "traefik.http.services.portainer.loadbalancer.server.port" = "9000"
-    })
+    for_each = merge(
+      local.common_labels,
+      local.use_proxy ? merge(
+        {
+          "traefik.enable"                                           = "true"
+          "traefik.http.routers.portainer.entrypoints"               = local.proxy_entrypoint
+          "traefik.http.routers.portainer.rule"                      = "Host(`${local.portainer_host}`)"
+          "traefik.http.services.portainer.loadbalancer.server.port" = "9000"
+        },
+        (var.enable_https ? (var.enable_letsencrypt ? {
+          "traefik.http.routers.portainer.tls.certresolver" = "letsencrypt"
+        } : {
+          "traefik.http.routers.portainer.tls" = "true"
+        }) : {})
+      ) : {
+        "traefik.enable" = "false"
+      }
+    )
     content {
       label = labels.key
       value = labels.value
@@ -634,6 +888,11 @@ resource "docker_container" "netdata" {
 
   restart    = "unless-stopped"
   depends_on = [docker_container.traefik]
+
+  ports {
+    internal = 19999
+    external = var.netdata_port
+  }
 
   capabilities {
     add = ["SYS_PTRACE"]
@@ -674,13 +933,24 @@ resource "docker_container" "netdata" {
   }
 
   dynamic "labels" {
-    for_each = merge(local.common_labels, {
-      "traefik.enable"                                         = "true"
-      "traefik.http.routers.netdata.entrypoints"               = "websecure"
-      "traefik.http.routers.netdata.rule"                      = "Host(`${local.monitor_url}`)"
-      "traefik.http.routers.netdata.tls.certresolver"          = "letsencrypt"
-      "traefik.http.services.netdata.loadbalancer.server.port" = "19999"
-    })
+    for_each = merge(
+      local.common_labels,
+      local.use_proxy ? merge(
+        {
+          "traefik.enable"                                         = "true"
+          "traefik.http.routers.netdata.entrypoints"               = local.proxy_entrypoint
+          "traefik.http.routers.netdata.rule"                      = "Host(`${local.monitor_host}`)"
+          "traefik.http.services.netdata.loadbalancer.server.port" = "19999"
+        },
+        (var.enable_https ? (var.enable_letsencrypt ? {
+          "traefik.http.routers.netdata.tls.certresolver" = "letsencrypt"
+        } : {
+          "traefik.http.routers.netdata.tls" = "true"
+        }) : {})
+      ) : {
+        "traefik.enable" = "false"
+      }
+    )
     content {
       label = labels.key
       value = labels.value
@@ -697,57 +967,117 @@ resource "docker_container" "netdata" {
 output "service_urls" {
   description = "All deployed service URLs"
   value = {
-    traefik = {
-      name        = "Traefik Dashboard"
-      url         = "https://${local.traefik_url}"
-      description = "Reverse proxy dashboard"
+    mode = var.access_mode
+    hostname = local.hostname
+    mdns     = local.mdns_host
+    suggested_hosts = [local.mdns_host, local.hostname]
+    advertised_host = local.advertise
+
+    ports = {
+      traefik_dashboard = {
+        name        = "Traefik Dashboard"
+        url         = "http://${local.advertise}:${var.traefik_dashboard_port}"
+        description = "Direct port access"
+      }
+
+      dokploy = local.use_dokploy ? {
+        name        = "Dokploy"
+        url         = "http://${local.advertise}:${var.dokploy_port}"
+        description = "PaaS deployment platform"
+      } : null
+
+      monitoring = local.is_default ? {
+        name        = "Uptime Kuma"
+        url         = "http://${local.advertise}:${var.uptime_kuma_port}"
+        description = "Service status and uptime monitoring"
+      } : local.is_beszel ? {
+        name        = "Beszel"
+        url         = "http://${local.advertise}:${var.beszel_port}"
+        description = "Server metrics monitoring"
+      } : {
+        name        = "Netdata"
+        url         = "http://${local.advertise}:${var.netdata_port}"
+        description = "System performance monitoring"
+      }
+
+      logs = {
+        name        = "Dozzle"
+        url         = "http://${local.advertise}:${var.dozzle_port}"
+        description = "Real-time container log viewer"
+      }
+
+      whoami = local.use_dokploy ? {
+        name        = "Whoami"
+        url         = "http://${local.advertise}:${var.whoami_port}"
+        description = "Test service"
+      } : null
+
+      dockge = local.use_dockge ? {
+        name        = "Dockge"
+        url         = "http://${local.advertise}:${var.dockge_port}"
+        description = "Docker Compose management"
+      } : null
+
+      portainer = local.is_minimal ? {
+        name        = "Portainer"
+        url         = "http://${local.advertise}:${var.portainer_port}"
+        description = "Container management UI"
+      } : null
     }
-    
-    # Default/Beszel variant services
-    dokploy = local.use_dokploy ? {
-      name        = "Dokploy"
-      url         = "https://${local.deploy_url}"
-      description = "PaaS deployment platform"
-    } : null
 
-    monitoring = local.is_default ? {
-      name        = "Uptime Kuma"
-      url         = "https://${local.status_url}"
-      description = "Service status and uptime monitoring"
-    } : local.is_beszel ? {
-      name        = "Beszel"
-      url         = "https://${local.monitor_url}"
-      description = "Server metrics monitoring"
-    } : {
-      name        = "Netdata"
-      url         = "https://${local.monitor_url}"
-      description = "System performance monitoring"
-    }
+    proxy = local.use_proxy ? {
+      base_domain = local.base_domain
+      scheme      = local.proxy_scheme
 
-    logs = {
-      name        = "Dozzle"
-      url         = "https://${local.logs_url}"
-      description = "Real-time container log viewer"
-    }
+      traefik = {
+        name        = "Traefik Dashboard"
+        url         = "${local.proxy_scheme}://${local.traefik_host}"
+        description = "Reverse proxy dashboard"
+      }
 
-    # Test service (default/beszel only)
-    whoami = local.use_dokploy ? {
-      name        = "Whoami"
-      url         = "https://${local.whoami_url}"
-      description = "Test service for proxy verification"
-    } : null
+      dokploy = local.use_dokploy ? {
+        name        = "Dokploy"
+        url         = "${local.proxy_scheme}://${local.deploy_host}"
+        description = "PaaS deployment platform"
+      } : null
 
-    # Minimal variant services
-    dockge = local.use_dockge ? {
-      name        = "Dockge"
-      url         = "https://${local.dockge_url}"
-      description = "Docker Compose management"
-    } : null
+      monitoring = local.is_default ? {
+        name        = "Uptime Kuma"
+        url         = "${local.proxy_scheme}://${local.status_host}"
+        description = "Service status and uptime monitoring"
+      } : local.is_beszel ? {
+        name        = "Beszel"
+        url         = "${local.proxy_scheme}://${local.monitor_host}"
+        description = "Server metrics monitoring"
+      } : {
+        name        = "Netdata"
+        url         = "${local.proxy_scheme}://${local.monitor_host}"
+        description = "System performance monitoring"
+      }
 
-    portainer = local.is_minimal ? {
-      name        = "Portainer"
-      url         = "https://${local.portainer_url}"
-      description = "Container management UI"
+      logs = {
+        name        = "Dozzle"
+        url         = "${local.proxy_scheme}://${local.logs_host}"
+        description = "Real-time container log viewer"
+      }
+
+      whoami = local.use_dokploy ? {
+        name        = "Whoami"
+        url         = "${local.proxy_scheme}://${local.whoami_host}"
+        description = "Test service"
+      } : null
+
+      dockge = local.use_dockge ? {
+        name        = "Dockge"
+        url         = "${local.proxy_scheme}://${local.dockge_host}"
+        description = "Docker Compose management"
+      } : null
+
+      portainer = local.is_minimal ? {
+        name        = "Portainer"
+        url         = "${local.proxy_scheme}://${local.portainer_host}"
+        description = "Container management UI"
+      } : null
     } : null
   }
 }
@@ -759,15 +1089,26 @@ output "deployment_summary" {
 
 **Variant:** ${var.variant}
 **Compute Tier:** ${var.compute_tier}
-**Domain:** ${var.domain}
+**Access Mode:** ${var.access_mode}
+**Naming Standard:** ${local.mdns_host} (mDNS) + IP fallback (set `advertise_host` if needed)
 
 ## 🔗 Service URLs
 
-| Service | URL | Description |
-|---------|-----|-------------|
-| Traefik | https://${local.traefik_url} | Reverse proxy dashboard |
-${local.use_dokploy ? "| Dokploy | https://${local.deploy_url} | PaaS deployment platform |\n" : ""}${local.is_default ? "| Uptime Kuma | https://${local.status_url} | Status monitoring |\n" : ""}${local.is_beszel ? "| Beszel | https://${local.monitor_url} | Server monitoring |\n" : ""}| Dozzle | https://${local.logs_url} | Container logs |
-${local.use_dokploy ? "| Whoami | https://${local.whoami_url} | Test service |\n" : ""}${local.use_dockge ? "| Dockge | https://${local.dockge_url} | Compose manager |\n" : ""}${local.is_minimal ? "| Portainer | https://${local.portainer_url} | Container UI |\n| Netdata | https://${local.monitor_url} | System monitoring |\n" : ""}
+### Preferred (Zero-Config)
+
+Links use `${local.advertise}` (defaults to `${local.mdns_host}`). If your clients don't resolve mDNS `.local`, set `advertise_host` to the server IP/hostname.
+
+| Service | URL | Notes |
+|---------|-----|-------|
+| Traefik Dashboard | http://${local.advertise}:${var.traefik_dashboard_port} | Direct port access |
+${local.use_dokploy ? "| Dokploy | http://${local.advertise}:${var.dokploy_port} | Direct port access |\n" : ""}${local.is_default ? "| Uptime Kuma | http://${local.advertise}:${var.uptime_kuma_port} | Direct port access |\n" : ""}${local.is_beszel ? "| Beszel | http://${local.advertise}:${var.beszel_port} | Direct port access |\n" : ""}| Dozzle | http://${local.advertise}:${var.dozzle_port} | Direct port access |
+${local.use_dokploy ? "| Whoami | http://${local.advertise}:${var.whoami_port} | Test service |\n" : ""}${local.use_dockge ? "| Dockge | http://${local.advertise}:${var.dockge_port} | Direct port access |\n" : ""}${local.is_minimal ? "| Portainer | http://${local.advertise}:${var.portainer_port} | Direct port access |\n| Netdata | http://${local.advertise}:${var.netdata_port} | Direct port access |\n" : ""}
+
+### Optional (Proxy Mode)
+
+If you set `access_mode = "proxy"`, the StackKit also exposes clean hostnames.
+Base domain: `${local.base_domain}`
+
 ## 📋 Next Steps
 
 1. Access Traefik dashboard to verify routing

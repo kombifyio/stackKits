@@ -1,0 +1,379 @@
+// Package iac provides a unified interface for IaC execution.
+// It supports both Day 1 operations (OpenTofu only) and Day 1+2 operations (Terramate).
+package iac
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/kombihq/stackkits/internal/terramate"
+	"github.com/kombihq/stackkits/internal/tofu"
+	"github.com/kombihq/stackkits/pkg/models"
+)
+
+// ExecutionMode represents the IaC execution mode
+type ExecutionMode string
+
+const (
+	// ModeOpenTofu uses OpenTofu directly (Day 1 only)
+	ModeOpenTofu ExecutionMode = "opentofu"
+	// ModeTerramate uses Terramate for orchestration (Day 1 + Day 2)
+	ModeTerramate ExecutionMode = "terramate"
+)
+
+// Executor provides a unified interface for IaC operations
+type Executor interface {
+	// Core operations
+	Init(ctx context.Context) error
+	Plan(ctx context.Context) (*PlanResult, error)
+	Apply(ctx context.Context, autoApprove bool) error
+	Destroy(ctx context.Context, autoApprove bool) error
+
+	// Day 2 operations (may not be supported in all modes)
+	DetectDrift(ctx context.Context) (*DriftResult, error)
+	Refresh(ctx context.Context) error
+
+	// Metadata
+	Mode() ExecutionMode
+	IsInstalled() bool
+	Version(ctx context.Context) (string, error)
+}
+
+// PlanResult represents the result of a plan operation
+type PlanResult struct {
+	HasChanges bool
+	Add        int
+	Change     int
+	Destroy    int
+	Output     string
+	Duration   time.Duration
+}
+
+// DriftResult represents the result of drift detection
+type DriftResult struct {
+	HasDrift  bool
+	Resources []DriftedResource
+	CheckedAt time.Time
+	Duration  time.Duration
+}
+
+// DriftedResource represents a resource with drift
+type DriftedResource struct {
+	Type    string
+	Name    string
+	Address string
+	Action  string
+	Details string
+}
+
+// Config holds configuration for the executor
+type Config struct {
+	WorkDir     string
+	Mode        ExecutionMode
+	Timeout     time.Duration
+	Parallelism int
+	AutoApprove bool
+}
+
+// DefaultConfig returns the default configuration
+func DefaultConfig() *Config {
+	return &Config{
+		WorkDir:     ".",
+		Mode:        ModeOpenTofu,
+		Timeout:     30 * time.Minute,
+		Parallelism: 1,
+		AutoApprove: false,
+	}
+}
+
+// NewExecutor creates a new IaC executor based on the mode
+func NewExecutor(cfg *Config) (Executor, error) {
+	if cfg == nil {
+		cfg = DefaultConfig()
+	}
+
+	switch cfg.Mode {
+	case ModeOpenTofu:
+		return newOpenTofuExecutor(cfg), nil
+	case ModeTerramate:
+		return newTerramateExecutor(cfg), nil
+	default:
+		return nil, fmt.Errorf("unsupported execution mode: %s", cfg.Mode)
+	}
+}
+
+// NewExecutorFromSpec creates an executor based on the stack spec
+func NewExecutorFromSpec(spec *models.StackSpec, workDir string) (Executor, error) {
+	cfg := DefaultConfig()
+	cfg.WorkDir = workDir
+
+	// Determine mode from spec - Mode is a string field ("simple", "advanced")
+	// For engine selection, we use a convention: "terramate" prefix means use Terramate
+	if spec.Mode == "terramate" || spec.Mode == "advanced-terramate" {
+		cfg.Mode = ModeTerramate
+	} else {
+		cfg.Mode = ModeOpenTofu
+	}
+
+	return NewExecutor(cfg)
+}
+
+// OpenTofuExecutor implements Executor using OpenTofu directly
+type OpenTofuExecutor struct {
+	executor *tofu.Executor
+	workDir  string
+}
+
+func newOpenTofuExecutor(cfg *Config) *OpenTofuExecutor {
+	return &OpenTofuExecutor{
+		executor: tofu.NewExecutor(
+			tofu.WithWorkDir(cfg.WorkDir),
+			tofu.WithTimeout(cfg.Timeout),
+			tofu.WithAutoApprove(cfg.AutoApprove),
+		),
+		workDir: cfg.WorkDir,
+	}
+}
+
+func (e *OpenTofuExecutor) Mode() ExecutionMode {
+	return ModeOpenTofu
+}
+
+func (e *OpenTofuExecutor) IsInstalled() bool {
+	return e.executor.IsInstalled()
+}
+
+func (e *OpenTofuExecutor) Version(ctx context.Context) (string, error) {
+	return e.executor.Version(ctx)
+}
+
+func (e *OpenTofuExecutor) Init(ctx context.Context) error {
+	result, err := e.executor.Init(ctx)
+	if err != nil {
+		return err
+	}
+	if !result.Success {
+		return fmt.Errorf("init failed: %s", result.Stderr)
+	}
+	return nil
+}
+
+func (e *OpenTofuExecutor) Plan(ctx context.Context) (*PlanResult, error) {
+	result, err := e.executor.Plan(ctx, "")
+	if err != nil {
+		return nil, err
+	}
+
+	changes := tofu.ParsePlanOutput(result.Stdout)
+	return &PlanResult{
+		HasChanges: result.ExitCode == 2 || changes.Add > 0 || changes.Change > 0 || changes.Destroy > 0,
+		Add:        changes.Add,
+		Change:     changes.Change,
+		Destroy:    changes.Destroy,
+		Output:     result.Stdout,
+		Duration:   result.Duration,
+	}, nil
+}
+
+func (e *OpenTofuExecutor) Apply(ctx context.Context, autoApprove bool) error {
+	result, err := e.executor.Apply(ctx, "")
+	if err != nil {
+		return err
+	}
+	if !result.Success {
+		return fmt.Errorf("apply failed: %s", result.Stderr)
+	}
+	return nil
+}
+
+func (e *OpenTofuExecutor) Destroy(ctx context.Context, autoApprove bool) error {
+	result, err := e.executor.Destroy(ctx)
+	if err != nil {
+		return err
+	}
+	if !result.Success {
+		return fmt.Errorf("destroy failed: %s", result.Stderr)
+	}
+	return nil
+}
+
+func (e *OpenTofuExecutor) Refresh(ctx context.Context) error {
+	result, err := e.executor.Refresh(ctx)
+	if err != nil {
+		return err
+	}
+	if !result.Success {
+		return fmt.Errorf("refresh failed: %s", result.Stderr)
+	}
+	return nil
+}
+
+func (e *OpenTofuExecutor) DetectDrift(ctx context.Context) (*DriftResult, error) {
+	// OpenTofu doesn't have native drift detection, so we run a plan
+	// and check for changes
+	startTime := time.Now()
+
+	// Run refresh first
+	if err := e.Refresh(ctx); err != nil {
+		return nil, fmt.Errorf("refresh failed: %w", err)
+	}
+
+	// Then plan to see differences
+	planResult, err := e.Plan(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &DriftResult{
+		HasDrift:  planResult.HasChanges,
+		CheckedAt: startTime,
+		Duration:  time.Since(startTime),
+		Resources: []DriftedResource{},
+	}
+
+	// Parse plan output for resource changes
+	if planResult.HasChanges {
+		// Simplified parsing - in production you'd want more sophisticated parsing
+		if planResult.Add > 0 {
+			result.Resources = append(result.Resources, DriftedResource{
+				Type:   "unknown",
+				Action: "create",
+			})
+		}
+		if planResult.Change > 0 {
+			result.Resources = append(result.Resources, DriftedResource{
+				Type:   "unknown",
+				Action: "update",
+			})
+		}
+		if planResult.Destroy > 0 {
+			result.Resources = append(result.Resources, DriftedResource{
+				Type:   "unknown",
+				Action: "delete",
+			})
+		}
+	}
+
+	return result, nil
+}
+
+// TerramateExecutor implements Executor using Terramate
+type TerramateExecutor struct {
+	executor *terramate.Executor
+	workDir  string
+}
+
+func newTerramateExecutor(cfg *Config) *TerramateExecutor {
+	return &TerramateExecutor{
+		executor: terramate.NewExecutor(
+			terramate.WithWorkDir(cfg.WorkDir),
+			terramate.WithTimeout(cfg.Timeout),
+			terramate.WithParallelism(cfg.Parallelism),
+		),
+		workDir: cfg.WorkDir,
+	}
+}
+
+func (e *TerramateExecutor) Mode() ExecutionMode {
+	return ModeTerramate
+}
+
+func (e *TerramateExecutor) IsInstalled() bool {
+	return e.executor.IsInstalled()
+}
+
+func (e *TerramateExecutor) Version(ctx context.Context) (string, error) {
+	return e.executor.Version(ctx)
+}
+
+func (e *TerramateExecutor) Init(ctx context.Context) error {
+	result, err := e.executor.RunInit(ctx)
+	if err != nil {
+		return err
+	}
+	if !result.Success {
+		return fmt.Errorf("init failed: %s", result.Stderr)
+	}
+	return nil
+}
+
+func (e *TerramateExecutor) Plan(ctx context.Context) (*PlanResult, error) {
+	result, err := e.executor.RunPlan(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Parse plan output
+	changes := tofu.ParsePlanOutput(result.Stdout)
+	return &PlanResult{
+		HasChanges: result.ExitCode == 2 || changes.Add > 0 || changes.Change > 0 || changes.Destroy > 0,
+		Add:        changes.Add,
+		Change:     changes.Change,
+		Destroy:    changes.Destroy,
+		Output:     result.Stdout,
+		Duration:   result.Duration,
+	}, nil
+}
+
+func (e *TerramateExecutor) Apply(ctx context.Context, autoApprove bool) error {
+	result, err := e.executor.RunApply(ctx, autoApprove)
+	if err != nil {
+		return err
+	}
+	if !result.Success {
+		return fmt.Errorf("apply failed: %s", result.Stderr)
+	}
+	return nil
+}
+
+func (e *TerramateExecutor) Destroy(ctx context.Context, autoApprove bool) error {
+	result, err := e.executor.RunDestroy(ctx, autoApprove)
+	if err != nil {
+		return err
+	}
+	if !result.Success {
+		return fmt.Errorf("destroy failed: %s", result.Stderr)
+	}
+	return nil
+}
+
+func (e *TerramateExecutor) Refresh(ctx context.Context) error {
+	result, err := e.executor.Refresh(ctx)
+	if err != nil {
+		return err
+	}
+	if !result.Success {
+		return fmt.Errorf("refresh failed: %s", result.Stderr)
+	}
+	return nil
+}
+
+func (e *TerramateExecutor) DetectDrift(ctx context.Context) (*DriftResult, error) {
+	tmResult, err := e.executor.DetectDrift(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &DriftResult{
+		HasDrift:  tmResult.HasDrift,
+		CheckedAt: tmResult.CheckedAt,
+		Duration:  tmResult.Duration,
+		Resources: []DriftedResource{},
+	}
+
+	// Convert Terramate changes to our format
+	for _, stack := range tmResult.Stacks {
+		for _, change := range stack.Changes {
+			result.Resources = append(result.Resources, DriftedResource{
+				Type:    change.ResourceType,
+				Name:    change.ResourceName,
+				Address: fmt.Sprintf("%s.%s", change.ResourceType, change.ResourceName),
+				Action:  change.Action,
+				Details: change.Details,
+			})
+		}
+	}
+
+	return result, nil
+}

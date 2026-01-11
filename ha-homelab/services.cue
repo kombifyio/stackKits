@@ -8,7 +8,7 @@
 package ha_homelab
 
 import "github.com/kombihq/stackkits/base"
-import "github.com/kombihq/stackkits/modern-homelab"
+// Note: modern-homelab imports removed as ha-homelab is standalone StackKit
 
 // =============================================================================
 // HA KUBERNETES
@@ -215,34 +215,30 @@ import "github.com/kombihq/stackkits/modern-homelab"
 }
 
 // =============================================================================
-// SERVICE COLLECTIONS (Planned)
+// SERVICE COLLECTIONS (Planned - HA Variants)
 // =============================================================================
 
+// Note: These are placeholder service collections. The actual services
+// from modern-homelab should be referenced via proper module imports
+// once the full StackKit structure is finalized.
+
 // #DefaultHAServices - Standard HA deployment
-#DefaultHAServices: [
-	#K3sHAService,
-	#MetalLBService,
-	modern_homelab.#FluxService,
-	modern_homelab.#TraefikIngressService,
-	#PrometheusHAService,
-	#ThanosService,
-	modern_homelab.#GrafanaService,
-	modern_homelab.#LokiService,
-	#LonghornHAService,
-	#VeleroService,
-]
+#DefaultHAServices: {
+	k3s:        #K3sHAService
+	metallb:    #MetalLBService
+	prometheus: #PrometheusHAService
+	thanos:     #ThanosService
+	longhorn:   #LonghornHAService
+	velero:     #VeleroService
+}
 
 // #EnterpriseServices - Full enterprise stack
-#EnterpriseServices: [
-	#K3sHAService,
-	#MetalLBService,
-	#HAProxyService,
-	modern_homelab.#ArgoCDService,
-	modern_homelab.#TraefikIngressService,
-	#PrometheusHAService,
-	#ThanosService,
-	modern_homelab.#GrafanaService,
-	modern_homelab.#LokiService,
-	#CephService,
-	#VeleroService,
-]
+#EnterpriseServices: {
+	k3s:        #K3sHAService
+	metallb:    #MetalLBService
+	haproxy:    #HAProxyService
+	prometheus: #PrometheusHAService
+	thanos:     #ThanosService
+	ceph:       #CephService
+	velero:     #VeleroService
+}

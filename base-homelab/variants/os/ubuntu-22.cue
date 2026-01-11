@@ -1,11 +1,9 @@
 // Ubuntu 22.04 LTS Variant
 // OS-spezifische Konfiguration für Ubuntu 22.04 (Jammy Jellyfish)
-package variants
-
-import "kombistack.dev/stackkits/base"
+package base_homelab
 
 // Ubuntu 22.04 LTS Variante
-#Ubuntu22Variant: base.#SystemConfig & {
+#Ubuntu22Variant: {
 	os: {
 		family:  "debian"
 		distro:  "ubuntu"

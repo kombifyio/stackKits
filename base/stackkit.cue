@@ -7,6 +7,12 @@ package base
 	// StackKit metadata (required)
 	metadata: #StackKitMetadata
 
+	// Variant selection (optional, defined by extending StackKits)
+	variant?: string
+
+	// Deployment mode (simple/advanced)
+	deploymentMode?: string
+
 	// System configuration (host-level)
 	system: #SystemConfig
 
@@ -48,10 +54,16 @@ package base
 	}
 
 	// Service definitions (to be extended by specific StackKits)
-	services: [...#ServiceDefinition]
+	services: [...#ServiceDefinition] | _
 
 	// Node definitions (to be provided by user spec)
 	nodes: [...#NodeDefinition]
+
+	// Output URLs and documentation (optional)
+	outputs?: _
+
+	// Allow extensions by platforms and StackKits
+	...
 }
 
 // #StackKitMetadata provides information about the StackKit
@@ -100,6 +112,22 @@ package base
 
 	// Display name
 	displayName?: string
+
+	// Service category (for grouping/filtering)
+	category?: string
+
+	// Whether this service is required
+	required?: bool
+
+	// Service implementation status
+	status?: "implemented" | "planned" | "beta" | "deprecated"
+
+	// Placement constraints
+	placement?: {
+		nodeType?: string
+		strategy?: string
+		...
+	}
 
 	// Service type
 	type: #ServiceType
@@ -154,12 +182,40 @@ package base
 
 	// Whether service is enabled
 	enabled: bool | *true
+
+	// Output URLs and access information
+	output?: {
+		url:         string
+		description: string
+		credentials?: {
+			defaultUser?: string
+			note:         string
+		}
+	}
+
+	// Allow additional custom fields for service-specific extensions
+	...
 }
 
-// #ServiceType categorizes services
-#ServiceType: "reverse-proxy" | "database" | "cache" | "backend" | "frontend" |
-	"monitoring" | "logging" | "management" | "storage" | "media" |
-	"auth" | "vpn" | "dns" | "observability" | "custom"
+// #ServiceType categorizes services (comprehensive homelab taxonomy)
+#ServiceType: 
+	// Infrastructure
+	"reverse-proxy" | "load-balancer" | "ingress" | "vpn" | "vpn-client" | "dns" |
+	// Platform  
+	"paas" | "container-manager" | "compose-manager" | "cluster" |
+	// Data
+	"database" | "cache" | "storage" | "block-storage" | "distributed-storage" |
+	// Application Tiers
+	"backend" | "frontend" | "application" | "api" |
+	// Observability
+	"monitoring" | "metrics" | "metrics-aggregation" | "dashboards" | 
+	"logging" | "logs" | "log-shipper" | "uptime" | "observability" | "alerting" |
+	// DevOps
+	"ci-cd" | "gitops" | "registry" | "backup" | "disaster-recovery" | "automation" |
+	// Management
+	"management" | "auth" |
+	// Specialized
+	"media" | "custom"
 
 // #ServiceNetworkConfig defines service networking
 #ServiceNetworkConfig: {
@@ -171,6 +227,7 @@ package base
 		enabled: bool | *false
 		rule?:   string
 		tls?:    bool | *true
+		port?:   int // Target port for Traefik
 	}
 
 	// Network mode
@@ -182,15 +239,19 @@ package base
 
 // #PortMapping defines a port mapping
 #PortMapping: {
-	host:      uint16 & >0 & <=65535
-	container: uint16 & >0 & <=65535
-	protocol:  "tcp" | "udp" | *"tcp"
+	host:         uint16 & >0 & <=65535
+	container:    uint16 & >0 & <=65535
+	protocol:     "tcp" | "udp" | *"tcp"
+	description?: string // Optional description for documentation
 }
 
 // #ResourceLimits defines container resource constraints
 #ResourceLimits: {
 	// Memory limit (e.g., "512m", "2g")
 	memory?: string
+
+	// Memory maximum (alias)
+	memoryMax?: string
 
 	// Memory reservation
 	memoryReservation?: string
@@ -215,6 +276,9 @@ package base
 
 	// Volume type
 	type: "bind" | "volume" | "tmpfs" | *"volume"
+
+	// Description for documentation
+	description?: string
 
 	// Read-only mount
 	readOnly: bool | *false

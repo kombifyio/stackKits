@@ -1,29 +1,34 @@
-// Base Homelab CUE Tests v2.0
-// Validiert die Schema-Definitionen und Constraints
+// =============================================================================
+// Base Homelab CUE Tests v3.0
+// =============================================================================
+// Validates the schema definitions and constraints for base-homelab StackKit.
 // 
-// Tests für:
-// - Default Variante (Dokploy + Uptime Kuma)
-// - Beszel Variante (Dokploy + Beszel)
-// - Minimal Variante (Dockge + Portainer + Netdata)
-// - Deployment Modi (simple/advanced)
+// Tests:
+//   - Default Variant (Dokploy + Uptime Kuma)
+//   - Beszel Variant (Dokploy + Beszel)
+//   - Minimal Variant (Dockge + Portainer + Netdata)
+//   - Deployment Modes (simple/advanced)
+//   - Compute Tiers (high/standard/low)
+// =============================================================================
+
 package tests
 
 import (
-	"kombistack.dev/stackkits/base"
-	"kombistack.dev/stackkits/base-homelab"
+	homelab "github.com/kombihq/stackkits/base-homelab"
 )
 
 // =============================================================================
 // DEFAULT VARIANT TESTS (Dokploy + Uptime Kuma)
 // =============================================================================
 
-// Test: Default Variante - minimal gültige Konfiguration
+// Test: Default Variant - minimal valid configuration
 _validDefaultVariant: homelab.#BaseHomelabStack & {
 	meta: {
 		name:    "test-homelab"
-		version: "2.0.0"
+		version: "3.0.0"
 	}
-	variant: "default"
+	deploymentMode: "simple"
+	variant:        "default"
 	nodes: [{
 		id:   "node-1"
 		name: "test-node"
@@ -38,13 +43,13 @@ _validDefaultVariant: homelab.#BaseHomelabStack & {
 		domain:    "test.local"
 		acmeEmail: "admin@test.local"
 	}
-	// Default Variante Services
+	// Default Variant Services
 	services: {
-		traefik:     enabled: true
-		dokploy:     enabled: true
-		uptimeKuma:  enabled: true
-		dozzle:      enabled: true
-		whoami:      enabled: true
+		traefik:    enabled: true
+		dokploy:    enabled: true
+		uptimeKuma: enabled: true
+		dozzle:     enabled: true
+		whoami:     enabled: true
 	}
 }
 
@@ -52,13 +57,14 @@ _validDefaultVariant: homelab.#BaseHomelabStack & {
 // BESZEL VARIANT TESTS (Dokploy + Beszel)
 // =============================================================================
 
-// Test: Beszel Variante
+// Test: Beszel Variant
 _validBeszelVariant: homelab.#BaseHomelabStack & {
 	meta: {
 		name:    "beszel-homelab"
-		version: "2.0.0"
+		version: "3.0.0"
 	}
-	variant: "beszel"
+	deploymentMode: "simple"
+	variant:        "beszel"
 	nodes: [{
 		id:   "node-1"
 		name: "beszel-node"
@@ -73,14 +79,13 @@ _validBeszelVariant: homelab.#BaseHomelabStack & {
 		domain:    "beszel.local"
 		acmeEmail: "admin@beszel.local"
 	}
-	// Beszel Variante Services
+	// Beszel Variant Services
 	services: {
-		traefik:    enabled: true
-		dokploy:    enabled: true
-		beszel:     enabled: true
-		dozzle:     enabled: true
-		whoami:     enabled: true
-		uptimeKuma: enabled: false  // Nicht in Beszel Variante
+		traefik: enabled: true
+		dokploy: enabled: true
+		beszel:  enabled: true
+		dozzle:  enabled: true
+		whoami:  enabled: true
 	}
 }
 
@@ -88,13 +93,14 @@ _validBeszelVariant: homelab.#BaseHomelabStack & {
 // MINIMAL VARIANT TESTS (Dockge + Portainer + Netdata)
 // =============================================================================
 
-// Test: Minimal Variante - klassischer Stack
+// Test: Minimal Variant - classic stack
 _validMinimalVariant: homelab.#BaseHomelabStack & {
 	meta: {
 		name:    "minimal-homelab"
-		version: "2.0.0"
+		version: "3.0.0"
 	}
-	variant: "minimal"
+	deploymentMode: "simple"
+	variant:        "minimal"
 	nodes: [{
 		id:   "node-1"
 		name: "minimal-node"
@@ -109,17 +115,13 @@ _validMinimalVariant: homelab.#BaseHomelabStack & {
 		domain:    "minimal.local"
 		acmeEmail: "admin@minimal.local"
 	}
-	// Minimal Variante Services (klassischer Stack)
+	// Minimal Variant Services (classic stack)
 	services: {
 		traefik:   enabled: true
 		dockge:    enabled: true
 		portainer: enabled: true
 		netdata:   enabled: true
 		dozzle:    enabled: true
-		// Diese sind in Minimal nicht aktiv
-		dokploy:    enabled: false
-		uptimeKuma: enabled: false
-		beszel:     enabled: false
 	}
 }
 
@@ -127,14 +129,15 @@ _validMinimalVariant: homelab.#BaseHomelabStack & {
 // COMPUTE TIER TESTS
 // =============================================================================
 
-// Test: High Compute Konfiguration
+// Test: High Compute Configuration
 _validHighComputeConfig: homelab.#BaseHomelabStack & {
 	meta: {
 		name:    "high-compute-lab"
-		version: "2.0.0"
+		version: "3.0.0"
 	}
-	variant: "default"
-	computeTier: "high"
+	deploymentMode: "simple"
+	variant:        "default"
+	computeTier:    "high"
 	nodes: [{
 		id:   "powerful-server"
 		name: "bigbox"
@@ -149,16 +152,24 @@ _validHighComputeConfig: homelab.#BaseHomelabStack & {
 		domain:    "homelab.example.com"
 		acmeEmail: "admin@example.com"
 	}
+	services: {
+		traefik:    enabled: true
+		dokploy:    enabled: true
+		uptimeKuma: enabled: true
+		dozzle:     enabled: true
+		whoami:     enabled: true
+	}
 }
 
-// Test: Low Compute mit automatischer Varianten-Umschaltung
+// Test: Low Compute with automatic variant switch
 _validLowComputeConfig: homelab.#BaseHomelabStack & {
 	meta: {
 		name:    "low-compute-lab"
-		version: "2.0.0"
+		version: "3.0.0"
 	}
-	variant: "minimal"  // Low compute empfiehlt minimal
-	computeTier: "low"
+	deploymentMode: "simple"
+	variant:        "minimal" // Low compute recommends minimal
+	computeTier:    "low"
 	nodes: [{
 		id:   "mini-pc"
 		name: "minibox"
@@ -173,6 +184,13 @@ _validLowComputeConfig: homelab.#BaseHomelabStack & {
 		domain:    "mini.local"
 		acmeEmail: "admin@mini.local"
 	}
+	services: {
+		traefik:   enabled: true
+		dockge:    enabled: true
+		portainer: enabled: true
+		netdata:   enabled: true
+		dozzle:    enabled: true
+	}
 }
 
 // =============================================================================
@@ -183,10 +201,10 @@ _validLowComputeConfig: homelab.#BaseHomelabStack & {
 _validSimpleModeConfig: homelab.#BaseHomelabStack & {
 	meta: {
 		name:    "simple-mode-lab"
-		version: "2.0.0"
+		version: "3.0.0"
 	}
 	deploymentMode: "simple"
-	variant: "default"
+	variant:        "default"
 	nodes: [{
 		id:   "simple-node"
 		name: "simpleserver"
@@ -201,16 +219,26 @@ _validSimpleModeConfig: homelab.#BaseHomelabStack & {
 		domain:    "simple.local"
 		acmeEmail: "admin@simple.local"
 	}
+	services: {
+		traefik:    enabled: true
+		dokploy:    enabled: true
+		uptimeKuma: enabled: true
+		dozzle:     enabled: true
+		whoami:     enabled: true
+	}
 }
 
-// Test: Advanced Mode (Terramate)
+// Test: Advanced Mode (Terramate with drift detection)
 _validAdvancedModeConfig: homelab.#BaseHomelabStack & {
 	meta: {
 		name:    "advanced-mode-lab"
-		version: "2.0.0"
+		version: "3.0.0"
 	}
 	deploymentMode: "advanced"
-	driftDetection: enabled: true
+	driftDetection: {
+		enabled:  true
+		schedule: "0 */6 * * *"
+	}
 	variant: "default"
 	nodes: [{
 		id:   "advanced-node"
@@ -226,59 +254,21 @@ _validAdvancedModeConfig: homelab.#BaseHomelabStack & {
 		domain:    "advanced.local"
 		acmeEmail: "admin@advanced.local"
 	}
-}
-
-// =============================================================================
-// SERVICE OUTPUT TESTS
-// =============================================================================
-
-// Test: Service-Konfiguration mit Output URLs validieren
-_validServiceConfig: base.#ServiceDefinition & {
-	name:        "test-service"
-	displayName: "Test Service"
-	category:    "test"
-	type:        "application"
-	enabled:     true
-	image:       "nginx:latest"
-	tag:         "latest"
-	
-	network: {
-		ports: [{
-			host:     8080
-			container: 80
-			protocol: "tcp"
-		}]
-		traefik: {
-			enabled: true
-			rule:    "Host(`test.example.com`)"
-			tls:     true
-			port:    80
-		}
-	}
-	
-	healthCheck: {
-		enabled: true
-		http: {
-			path:   "/"
-			port:   80
-			scheme: "http"
-		}
-		interval: "30s"
-		timeout:  "10s"
-		retries:  3
-	}
-	
-	output: {
-		url:         "https://test.example.com"
-		description: "Test Service"
-		credentials: {
-			note: "No auth required"
-		}
+	services: {
+		traefik:    enabled: true
+		dokploy:    enabled: true
+		uptimeKuma: enabled: true
+		dozzle:     enabled: true
+		whoami:     enabled: true
 	}
 }
 
-// Test: Node-Definition validieren
-_validNodeConfig: base.#NodeDefinition & {
+// =============================================================================
+// NODE VALIDATION TESTS
+// =============================================================================
+
+// Test: Node with OS configuration
+_validNodeWithOS: homelab.#HomelabNode & {
 	id:   "test-node-001"
 	name: "testserver"
 	host: "192.168.1.100"
@@ -292,31 +282,98 @@ _validNodeConfig: base.#NodeDefinition & {
 		distro:  "ubuntu"
 		version: "24.04"
 	}
-	role: "worker"
+	role: "main"
+}
+
+// Test: Minimal valid node
+_minimalNode: homelab.#HomelabNode & {
+	id:   "minimal"
+	name: "mini"
+	host: "10.0.0.1"
+	compute: {
+		cpuCores:  1
+		ramGB:     2
+		storageGB: 20
+	}
 }
 
 // =============================================================================
-// NEGATIVE TESTS (commented - CUE fails on constraint violation)
+// NETWORK VALIDATION TESTS
 // =============================================================================
 
-// _invalidVariant: homelab.#BaseHomelabStack & {
-//     variant: "unknown"  // FEHLER: muss default, beszel, oder minimal sein
-// }
+// Test: Network with custom DNS
+_validNetworkWithDNS: homelab.#NetworkConfig & {
+	domain:    "custom.example.com"
+	acmeEmail: "ssl@example.com"
+	subnet:    "10.10.0.0/16"
+	dns: {
+		servers: ["9.9.9.9", "1.0.0.1"]
+	}
+}
 
-// _invalidNodeNoCPU: base.#NodeDefinition & {
-//     id:   "invalid"
-//     name: "invalid"
-//     host: "192.168.1.1"
-//     compute: {
-//         cpuCores: 0  // FEHLER: muss >= 1 sein
-//         ramGB: 8
-//         storageGB: 100
-//     }
-// }
+// Test: Minimal network config
+_minimalNetwork: homelab.#NetworkConfig & {
+	domain:    "test.local"
+	acmeEmail: "admin@test.local"
+}
 
-// _invalidServiceNoImage: base.#ServiceDefinition & {
-//     name: "invalid-service"
-//     enabled: true
-//     // FEHLER: image ist required
-// }
+// =============================================================================
+// DEPLOYMENT CONFIG TESTS
+// =============================================================================
+
+// Test: Simple deployment config
+_simpleDeployment: homelab.#DeploymentConfig & {
+	mode: "simple"
+	day1: {
+		engine: "opentofu"
+		actions: ["init", "plan", "apply"]
+	}
+	day2: {
+		enabled: false
+	}
+}
+
+// Test: Advanced deployment config  
+_advancedDeployment: homelab.#DeploymentConfig & {
+	mode: "advanced"
+	day1: {
+		engine: "opentofu"
+		actions: ["init", "plan", "apply"]
+	}
+	day2: {
+		enabled: true
+		engine:  "terramate"
+		actions: ["drift", "update", "destroy"]
+		features: {
+			drift_detection:  true
+			change_sets:      true
+			rolling_updates:  true
+			stack_ordering:   true
+		}
+	}
+}
+
+// =============================================================================
+// SERVICE SET TESTS
+// =============================================================================
+
+// Test: Default services
+_defaultServices: homelab.#ServiceSet & {
+	traefik:    enabled: true
+	dokploy:    enabled: true
+	uptimeKuma: enabled: true
+	dozzle:     enabled: true
+	whoami:     enabled: true
+}
+
+// Test: Minimal services
+_minimalServices: homelab.#ServiceSet & {
+	traefik:   enabled: true
+	dockge:    enabled: true
+	portainer: enabled: true
+	netdata:   enabled: true
+	dozzle:    enabled: true
+	whoami:    enabled: false
+}
+
 

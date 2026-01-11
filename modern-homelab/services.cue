@@ -455,7 +455,7 @@ import "github.com/kombihq/stackkits/base"
 	category:    "monitoring"
 	type:        "metrics"
 	required:    false
-	enabled:     false  // Not default, use in beszel variant
+	enabled:     bool | *false  // Not default, use in beszel variant
 	image:       "henrygd/beszel"
 	tag:         "latest"
 	status:      "planned"

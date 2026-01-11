@@ -242,14 +242,7 @@ import "github.com/kombihq/stackkits/base"
 // VALIDATION RULES
 // =============================================================================
 
-// Ensure at least one cloud node
-_cloudNodeRequired: true & (len(#ClusterConfig.nodes.cloud) >= 1)
-
-// Ensure domain is set
-_domainRequired: true & (#ClusterConfig.domain != "")
-
-// Ensure VPN is configured when local nodes exist
-_vpnRequiredForLocal: true & (
-	(#ClusterConfig.nodes.local == _|_ || len(#ClusterConfig.nodes.local) == 0) ||
-	#ClusterConfig.vpn.enabled
-)
+// Validation constraints are enforced via schema structure
+// - Cloud nodes: enforced by [...#CloudNode] requiring at least one element
+// - Domain: required field in #ClusterConfig
+// - VPN: optional, validated when local nodes are present

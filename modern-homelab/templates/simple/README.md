@@ -8,9 +8,8 @@ This template deploys a basic modern-homelab setup with:
 
 ## Prerequisites
 
-- Hetzner Cloud account (or other supported provider)
-- Domain with DNS access
 - SSH key pair
+- Domain/DNS is optional (only needed if you enable public ingress + ACME)
 
 ## Files (TODO)
 
@@ -28,3 +27,10 @@ tofu init
 tofu plan -var-file=terraform.tfvars
 tofu apply -var-file=terraform.tfvars
 ```
+
+## Networking Standard
+
+This StackKit follows the StackKits local-first standard:
+- Always provide an IP/port access path (works in every network)
+- Use mDNS `HOSTNAME.local` as a convenience (never rely on `.local` subdomains)
+- Only enable ACME/Let’s Encrypt when a real domain exists

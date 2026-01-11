@@ -28,43 +28,93 @@ Optional: Terramate (0.6+) for multi-node orchestration, CUE (0.9+) for developm
 
 ## 📦 Available StackKits
 
-| StackKit | Description | Nodes | Cloud | Status |
-|----------|-------------|-------|-------|--------|
-| **base-homelab** | Single server, local only | 1 | ❌ | ✅ Available |
-| **modern-homelab** | Local + Cloud hybrid | 2 | ✅ | 🚧 Planned |
-| **ha-homelab** | Multi-cloud high availability | 3+ | ✅ | 🚧 Planned |
+| StackKit | Description | Nodes | Deployment Modes | Status |
+|----------|-------------|-------|------------------|--------|
+| **base-homelab** | Single server, local only | 1 | simple, advanced | ✅ Available |
+| **modern-homelab** | Multi-node Docker + Coolify | 2+ | simple, advanced | ✅ Available |
+| **ha-homelab** | Kubernetes (k3s) HA | 3+ | simple, advanced | ✅ Available |
 
-## 🏗️ Repository Structure
+### Deployment Modes
+
+- **Simple Mode:** OpenTofu Day-1 provisioning (init → plan → apply)
+- **Advanced Mode:** OpenTofu + Terramate Day-1 & Day-2 (drift detection, change sets, rolling updates)
+
+## 🏗️ 3-Layer Architecture
+
+StackKits uses a strict **3-layer architecture** for maximum reusability:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  LAYER 3: STACKKITS (stackkits/)                            │
+│  Use-case specific configurations with services             │
+│  • base-homelab: Single-node Docker + Dokploy               │
+│  • modern-homelab: Multi-node Docker + Coolify              │
+│  • ha-homelab: Kubernetes (k3s) + HA                        │
+├─────────────────────────────────────────────────────────────┤
+│  LAYER 2: PLATFORMS (platforms/)                            │
+│  Container orchestration layer                              │
+│  • docker/: Docker + Traefik                                │
+│  • kubernetes/: K3s + Ingress                               │
+├─────────────────────────────────────────────────────────────┤
+│  LAYER 1: CORE (base/)                                      │
+│  Shared foundation applied to ALL deployments               │
+│  • Bootstrap, Security, Network, Observability              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## 📁 Repository Structure
 
 ```
 StackKits/
-├── base/                   # Shared CUE schemas
-│   ├── stackkit.cue        # Base definitions
-│   ├── system.cue          # System configuration
-│   ├── network.cue         # Network configuration
-│   ├── security.cue        # Security policies
-│   └── observability.cue   # Monitoring & logging
+├── base/                       # Layer 1: CORE
+│   ├── stackkit.cue            # Base CUE schema
+│   ├── security.cue            # Security definitions
+│   ├── network.cue             # Network definitions
+│   ├── observability.cue       # Monitoring definitions
+│   ├── bootstrap/              # System bootstrap templates
+│   └── security/               # Security hardening templates
 │
-├── base-homelab/           # Single-server StackKit
-│   ├── stackkit.yaml       # Metadata
-│   ├── stackfile.cue       # Main schema
-│   ├── default-spec.yaml   # CLI-ready template (⭐ START HERE)
-│   ├── services.cue        # Service definitions
-│   ├── defaults.cue        # Smart defaults
-│   ├── templates/          # OpenTofu templates
-│   └── variants/           # OS/Compute variants
-│   ├── services.cue        # Service definitions
-│   ├── defaults.cue        # Smart defaults
-│   ├── variants/           # OS & compute variants
-│   └── templates/          # OpenTofu templates
+├── platforms/                  # Layer 2: PLATFORMS
+│   ├── docker/                 # Docker platform schemas
+│   └── kubernetes/             # Kubernetes platform schemas
 │
-├── addons/                 # Optional add-ons
-│   ├── monitoring/
-│   ├── vpn-overlay/
-│   └── backup-restic/
+├── base-homelab/               # Layer 3: STACKKIT - Single Server
+│   ├── stackkit.yaml           # Manifest
+│   ├── stackfile.cue           # CUE schema
+│   ├── services.cue            # Service definitions
+│   ├── default-spec.yaml       # User template (⭐ START HERE)
+│   ├── templates/
+│   │   ├── simple/             # OpenTofu-only templates
+│   │   └── advanced/           # Terramate + OpenTofu templates
+│   └── variants/
+│       ├── os/                 # Ubuntu/Debian variants
+│       └── compute/            # High/standard/low tiers
 │
-└── tests/                  # Validation tests
-    └── cue/
+├── modern-homelab/             # Layer 3: STACKKIT - Multi Node
+│   ├── stackkit.yaml
+│   ├── stackfile.cue
+│   ├── services.cue
+│   └── templates/
+│
+├── ha-homelab/                 # Layer 3: STACKKIT - High Availability
+│   ├── stackkit.yaml
+│   ├── stackfile.cue
+│   ├── services.cue
+│   └── templates/
+│
+├── docs/                       # Documentation
+│   ├── ROADMAP.md              # Development roadmap
+│   ├── architecture.md         # Architecture details
+│   └── cli-reference.md        # CLI commands
+│
+├── cmd/                        # CLI source (Go)
+│   └── stackkit/               # Main CLI entry point
+│
+└── internal/                   # Internal packages
+    ├── cue/                    # CUE validation
+    ├── tofu/                   # OpenTofu execution
+    ├── terramate/              # Terramate integration
+    └── ...
 ```
 
 ## 🚀 Quick Start

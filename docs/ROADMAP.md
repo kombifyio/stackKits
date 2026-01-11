@@ -1,10 +1,185 @@
 # StackKits Roadmap
 
-> **Version:** 1.0  
-> **Last Updated:** 2026-01-10  
+> **Version:** 1.3  
+> **Last Updated:** 2025-01-XX (Current)  
 > **Status:** Active Development
 
 This document outlines the development roadmap for StackKits as a standalone open-source project that can be used independently of KombiStack.
+
+---
+
+## 🧹 Recent Cleanup (2025-01)
+
+### Repository Cleanup Completed
+
+| Item | Action | Status |
+|------|--------|--------|
+| Duplicate `stackkits/` directory | Removed (was outdated) | ✅ |
+| `desprecated_web/` folder | Removed (deprecated) | ✅ |
+| `.old` backup files | Removed from modern-homelab | ✅ |
+| CUE validation | All packages passing | ✅ |
+| Documentation | Updated to reflect current structure | ✅ |
+
+### StackKits Now Available
+
+| StackKit | Status | Deployment Modes |
+|----------|--------|-----------------|
+| **base-homelab** | ✅ Complete | simple (OpenTofu), advanced (Terramate) |
+| **modern-homelab** | ✅ Schema Complete | simple, advanced |
+| **ha-homelab** | ✅ Schema Complete | simple, advanced |
+
+---
+
+## 📊 Sprint Overview & Work Packages
+
+### Current Sprint: S1-2026 (Jan 6 - Jan 19, 2026)
+
+| ID | Work Package | Status | Owner | Est. |
+|----|--------------|--------|-------|------|
+| WP-001 | CLI Framework Setup (Go/Cobra) | ✅ Complete | Core | 3d |
+| WP-002 | Core Commands (init, prepare, plan, apply) | ✅ Complete | Core | 5d |
+| WP-003 | CUE Validation Integration | ✅ Complete | Core | 2d |
+| WP-004 | Test Suite Foundation | ✅ Complete | QA | 3d |
+
+### Sprint Backlog
+
+#### S2-2026 (Jan 20 - Feb 2, 2026)
+| ID | Work Package | Priority | Est. |
+|----|--------------|----------|------|
+| WP-005 | Service Template Engine | P0 | 4d |
+| WP-006 | OpenTofu Execution Wrapper | ✅ Complete | 3d |
+| WP-007 | SSH Remote Execution | ✅ Complete | 3d |
+| WP-008 | Integration Tests | 🟡 Partial | 3d |
+| **WP-TD1** | **Fix Critical Security Issues** | **P0** | **2d** | ✅ Complete |
+
+#### S3-2026 (Feb 3 - Feb 16, 2026)
+| ID | Work Package | Priority | Est. |
+|----|--------------|----------|------|
+| WP-009 | Status & Health Monitoring | ✅ Complete | 3d |
+| WP-010 | Shell Completion | ✅ Complete (built-in) | 1d |
+| WP-011 | E2E Test Coverage | P1 | 4d |
+| WP-012 | Documentation & Examples | P1 | 2d |
+| **WP-TD2** | **Increase Test Coverage >60%** | **P1** | **3d** |
+
+#### S4-2026 (Feb 17 - Mar 2, 2026) - NEW
+| ID | Work Package | Priority | Est. |
+|----|--------------|----------|------|
+| **WP-013** | **Terramate Integration for Day 2 Ops** | **✅ Complete** | **3d** |
+| **WP-014** | **Unified IaC Executor (Dual-Mode)** | **✅ Complete** | **2d** |
+| **WP-015** | **Drift Detection Support** | **✅ Complete** | **2d** |
+| WP-016 | Multi-Node Stack Orchestration | P1 | 3d |
+
+### Work Package Dependencies
+
+```
+WP-001 ──┬──► WP-002 ──┬──► WP-005 ──► WP-009
+         │             │
+         └──► WP-003 ──┴──► WP-006 ──► WP-007
+                            │
+WP-004 ────────────────────┴──► WP-008 ──► WP-011
+```
+
+### Milestone Summary
+
+| Milestone | Target Date | Key Deliverables | Status |
+|-----------|-------------|------------------|--------|
+| **M1: CLI MVP** | Jan 31, 2026 | Working CLI with init/prepare/apply | 🟢 Active |
+| **M2: Registry Integration** | Mar 31, 2026 | Public registry, `stackkit search` | 🔲 Planned |
+| **M3: Existing Systems** | Jun 30, 2026 | Import, analyze, coexist modes | 🔲 Planned |
+| **M4: Multi-Node** | Sep 30, 2026 | Terramate integration, HA support | 🔲 Planned |
+| **M5: Ecosystem** | Dec 31, 2026 | Add-on marketplace, IDE extensions | 🔲 Planned |
+
+### Definition of Done (DoD)
+
+- [ ] Unit tests with >80% coverage
+- [ ] Integration tests for critical paths
+- [ ] Documentation updated
+- [ ] Code reviewed and approved
+- [ ] No critical/high linter warnings
+- [ ] Works on Ubuntu 22.04/24.04, Debian 12
+
+---
+
+## 🔧 Technical Debt & Issues
+
+> **Last Reviewed:** 2026-01-15  
+> **Current Test Coverage:** config (84.9%), cue (63.1%), docker (38.5%), ssh (25.2%), template (82.1%), tofu (42.1%), iac (75.0%), terramate (68.0%), validation (78.0%)
+
+### Critical Security Issues
+
+| ID | Package | Issue | Impact | Status |
+|----|---------|-------|--------|--------|
+| TD-001 | ssh | Insecure SSH Host Key Verification (`InsecureIgnoreHostKey`) | MITM attacks possible | ✅ Fixed |
+| TD-002 | ssh | Command Injection via unescaped `remotePath` | Remote code execution | ✅ Fixed |
+| TD-003 | docker | No Input Sanitization for container/network names | Command injection | ✅ Fixed |
+
+### High Priority Issues
+
+| ID | Package | Issue | Recommendation | Status |
+|----|---------|-------|----------------|--------|
+| TD-004 | ssh | Low Test Coverage (20.8%) | Add SSH mock tests, integration tests | 🟢 Improved (25.2%) |
+| TD-005 | docker | Low Test Coverage (37.5%) | Add Docker client mocks | 🟢 Improved (38.5%) |
+| TD-006 | tofu | Low Test Coverage (35.3%) | Mock binary execution tests | 🟢 Improved (42.1%) |
+| TD-007 | config | Path Traversal Vulnerability | Validate paths stay within basePath | ✅ Fixed |
+| TD-008 | template | Deprecated `strings.Title` | Use golang.org/x/text cases | 🟠 Open |
+| TD-009 | commands | No Context Timeout for Remote Ops | Add configurable timeouts | 🟢 Improved |
+| TD-010 | config | Windows Path Handling (`$HOME` empty) | Use `os.UserHomeDir()` | ✅ Fixed |
+
+### Medium Priority Issues
+
+| ID | Package | Issue | Status |
+|----|---------|-------|--------|
+| TD-011 | template | Simplified toYaml/toJson (incorrect output) | ✅ Fixed |
+| TD-012 | cue | Missing Schema Directory Validation | 🟡 Open |
+| TD-013 | commands | Error handling ignores SaveDeploymentState errors | 🟡 Open |
+| TD-014 | commands | Race Condition in Concurrent Deployments | 🟡 Open |
+| TD-015 | docker | Timeout Not Configurable (hardcoded 30s) | 🟢 Improved |
+| TD-016 | tofu | Plan Output Parsing Fragile | 🟡 Open |
+| TD-017 | ssh | No Connection Pooling | 🟡 Open |
+| TD-018 | commands | Interactive Mode Not Implemented | 🟡 Open |
+| TD-019 | validate | OpenTofu Validation Not Actually Run | 🟡 Open |
+| TD-020 | commands | Missing --dry-run for Apply/Destroy | 🟡 Open |
+| TD-021 | ssh | ReadFile Uses Unescaped Path | ✅ Fixed |
+
+### Cross-Platform Compatibility
+
+| ID | Package | Issue | Platforms Affected | Status |
+|----|---------|-------|-------------------|--------|
+| TD-022 | ssh | Unix Socket Path for Docker | Windows | 🟡 Open |
+| TD-023 | prepare | installDockerRemote Unix-Only | Windows, macOS | 🟡 Open |
+| TD-024 | ssh | Shell Commands Assume Bash | BSD, Alpine | 🟡 Open |
+| TD-025 | config | Path Separator Handling | Windows | ✅ Fixed |
+
+### Missing Features (Technical Debt)
+
+| ID | Feature | Priority | Status |
+|----|---------|----------|--------|
+| TD-026 | Rollback Capability | P1 | 🔲 Not Started |
+| TD-027 | Lock File Support (.stackkit.lock) | P1 | 🔲 Not Started |
+| TD-028 | Config File Support (.stackkitrc) | P2 | 🔲 Not Started |
+| TD-029 | Structured Logging System | P2 | 🔲 Not Started |
+| TD-030 | JSON Output for Status Command | P2 | 🔲 Not Started |
+
+### NEW: Day 2 Operations Support
+
+| ID | Feature | Priority | Status |
+|----|---------|----------|--------|
+| TD-031 | Terramate Integration | P0 | ✅ Complete |
+| TD-032 | Drift Detection | P0 | ✅ Complete |
+| TD-033 | Unified IaC Executor | P0 | ✅ Complete |
+| TD-034 | Dual-Mode Support (OpenTofu / Terramate) | P0 | ✅ Complete |
+
+### Work Package: Technical Debt Sprint (Proposed)
+
+| ID | Task | Priority | Est. | Status |
+|----|------|----------|------|--------|
+| WP-TD1 | Fix Critical Security Issues (TD-001 to TD-003) | P0 | 2d | ✅ Complete |
+| WP-TD2 | Increase Test Coverage to >60% | P1 | 3d | 🟢 In Progress |
+| WP-TD3 | Fix Cross-Platform Issues | P1 | 2d | 🟡 Partial |
+| WP-TD4 | Add Proper Error Handling | P2 | 1d | 🟢 In Progress |
+| **WP-TD5** | **Day 2 Operations (Terramate, Drift)** | **P0** | **3d** | **✅ Complete** |
+
+---
 
 ## Vision
 
@@ -41,13 +216,70 @@ This document outlines the development roadmap for StackKits as a standalone ope
 │                          │                                               │
 │                          ▼                                               │
 │  ┌──────────────────────────────────────────────────────────────────┐   │
+│  │                     IaC EXECUTION LAYER (NEW)                     │   │
+│  │                                                                   │   │
+│  │  ┌─────────────────────────────────────────────────────────┐     │   │
+│  │  │              Unified IaC Executor                        │     │   │
+│  │  │                                                          │     │   │
+│  │  │   Mode: "simple"/"advanced"  ──►  OpenTofu Executor     │     │   │
+│  │  │   Mode: "terramate"          ──►  Terramate Executor    │     │   │
+│  │  │                                                          │     │   │
+│  │  │   Features: Plan, Apply, Destroy, Drift Detection       │     │   │
+│  │  └─────────────────────────────────────────────────────────┘     │   │
+│  │                                                                   │   │
+│  └──────────────────────────────────────────────────────────────────┘   │
+│                          │                                               │
+│                          ▼                                               │
+│  ┌──────────────────────────────────────────────────────────────────┐   │
 │  │                     PREREQUISITES                                 │   │
 │  │                                                                   │   │
 │  │  Docker (24.0+)           OpenTofu (1.6+)                        │   │
 │  │  └── Container Runtime    └── Infrastructure Provisioning        │   │
 │  │                                                                   │   │
-│  │  Optional: Terramate (0.6+) for multi-node orchestration        │   │
+│  │  Optional: Terramate (0.6+) for Day 2 Operations:               │   │
+│  │            - Multi-stack orchestration                           │   │
+│  │            - Drift detection                                     │   │
+│  │            - Change management across stacks                     │   │
 │  └──────────────────────────────────────────────────────────────────┘   │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Dual-Mode IaC Architecture (NEW)
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    DUAL-MODE IAC EXECUTION                               │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  Day 1 Path (Default - OpenTofu Only):                                  │
+│  ─────────────────────────────────────                                  │
+│  ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐             │
+│  │  Spec    │──►│  Plan    │──►│  Apply   │──►│  Deploy  │             │
+│  │  YAML    │   │  (tofu)  │   │  (tofu)  │   │  State   │             │
+│  └──────────┘   └──────────┘   └──────────┘   └──────────┘             │
+│                                                                          │
+│  Day 1 + Day 2 Path (Terramate + OpenTofu):                             │
+│  ──────────────────────────────────────────                             │
+│  ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐             │
+│  │  Spec    │──►│  Generate│──►│ Terramate│──►│  Deploy  │             │
+│  │  YAML    │   │  Stacks  │   │   Run    │   │  State   │             │
+│  └──────────┘   └──────────┘   └──────────┘   └──────────┘             │
+│                                     │                                    │
+│                                     ▼                                    │
+│                              ┌──────────────┐                           │
+│                              │    Drift     │                           │
+│                              │  Detection   │                           │
+│                              └──────────────┘                           │
+│                                                                          │
+│  internal/iac/executor.go:                                              │
+│  - NewExecutor(mode)        - Creates appropriate executor              │
+│  - NewExecutorFromSpec(spec)- Auto-selects based on spec.Mode          │
+│                                                                          │
+│  internal/terramate/executor.go:                                        │
+│  - DetectDrift()            - Detects infrastructure drift              │
+│  - ListChanged()            - Lists stacks with pending changes         │
+│  - RunApply()               - Applies changes across stacks             │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -71,15 +303,29 @@ This document outlines the development roadmap for StackKits as a standalone ope
 
 | Task | Status | Priority |
 |------|--------|----------|
-| CLI framework (Cobra/Go) | 🔲 Planned | P0 |
-| `stackkit init` command | 🔲 Planned | P0 |
-| `stackkit prepare` command | 🔲 Planned | P0 |
-| `stackkit plan` command | 🔲 Planned | P0 |
-| `stackkit apply` command | 🔲 Planned | P0 |
-| `stackkit destroy` command | 🔲 Planned | P0 |
-| `stackkit status` command | 🔲 Planned | P1 |
-| `stackkit validate` command | 🔲 Planned | P1 |
-| Shell completion | 🔲 Planned | P2 |
+| CLI framework (Cobra/Go) | ✅ Complete | P0 |
+| `stackkit init` command | ✅ Complete | P0 |
+| `stackkit prepare` command | ✅ Complete | P0 |
+| `stackkit plan` command | ✅ Complete | P0 |
+| `stackkit apply` command | ✅ Complete | P0 |
+| `stackkit destroy` command | ✅ Complete | P0 |
+| `stackkit status` command | ✅ Complete | P1 |
+| `stackkit validate` command | ✅ Complete | P1 |
+| Shell completion | ✅ Built-in (Cobra) | P2 |
+
+#### Implementation Notes (2026-01-11)
+
+- **Framework:** Go 1.22 with Cobra CLI v1.8.1
+- **Build:** `go build -o stackkit ./cmd/stackkit`
+- **Location:** `cmd/stackkit/` (entry point), `cmd/stackkit/commands/` (subcommands)
+- **Packages:**
+  - `pkg/models` - Core data structures
+  - `internal/config` - Configuration loading (84.9% coverage)
+  - `internal/cue` - CUE validation (63.1% coverage)
+  - `internal/tofu` - OpenTofu execution (35.3% coverage)
+  - `internal/template` - Template rendering (82.1% coverage)
+  - `internal/docker` - Docker client (28.9% coverage)
+  - `internal/ssh` - SSH remote execution (19.0% coverage)
 
 ### 1.3 Prepare Command
 

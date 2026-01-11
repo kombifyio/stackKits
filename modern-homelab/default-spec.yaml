@@ -4,13 +4,13 @@
 #
 # Verwendung:
 #   1. Kopiere diese Datei: cp default-spec.yaml my-modern-homelab-spec.yaml
-#   2. Passe Werte an (IPs, SSH-User, Domain)
+#   2. Passe Werte an (IPs, SSH-User; Domains optional)
 #   3. Führe aus: stackkit apply my-modern-homelab-spec.yaml
 #
 # Version: 1.0
 # StackKit: modern-homelab
 # Variant: os/ubuntu-24 (Ubuntu 24.04 LTS)
-# Network Mode: public (Ingress-NGINX mit Let's Encrypt)
+# Network Mode: local-first (Ingress optional; TLS/ACME optional)
 # Container Runtime: Kubernetes (K3s) statt Docker
 
 version: "1.0"
@@ -201,7 +201,8 @@ services:
       - 3000
     env:
       DATABASE_URL: postgresql://kombistack:changeme@postgres-cluster:5432/dokploy  # ⚠️ ANPASSEN!
-      NEXTAUTH_URL: https://dokploy.yourdomain.com  # ⚠️ ANPASSEN: Echte Domain!
+      # Local-first default: use IP/hostname. Set a real https:// URL only if you enable ingress+TLS.
+      NEXTAUTH_URL: http://192.168.1.100:3000  # ⚠️ ANPASSEN: Control Plane/Ingress IP oder DNS Name
       NEXTAUTH_SECRET: changeme_generate_random_secret_32chars  # ⚠️ ANPASSEN!
     labels:
       kombistack.service: dokploy
@@ -211,13 +212,13 @@ services:
       namespace: default
       replicas: 2  # HA
       ingress:
-        enabled: true
+        enabled: false
         className: nginx
-        host: dokploy.yourdomain.com  # ⚠️ ANPASSEN: Echte Domain!
+        # host: dokploy.yourdomain.com  # Optional: echte Domain
         tls:
-          enabled: true
+          enabled: false
           secretName: dokploy-tls
-          issuer: letsencrypt-prod
+          # issuer: letsencrypt-prod
     needs:
       - postgres-cluster
       - ingress-nginx
@@ -238,13 +239,13 @@ services:
       namespace: default
       replicas: 1
       ingress:
-        enabled: true
+        enabled: false
         className: nginx
-        host: uptime.yourdomain.com  # ⚠️ ANPASSEN: Echte Domain!
+        # host: uptime.yourdomain.com  # Optional: echte Domain
         tls:
-          enabled: true
+          enabled: false
           secretName: uptime-kuma-tls
-          issuer: letsencrypt-prod
+          # issuer: letsencrypt-prod
     needs:
       - ingress-nginx
       - cert-manager
@@ -277,14 +278,14 @@ services:
           enabled: true
           adminPassword: changeme_admin_password  # ⚠️ ANPASSEN!
           ingress:
-            enabled: true
+            enabled: false
             ingressClassName: nginx
-            hosts:
-              - grafana.yourdomain.com  # ⚠️ ANPASSEN!
-            tls:
-              - secretName: grafana-tls
-                hosts:
-                  - grafana.yourdomain.com
+            # hosts:
+            #   - grafana.yourdomain.com  # Optional: echte Domain
+            # tls:
+            #   - secretName: grafana-tls
+            #     hosts:
+            #       - grafana.yourdomain.com
     needs:
       - ingress-nginx
       - cert-manager
@@ -314,19 +315,20 @@ services:
       - prometheus
 
 network:
-  mode: public
+  mode: local
   k8s_service_cidr: 10.43.0.0/16
   k8s_pod_cidr: 10.42.0.0/16
   ingress_ip: 192.168.1.100  # ⚠️ ANPASSEN: External IP für Ingress
-  dns:
-    provider: cloudflare  # ⚠️ ANPASSEN: dns-provider für Let's Encrypt
-    email: admin@yourdomain.com  # ⚠️ ANPASSEN: ACME Email
+  # Optional: DNS provider config for ACME DNS-01
+  # dns:
+  #   provider: cloudflare
+  #   email: admin@yourdomain.com
 
 tls:
-  enabled: true
-  provider: letsencrypt
-  email: admin@yourdomain.com  # ⚠️ ANPASSEN: Let's Encrypt Email
-  staging: false  # false = Production Certificates
+  enabled: false
+  # provider: letsencrypt
+  # email: admin@yourdomain.com
+  # staging: false
 
 metadata:
   created_at: "2026-01-10T12:00:00Z"
@@ -353,21 +355,18 @@ metadata:
 #    - nodes[0-2].ssh.user
 #    - nodes[0-2].ssh.key_path
 #
-# 3. Domains (5 Stellen):
-#    - services[4].env.NEXTAUTH_URL (Dokploy)
+# 3. Domains (optional):
+#    Nur nötig, wenn du Ingress + TLS aktivierst.
 #    - services[4].k8s.ingress.host
-#    - services[5].k8s.ingress.host (Uptime Kuma)
+#    - services[5].k8s.ingress.host
 #    - services[6].k8s.values.grafana.ingress.hosts
-#    - network.dns.email
-#
-#    WICHTIG: Für Let's Encrypt brauchst du echte Domains!
-#    Registriere z.B. bei Cloudflare und zeige A-Records auf deine Public IP.
+#    - tls.email / network.dns.email
 #
 # 4. Secrets (4 Stellen):
 #    - services[4].env.DATABASE_URL (PostgreSQL Passwort)
 #    - services[4].env.NEXTAUTH_SECRET
 #    - services[6].k8s.values.grafana.adminPassword
-#    - tls.email (ACME Email)
+#    - tls.email (optional ACME Email)
 #
 #    Generiere mit: openssl rand -hex 32
 #
@@ -375,12 +374,12 @@ metadata:
 #    - network.dns.provider (cloudflare, route53, digitalocean, etc.)
 #    - network.dns.email
 #
-# DNS-Setup für Let's Encrypt:
+# DNS-Setup für Let's Encrypt (optional):
 #   1. Registriere Domain bei Cloudflare/etc.
 #   2. Erstelle A-Records:
-#      - dokploy.yourdomain.com → Public IP
-#      - uptime.yourdomain.com → Public IP
-#      - grafana.yourdomain.com → Public IP
+#      - dokploy.yourdomain.com → Ingress IP
+#      - uptime.yourdomain.com → Ingress IP
+#      - grafana.yourdomain.com → Ingress IP
 #   3. API-Token für DNS-01 Challenge erstellen
 #   4. Token in Kubernetes Secret speichern
 #

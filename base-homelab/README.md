@@ -1,15 +1,123 @@
 # Base Homelab StackKit
 
-> **Single-server homelab with Docker and essential services**
+> **Single-server homelab with Docker and essential services - Ready in 5 minutes!**
 
 ## 🎯 Overview
 
-The **Base Homelab** StackKit provides everything you need to run a modern homelab on a single server:
+The **Base Homelab** StackKit provides everything you need to run a modern homelab on a single server. Choose from three **preconfigured variants** that work out-of-the-box:
 
-- **Traefik** - Reverse proxy with automatic SSL
-- **Dockge** - Visual Docker Compose management
-- **Dozzle** - Real-time log viewer
-- **Netdata** - System monitoring dashboard
+| Variant | Best For | Services |
+|---------|----------|----------|
+| **default** | Beginners, App Deployment | Dokploy + Uptime Kuma |
+| **beszel** | Power Users, Server Metrics | Dokploy + Beszel |
+| **minimal** | Classic Docker Experience | Dockge + Portainer + Netdata |
+
+## 🚀 Quick Start (5 Minutes)
+
+### Step 1: Copy and Edit Configuration
+
+```bash
+cd base-homelab/templates/simple
+cp terraform.tfvars.example terraform.tfvars
+
+# Optionally tweak variant/compute/access settings
+nano terraform.tfvars
+```
+
+### Step 2: Deploy
+
+```bash
+tofu init
+tofu plan
+tofu apply
+```
+
+### Step 3: Access Your Services! 🎉
+
+By default, this StackKit works **without any domain/DNS**.
+
+Default naming fallback is mDNS: `HOSTNAME.local` (example: `homelab.local`). If your LAN clients don’t resolve `.local`, set `advertise_host` to your server IP/hostname.
+
+**Default Variant (ports mode):**
+| Service | URL | Description |
+|---------|-----|-------------|
+| Traefik Dashboard | `http://HOSTNAME.local:8080` | Reverse proxy dashboard |
+| Dokploy | `http://HOSTNAME.local:3000` | Deploy apps like Vercel |
+| Uptime Kuma | `http://HOSTNAME.local:3001` | Monitor your services |
+| Dozzle | `http://HOSTNAME.local:8888` | View container logs |
+| Whoami | `http://HOSTNAME.local:9080` | Test service |
+
+If you prefer clean hostnames + optional HTTPS, set `access_mode = "proxy"` and configure `domain` (and optionally `acme_email`).
+
+**Proxy Mode (example):**
+| Service | URL |
+|---------|-----|
+| Traefik | `https://traefik.yourdomain.com` |
+| Dokploy | `https://deploy.yourdomain.com` |
+| Uptime Kuma | `https://status.yourdomain.com` |
+| Dozzle | `https://logs.yourdomain.com` |
+| Whoami | `https://whoami.yourdomain.com` |
+
+## 📦 Variant Comparison
+
+### 🟢 Default (Recommended for Beginners)
+
+Perfect for deploying web applications with built-in PaaS functionality.
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  Dokploy (deploy.{domain})                                   │
+│  • Deploy from GitHub, Docker Hub, or Git                    │
+│  • Automatic SSL certificates                                │
+│  • Environment variables management                          │
+│  • Database deployments (PostgreSQL, MySQL, Redis, MongoDB)  │
+└──────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│  Uptime Kuma (status.{domain})                               │
+│  • Monitor HTTP, TCP, DNS, and more                          │
+│  • Beautiful status pages                                     │
+│  • Notifications (Telegram, Discord, Email)                  │
+└──────────────────────────────────────────────────────────────┘
+```
+
+### 🔵 Beszel (Advanced Monitoring)
+
+Same as default but with powerful server-side monitoring.
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  Beszel (monitor.{domain})                                   │
+│  • Real-time server metrics (CPU, RAM, Disk, Network)        │
+│  • Historical data with graphs                               │
+│  • Alerting based on thresholds                              │
+│  • Multi-server support with agents                          │
+└──────────────────────────────────────────────────────────────┘
+```
+
+### 🟡 Minimal (Classic Docker)
+
+Traditional Docker management without the PaaS overhead.
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  Dockge (dockge.{domain})                                    │
+│  • Visual docker-compose editor                              │
+│  • One-click start/stop/restart                              │
+│  • Manage compose files in /opt/stacks                       │
+└──────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│  Portainer (portainer.{domain})                              │
+│  • Full container management                                  │
+│  • Image management and updates                              │
+│  • Network and volume management                             │
+└──────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│  Netdata (monitor.{domain})                                  │
+│  • Real-time system metrics                                  │
+│  • Per-container resource usage                              │
+│  • 1000+ built-in metrics                                    │
+└──────────────────────────────────────────────────────────────┘
+```
 
 ## 📋 Requirements
 
@@ -19,85 +127,90 @@ The **Base Homelab** StackKit provides everything you need to run a modern homel
 | **RAM** | 4 GB | 8+ GB |
 | **Disk** | 50 GB | 100+ GB |
 | **OS** | Ubuntu 22.04+ | Ubuntu 24.04 LTS |
+| **Domain** | Not required | Optional (proxy mode) |
 
-## 🚀 Quick Start
+## 🔧 Deployment Modes
 
-```yaml
-# kombination.yaml
-name: my-homelab
-goals:
-  storage: true
-nodes:
-  - name: server-1
-    os: ubuntu-24
-    resources:
-      cpu: 4
-      memory: 8
+### Simple Mode (OpenTofu Only)
+Best for getting started quickly.
+
+```bash
+cd templates/simple
+tofu init && tofu plan && tofu apply
 ```
 
-## 📦 Included Services
+### Advanced Mode (Terramate + OpenTofu)
+Best for ongoing operations with drift detection.
 
-### Traefik (Reverse Proxy)
-- Automatic HTTPS via Let's Encrypt
-- Docker integration
-- Dashboard at `http://traefik.local:8080`
+```bash
+cd templates/advanced
+terramate run tofu init
+terramate run tofu plan
+terramate run tofu apply
 
-### Dockge (Container Management)
-- Visual compose file editor
-- One-click deployments
-- Access at `http://dockge.local`
+# Detect drift from desired state
+terramate run tofu plan -detailed-exitcode
+```
 
-### Dozzle (Log Viewer)
-- Real-time container logs
-- Filtering and search
-- Access at `http://logs.local`
+## 🔒 All Services Include
 
-### Netdata (Monitoring)
-- System metrics dashboard
-- Container monitoring
-- Access at `http://monitor.local`
-
-## 🔧 Variants
-
-### OS Variants
-- `ubuntu-24` - Ubuntu 24.04 LTS (recommended)
-- `ubuntu-22` - Ubuntu 22.04 LTS
-- `debian-12` - Debian 12 Bookworm
-
-### Compute Variants
-- `high` - 8+ CPU, 16+ GB RAM: Full stack with Prometheus/Grafana
-- `standard` - 4-7 CPU, 8-15 GB RAM: Default services
-- `low` - <4 CPU or <8 GB RAM: Lightweight alternatives
+- ✅ **Ports-first access** (zero config)
+- ✅ **Optional HTTPS** via Let's Encrypt (proxy mode)
+- ✅ **Optional Traefik routing** with clean hostnames (proxy mode)
+- ✅ **Health Checks** for container monitoring
+- ✅ **Restart Policies** for reliability
+- ✅ **Memory Limits** based on compute tier
+- ✅ **Dozzle Logs** for all containers
 
 ## 📁 File Structure
 
 ```
 base-homelab/
-├── stackkit.yaml       # Metadata
-├── stackfile.cue       # Main schema
+├── stackkit.yaml       # Metadata & manifest
+├── stackfile.cue       # Main CUE schema
 ├── services.cue        # Service definitions
-├── defaults.cue        # Smart defaults
+├── defaults.cue        # Smart defaults & compute tiers
+├── default-spec.yaml   # CLI user template
 ├── variants/
-│   ├── os/
-│   │   ├── ubuntu-24.cue
-│   │   ├── ubuntu-22.cue
-│   │   └── debian-12.cue
-│   └── compute/
-│       ├── high.cue
-│       ├── standard.cue
-│       └── low.cue
-└── templates/
-    ├── simple/
-    │   └── main.tf.tpl
-    └── advanced/
-        └── stacks/
+│   ├── os/             # Ubuntu 22/24, Debian 12
+│   └── compute/        # High/Standard/Low tiers
+├── templates/
+│   ├── simple/
+│   │   ├── main.tf                    # Complete OpenTofu config (790 lines)
+│   │   └── terraform.tfvars.example   # Documented example config
+│   └── advanced/
+│       ├── terramate.tm.hcl           # Terramate root config
+│       └── stacks/                    # Individual service stacks
+└── tests/
+    ├── schema_test.cue               # CUE validation tests
+    └── run_tests.sh                  # Test runner
 ```
 
-## 🔒 Security
+## 🎯 Next Steps After Deployment
 
-- SSH hardening (key-only auth)
-- UFW firewall enabled
-- TLS 1.2+ enforced
+1. **Access services** via `http://localhost:<port>` (default)
+2. **Deploy your first app** in Dokploy or add a compose stack in Dockge
+3. **Set up monitoring alerts** in Uptime Kuma / Beszel / Netdata
+4. **Check logs** in Dozzle if anything seems wrong
+
+## 🆘 Troubleshooting
+
+### SSL certificates not working?
+- This only applies in `access_mode = "proxy"` with Let's Encrypt enabled
+- Ensure your domain points to your server's IP and ports 80/443 are reachable
+- Wait up to 5 minutes for certificates to issue
+
+### Services not accessible?
+```bash
+# Check container status
+docker ps
+
+# Check Traefik logs
+docker logs traefik
+
+# Verify network
+docker network ls
+```
 - Non-root container execution
 
 ## 📖 Documentation

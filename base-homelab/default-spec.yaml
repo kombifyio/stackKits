@@ -4,7 +4,7 @@
 #
 # Verwendung:
 #   1. Kopiere diese Datei: cp default-spec.yaml my-homelab-spec.yaml
-#   2. Passe Werte an (IP, SSH-User, Domain)
+#   2. Passe Werte an (IP, SSH-User; Domains optional)
 #   3. Führe aus: stackkit apply my-homelab-spec.yaml
 #
 # Version: 1.0
@@ -158,7 +158,7 @@ metadata:
 #
 #    Generiere mit: openssl rand -hex 32
 #
-# 4. Domains (2 Stellen):
+# 4. Domains (optional, 2 Stellen):
 #    - services[1].labels.traefik.http.routers.dokploy.rule
 #    - services[3].labels.traefik.http.routers.uptime.rule
 #

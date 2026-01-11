@@ -1,11 +1,9 @@
 // Debian 12 (Bookworm) Variant
 // OS-spezifische Konfiguration für Debian 12
-package variants
-
-import "kombistack.dev/stackkits/base"
+package base_homelab
 
 // Debian 12 Variante
-#Debian12Variant: base.#SystemConfig & {
+#Debian12Variant: {
 	os: {
 		family:   "debian"
 		distro:   "debian"
