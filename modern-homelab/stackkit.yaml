@@ -1,23 +1,28 @@
 # StackKit Metadata - Modern Homelab
+# v1.0: Uses Docker Swarm + Dokploy (unified stack with base-homelab and ha-homelab)
 apiVersion: stackkit/v1
 kind: StackKit
 
 metadata:
   name: modern-homelab
-  version: "0.1.0-alpha"
-  description: "Multi-server hybrid homelab with Docker, Coolify, and public/remote access"
+  version: "1.0.0-alpha"
+  description: "Multi-server hybrid homelab with Docker Swarm, Dokploy, and public/remote access"
   author: "KombiStack Team"
   license: "MIT"
   repository: "https://github.com/kombihq/stackkits"
-  status: scaffolding  # Options: scaffolding, alpha, beta, stable
+  status: scaffolding
   tags:
     - homelab
     - multi-node
     - docker
-    - coolify
+    - docker-swarm
+    - dokploy
     - hybrid
     - public-access
     - advanced
+
+# Platform: Docker (v1.0 unified stack)
+platform: docker
 
 # Supported operating systems
 supportedOS:
@@ -74,11 +79,11 @@ modes:
       - name: platform
         order: 2
         after: [network]
-        description: "Docker on all nodes"
+        description: "Docker Swarm on all nodes"
       - name: services
         order: 3
         after: [platform]
-        description: "Coolify, monitoring, storage"
+        description: "Dokploy, monitoring, storage"
 
 # =============================================================================
 # FEATURE FLAGS
@@ -90,9 +95,23 @@ features:
   publicAccess: true        # Services accessible from internet
   remoteAccess: true        # SSH/management from outside
   gpuSupport: false         # Future: GPU scheduling
-  highAvailability: false   # Not HA, but multi-node
-  kubernetes: false         # Docker-based, NOT k8s
-  gitops: false             # Manual deployments via Coolify
+  highAvailability: false   # Not full HA, but multi-node redundancy
+  dockerSwarm: true         # Docker Swarm for multi-node
+  kubernetes: false         # v1.1+ as separate StackKit
+  gitops: false             # Manual deployments via Dokploy
+
+# =============================================================================
+# DOCKER SWARM CONFIGURATION
+# =============================================================================
+swarm:
+  mode: "single-manager"  # One manager node (use ha-homelab for multi-manager)
+  managers:
+    count: 1
+  workers:
+    count: 1  # At least one worker
+  network:
+    driver: "overlay"
+    encrypted: true
 
 # =============================================================================
 # NODE TYPES
@@ -145,12 +164,12 @@ network:
 # VARIANTS (Service Set Choices)
 # =============================================================================
 variants:
-  # Default: Full-featured hybrid setup
+  # Default: Full-featured hybrid setup with Dokploy
   default:
     name: "Standard"
-    description: "Coolify PaaS with Headscale VPN and full monitoring"
+    description: "Dokploy PaaS with Headscale VPN and full monitoring"
     services:
-      - coolify          # PaaS platform (replaces Dokploy for multi-node)
+      - dokploy          # PaaS platform (Swarm-enabled)
       - traefik          # Reverse proxy with TLS
       - headscale        # VPN overlay for node communication
       - prometheus       # Metrics collection
@@ -161,9 +180,9 @@ variants:
   # Minimal: Basic hybrid setup
   minimal:
     name: "Minimal"
-    description: "Coolify with basic VPN, minimal monitoring"
+    description: "Dokploy with basic VPN, minimal monitoring"
     services:
-      - coolify
+      - dokploy
       - traefik
       - headscale
       - uptime-kuma
@@ -171,27 +190,37 @@ variants:
   # Beszel: Alternative monitoring
   beszel:
     name: "Beszel Monitoring"
-    description: "Coolify with Beszel for lightweight monitoring"
+    description: "Dokploy with Beszel for lightweight monitoring"
     services:
-      - coolify
+      - dokploy
       - traefik
       - headscale
       - beszel
 
+  # Coolify: Alternative PaaS (for users who prefer Coolify)
+  coolify:
+    name: "Coolify Alternative"
+    description: "Coolify PaaS instead of Dokploy"
+    services:
+      - coolify
+      - traefik
+      - headscale
+      - uptime-kuma
+
 # =============================================================================
-# KEY DIFFERENCES FROM BASE-HOMELAB
+# KEY DIFFERENCES FROM OTHER STACKKITS
 # =============================================================================
 # 
-# | Aspect          | base-homelab        | modern-homelab           |
-# |-----------------|---------------------|--------------------------|
-# | Nodes           | Single              | Multiple (2+)            |
-# | Platform        | Dokploy             | Coolify                  |
-# | Network         | Local only          | Hybrid (local + cloud)   |
-# | VPN             | None                | Headscale/Tailscale      |
-# | Public Access   | Optional add-on     | Default enabled          |
-# | DNS             | Optional            | Required for public      |
-# | Monitoring      | Basic (Uptime Kuma) | Full stack (Prometheus)  |
-# | Complexity      | Beginner            | Advanced                 |
+# | Aspect          | base-homelab        | modern-homelab           | ha-homelab           |
+# |-----------------|---------------------|--------------------------|----------------------|
+# | Nodes           | Single              | Multiple (2-5)           | Multiple (3+)        |
+# | Platform        | Docker              | Docker Swarm             | Docker Swarm HA      |
+# | PaaS            | Dokploy             | Dokploy                  | Dokploy              |
+# | Network         | Local only          | Hybrid (local + cloud)   | Hybrid + failover    |
+# | VPN             | None                | Headscale/Tailscale      | Headscale            |
+# | Public Access   | Optional add-on     | Default enabled          | Default enabled      |
+# | Monitoring      | Basic (Uptime Kuma) | Full stack (Prometheus)  | HA Prometheus        |
+# | Complexity      | Beginner            | Intermediate             | Advanced             |
 # =============================================================================
 
 # Auto-selection rules
@@ -200,3 +229,21 @@ autoSelect:
     - "driftDetection.enabled == true"
     - "nodes.count > 3"
   default: simple
+
+# =============================================================================
+# CHANGELOG
+# =============================================================================
+changelog:
+  - version: "1.0.0-alpha"
+    date: "2026-01-15"
+    changes:
+      - "BREAKING: Switched from Coolify to Dokploy for unified v1.0 stack"
+      - "Added Docker Swarm support for multi-node"
+      - "Added Coolify as optional variant for compatibility"
+      - "Updated comparison table with ha-homelab"
+      
+  - version: "0.1.0-alpha"
+    date: "2025-01-27"
+    changes:
+      - "Initial scaffolding"
+      - "Hybrid architecture planning (originally Coolify-based)"

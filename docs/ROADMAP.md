@@ -1,10 +1,45 @@
 # StackKits Roadmap
 
-> **Version:** 1.3  
-> **Last Updated:** 2025-01-XX (Current)  
-> **Status:** Active Development
+> **Version:** 2.0  
+> **Last Updated:** 2026-01-15  
+> **Status:** Active Development  
+> **Key Decision:** [ADR-001: Docker-First Strategy](./ADR-001-DOCKER-FIRST-V1.md)
 
 This document outlines the development roadmap for StackKits as a standalone open-source project that can be used independently of KombiStack.
+
+---
+
+## 🎯 v1.0 Strategy: Docker-First
+
+**All StackKits in v1.0 use the same technology stack:**
+
+| Component | Default | Alternatives (Config-Level) |
+|-----------|---------|----------------------------|
+| **OS** | Ubuntu 24.04 LTS | Debian 12, Ubuntu 22.04 |
+| **Container Runtime** | Docker 27.x | — |
+| **Multi-Node** | Docker Swarm | — |
+| **PaaS** | Dokploy | Coolify (variant) |
+| **Reverse Proxy** | Traefik v3 | Caddy (variant) |
+| **Monitoring** | Uptime Kuma | Beszel (variant) |
+
+### v1.0 StackKit Matrix
+
+| StackKit | Nodes | Orchestration | Use Case |
+|----------|-------|---------------|----------|
+| `base-homelab` | 1 | Standalone | Single server, beginners |
+| `modern-homelab` | 2-5 | Docker Swarm | Hybrid (local + cloud) |
+| `ha-homelab` | 3+ | Docker Swarm HA | Production-like HA |
+
+### v1.1+ Planned: Kubernetes Support
+
+Kubernetes will be added as **new, separate StackKits** (not modifications to existing):
+
+| Future StackKit | Platform | Use Case |
+|-----------------|----------|----------|
+| `k3s-homelab` | k3s | Single-node Kubernetes learning |
+| `k8s-cluster` | k3s HA | Multi-node Kubernetes cluster |
+
+> **Rationale:** See [ADR-001](./ADR-001-DOCKER-FIRST-V1.md) for full decision record.
 
 ---
 
@@ -69,6 +104,30 @@ This document outlines the development roadmap for StackKits as a standalone ope
 | **WP-015** | **Drift Detection Support** | **✅ Complete** | **2d** |
 | WP-016 | Multi-Node Stack Orchestration | P1 | 3d |
 
+#### S5-2026 (Mar 3 - Mar 16, 2026) - ARCHITECTURE ALIGNMENT SPRINT
+> **See:** [ADR-001: Docker-First Strategy](./ADR-001-DOCKER-FIRST-V1.md)
+
+| ID | Work Package | Priority | Est. |
+|----|--------------|----------|------|
+| **WP-017** | **Update ha-homelab to Docker Swarm** | **P0** | **2d** |
+| **WP-018** | **Update modern-homelab to Dokploy** | **P0** | **1d** |
+| **WP-019** | **Add Docker Swarm templates** | **P0** | **3d** |
+| **WP-020** | **Document Kubernetes as v1.1+ roadmap** | **P1** | **1d** |
+| **WP-021** | **Integration tests for all 3 StackKits** | **P1** | **3d** |
+
+**Sprint S5 Goals:**
+- Unify all StackKits on Docker + Dokploy platform
+- Add Docker Swarm support for multi-node scenarios
+- Remove Kubernetes dependencies from existing StackKits
+- Update all documentation to reflect v1.0 scope
+
+**Acceptance Criteria:**
+- [ ] All 3 StackKits use Docker platform layer
+- [ ] ha-homelab deploys with Docker Swarm HA (not k3s)
+- [ ] modern-homelab uses Dokploy instead of Coolify
+- [ ] Kubernetes documented as "Planned v1.1+ - separate StackKits"
+- [ ] `stackkit apply` works for all 3 StackKits
+
 ### Work Package Dependencies
 
 ```
@@ -83,11 +142,13 @@ WP-004 ────────────────────┴──► 
 
 | Milestone | Target Date | Key Deliverables | Status |
 |-----------|-------------|------------------|--------|
-| **M1: CLI MVP** | Jan 31, 2026 | Working CLI with init/prepare/apply | 🟢 Active |
-| **M2: Registry Integration** | Mar 31, 2026 | Public registry, `stackkit search` | 🔲 Planned |
+| **M1: CLI MVP** | Jan 31, 2026 | Working CLI with init/prepare/apply | ✅ Complete |
+| **M1.5: Docker-First Alignment** | Mar 16, 2026 | All StackKits on Docker + Dokploy | 🟢 Active |
+| **M2: Registry Integration** | Apr 30, 2026 | Public registry, `stackkit search` | 🔲 Planned |
 | **M3: Existing Systems** | Jun 30, 2026 | Import, analyze, coexist modes | 🔲 Planned |
-| **M4: Multi-Node** | Sep 30, 2026 | Terramate integration, HA support | 🔲 Planned |
-| **M5: Ecosystem** | Dec 31, 2026 | Add-on marketplace, IDE extensions | 🔲 Planned |
+| **M4: Multi-Node HA** | Sep 30, 2026 | Docker Swarm HA for all StackKits | 🔲 Planned |
+| **M5: Kubernetes Support** | Q1 2027 | New k3s-homelab, k8s-cluster StackKits | 🔲 Planned |
+| **M6: Ecosystem** | Q2 2027 | Add-on marketplace, IDE extensions | 🔲 Planned |
 
 ### Definition of Done (DoD)
 

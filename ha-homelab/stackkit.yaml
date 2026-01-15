@@ -1,11 +1,12 @@
 # StackKit Metadata - High Availability Homelab
+# v1.0: Uses Docker Swarm HA (Kubernetes planned for v1.1+ as separate StackKit)
 apiVersion: stackkit/v1
 kind: StackKit
 
 metadata:
   name: ha-homelab
-  version: "0.1.0-alpha"
-  description: "Enterprise-grade homelab with high availability and automatic failover"
+  version: "1.0.0-alpha"
+  description: "Enterprise-grade homelab with Docker Swarm HA and automatic failover"
   author: "KombiStack Team"
   license: "MIT"
   repository: "https://github.com/kombihq/stackkits"
@@ -13,13 +14,18 @@ metadata:
   tags:
     - homelab
     - multi-node
-    - kubernetes
+    - docker-swarm
     - high-availability
     - enterprise
     - advanced
+    - dokploy
 
 # Extends Modern Homelab
 extends: modern-homelab
+
+# Platform: Docker (v1.0 unified stack)
+# NOTE: Kubernetes support will be added in v1.1+ as separate StackKits (k3s-homelab, k8s-cluster)
+platform: docker
 
 # Supported operating systems
 supportedOS:
@@ -30,21 +36,23 @@ supportedOS:
 # Resource requirements (per node)
 requirements:
   minimum:
-    masterNodes: 3
-    workerNodes: 2
+    managerNodes: 3  # Swarm manager nodes for HA
+    workerNodes: 0   # Optional worker nodes
     cpu: 4
     memory: 8
     disk: 100
     diskType: ssd
   recommended:
-    masterNodes: 5
-    workerNodes: 3
+    managerNodes: 3
+    workerNodes: 2
     cpu: 8
     memory: 16
     disk: 256
     diskType: nvme
 
-# Deployment modes (inherited from base)
+# =============================================================================
+# DEPLOYMENT MODES
+# =============================================================================
 modes:
   simple:
     description: "OpenTofu-only deployment via KombiStack Core"
@@ -64,104 +72,161 @@ modes:
       - "Rolling updates"
       - "Canary deployments"
 
-# Feature flags
+# =============================================================================
+# FEATURE FLAGS
+# =============================================================================
 features:
   multiNode: true
   cloudProviders: true  # For hybrid setups
   vpnOverlay: true
   gpuSupport: false
   highAvailability: true
-  kubernetes: true
-  gitops: true
+  dockerSwarm: true
+  kubernetes: false  # v1.1+ as separate StackKit
+  gitops: false      # Dokploy-based deployments
   multiSite: true
 
-# Planned variants
+# =============================================================================
+# DOCKER SWARM HA CONFIGURATION
+# =============================================================================
+swarm:
+  mode: "ha"  # "single-manager" | "ha" (3+ managers)
+  managers:
+    count: 3  # Minimum for HA quorum
+    electPolicy: "spread"  # Spread across availability zones
+  workers:
+    count: 0  # Optional, can be scaled later
+  network:
+    driver: "overlay"
+    encrypted: true
+  ingress:
+    mode: "routing-mesh"  # Built-in Swarm routing
+
+# =============================================================================
+# VARIANTS (Service Set Choices)
+# =============================================================================
 variants:
+  # Default: Docker Swarm HA with Dokploy
   default:
     name: "Standard HA"
-    description: "3 masters + HA monitoring + Longhorn storage"
+    description: "3 Swarm managers + Dokploy + HA monitoring"
     services:
-      - k3s-ha
-      - etcd-embedded
-      - flux
-      - traefik-ingress-ha
-      - prometheus-ha
-      - thanos
+      - docker-swarm-ha
+      - dokploy             # Swarm mode enabled
+      - traefik-ha          # Deployed as global service
+      - prometheus-ha       # With remote-write for federation
       - grafana
       - loki
-      - longhorn
-      - metallb
-      - velero
+      - uptime-kuma-ha
+      - gluster-fs          # Shared storage for HA
+      - keepalived          # VIP failover
 
-  enterprise:
-    name: "Enterprise"
-    description: "Full stack with Ceph and advanced observability"
+  # Minimal: Basic HA without full observability
+  minimal:
+    name: "Minimal HA"
+    description: "3 Swarm managers + Dokploy + basic monitoring"
     services:
-      - k3s-ha
-      - etcd-embedded
-      - argocd
-      - traefik-ingress-ha
-      - prometheus-ha
-      - thanos
-      - grafana-enterprise
-      - loki
-      - tempo
-      - ceph
-      - metallb
-      - haproxy
-      - velero
-      - external-secrets
+      - docker-swarm-ha
+      - dokploy
+      - traefik-ha
+      - uptime-kuma-ha
 
-# HA-specific service definitions (planned)
+  # Beszel: Alternative monitoring with Beszel
+  beszel:
+    name: "Beszel HA"
+    description: "3 Swarm managers + Dokploy + Beszel monitoring"
+    services:
+      - docker-swarm-ha
+      - dokploy
+      - traefik-ha
+      - beszel-hub
+      - beszel-agents
+
+# =============================================================================
+# HA-SPECIFIC SERVICE DEFINITIONS
+# =============================================================================
 services:
-  - name: k3s-ha
+  - name: docker-swarm-ha
     required: true
-    description: "k3s with HA control plane (embedded etcd)"
+    description: "Docker Swarm with 3+ manager nodes for HA quorum"
     status: planned
-  - name: etcd-embedded
+    replicas: null  # Not a replicated service, cluster configuration
+    
+  - name: dokploy
     required: true
-    description: "Embedded etcd for k3s HA"
-    status: planned
-  - name: metallb
+    description: "Dokploy PaaS with Swarm mode enabled"
+    status: available
+    replicas: 1  # Single instance, failover via Swarm
+    swarmMode: true
+    
+  - name: traefik-ha
     required: true
-    description: "Bare-metal load balancer"
+    description: "Traefik deployed as global service (one per node)"
     status: planned
-  - name: haproxy
-    required: false
-    description: "External load balancer for API server"
-    status: planned
+    deploy:
+      mode: global
+      constraints:
+        - "node.role == manager"
+        
   - name: prometheus-ha
-    required: true
-    description: "Prometheus with HA configuration"
-    status: planned
-  - name: thanos
     required: false
-    description: "Long-term metrics storage and querying"
+    description: "Prometheus with HA configuration (2 replicas)"
     status: planned
-  - name: velero
-    required: true
-    description: "Backup and disaster recovery"
-    status: planned
-  - name: ceph
+    replicas: 2
+    
+  - name: gluster-fs
     required: false
-    description: "Distributed storage system (enterprise)"
+    description: "GlusterFS for shared persistent storage"
     status: planned
+    replicas: 3
+    
+  - name: keepalived
+    required: false
+    description: "Virtual IP failover between manager nodes"
+    status: planned
+    deploy:
+      mode: global
+      constraints:
+        - "node.role == manager"
 
-# Outputs (planned)
+# =============================================================================
+# OUTPUTS
+# =============================================================================
 outputs:
   format: "markdown"
   include:
     - serviceUrls
-    - kubeconfig
+    - swarmJoinToken
     - clusterHealth
-    - replicationStatus
+    - nodeStatus
     - backupStatus
 
-# Changelog
+# =============================================================================
+# PLANNED: KUBERNETES MIGRATION (v1.1+)
+# =============================================================================
+# Kubernetes support will be available as separate StackKits:
+#   - k3s-homelab: Single-node k3s for learning
+#   - k8s-cluster: Multi-node k3s HA cluster
+#
+# This allows users who need Kubernetes to migrate to those StackKits
+# while keeping ha-homelab simple and Docker-focused.
+
+# =============================================================================
+# CHANGELOG
+# =============================================================================
 changelog:
+  - version: "1.0.0-alpha"
+    date: "2026-01-15"
+    changes:
+      - "BREAKING: Switched from Kubernetes (k3s) to Docker Swarm HA"
+      - "Added Dokploy with Swarm mode support"
+      - "Updated variants for Docker-based HA"
+      - "Added GlusterFS for shared storage"
+      - "Added Keepalived for VIP failover"
+      - "Kubernetes moved to v1.1+ roadmap as separate StackKits"
+      
   - version: "0.1.0-alpha"
     date: "2025-01-27"
     changes:
       - "Initial scaffolding"
-      - "HA architecture planning"
-      - "Enterprise variant definition"
+      - "HA architecture planning (originally k3s-based)"

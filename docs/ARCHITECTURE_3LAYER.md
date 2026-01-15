@@ -1,8 +1,9 @@
 # StackKits 3-Layer Architecture
 
-> **Version:** 1.0  
-> **Last Updated:** 2026-01-11  
-> **Status:** Approved & Implemented
+> **Version:** 2.0  
+> **Last Updated:** 2026-01-15  
+> **Status:** Approved & Implemented  
+> **See Also:** [ADR-001: Docker-First Strategy](./ADR-001-DOCKER-FIRST-V1.md)
 
 ---
 
@@ -10,14 +11,27 @@
 
 StackKits uses a **strict 3-layer architecture** where:
 - **Layer 1 (CORE)**: Shared OS-level configuration applied to ALL deployments
-- **Layer 2 (PLATFORM)**: Container orchestration layer (Docker vs Kubernetes)
+- **Layer 2 (PLATFORM)**: Container orchestration layer (Docker for v1.0, Kubernetes planned for v1.1+)
 - **Layer 3 (STACKKIT)**: Specific use-case configurations with services and variants
+
+### v1.0 Scope (Docker-First)
+
+**All StackKits in v1.0 use Docker + Dokploy** for unified development and testing:
+
+| StackKit | Nodes | Platform | Orchestration |
+|----------|-------|----------|---------------|
+| `base-homelab` | 1 | Docker | Standalone |
+| `modern-homelab` | 2-5 | Docker | Docker Swarm |
+| `ha-homelab` | 3+ | Docker | Docker Swarm HA |
+
+> **Note:** Kubernetes support (k3s) is planned for v1.1 as **separate StackKits**, not modifications to existing ones.
 
 This architecture ensures:
 - ✅ Clear separation of concerns
 - ✅ Reusable components across StackKits
 - ✅ Consistent security and hardening
 - ✅ Easy maintenance and updates
+- ✅ Unified testing with single platform (v1.0)
 
 ---
 
@@ -37,8 +51,8 @@ This architecture ensures:
 │  │  │ homelab     │   │ homelab     │   │ homelab     │                  │ │
 │  │  │             │   │             │   │             │                  │ │
 │  │  │ • 1 Node    │   │ • 2-5 Nodes │   │ • 3+ Nodes  │                  │ │
-│  │  │ • Dokploy   │   │ • Swarm     │   │ • k3s HA    │                  │ │
-│  │  │ • Variants  │   │ • Variants  │   │ • GitOps    │                  │ │
+│  │  │ • Dokploy   │   │ • Swarm     │   │ • Swarm HA  │                  │ │
+│  │  │ • Variants  │   │ • Variants  │   │ • Variants  │                  │ │
 │  │  └──────┬──────┘   └──────┬──────┘   └──────┬──────┘                  │ │
 │  │         │                 │                 │                          │ │
 │  └─────────┼─────────────────┼─────────────────┼──────────────────────────┘ │
@@ -51,17 +65,18 @@ This architecture ensures:
 │  │ ─────────────────────────────────────────────                          │ │
 │  │                                                                        │ │
 │  │  ┌─────────────────────────────┐   ┌─────────────────────────────┐    │ │
-│  │  │ DOCKER PLATFORM             │   │ KUBERNETES PLATFORM         │    │ │
+│  │  │ DOCKER PLATFORM (v1.0) ✅   │   │ KUBERNETES (v1.1+) 🔲       │    │ │
 │  │  │                             │   │                             │    │ │
-│  │  │ • Docker Engine             │   │ • k3s Installation          │    │ │
+│  │  │ • Docker Engine 27.x        │   │ • k3s Installation          │    │ │
 │  │  │ • Docker Compose            │   │ • CNI (Flannel/Cilium)      │    │ │
-│  │  │ • Traefik (Docker)          │   │ • Ingress Controller        │    │ │
-│  │  │ • Docker Networks           │   │ • MetalLB/kube-vip          │    │ │
-│  │  │ • Volume Management         │   │ • Persistent Volumes        │    │ │
+│  │  │ • Docker Swarm (multi-node) │   │ • Ingress Controller        │    │ │
+│  │  │ • Dokploy (PaaS)            │   │ • MetalLB/kube-vip          │    │ │
+│  │  │ • Traefik v3                │   │ • Persistent Volumes        │    │ │
 │  │  │                             │   │                             │    │ │
-│  │  │ Used by:                    │   │ Used by:                    │    │ │
-│  │  │ • base-homelab              │   │ • ha-homelab                │    │ │
-│  │  │ • modern-homelab            │   │                             │    │ │
+│  │  │ Used by (v1.0):             │   │ Future StackKits:           │    │ │
+│  │  │ • base-homelab              │   │ • k3s-homelab (planned)     │    │ │
+│  │  │ • modern-homelab            │   │ • k8s-cluster (planned)     │    │ │
+│  │  │ • ha-homelab                │   │                             │    │ │
 │  │  └──────────────┬──────────────┘   └──────────────┬──────────────┘    │ │
 │  │                 │                                 │                    │ │
 │  └─────────────────┼─────────────────────────────────┼────────────────────┘ │
@@ -138,25 +153,28 @@ This architecture ensures:
 
 **Available Platforms:**
 
-| Platform | Description | Used By |
-|----------|-------------|---------|
-| `platforms/docker/` | Docker + Compose | base-homelab, modern-homelab |
-| `platforms/kubernetes/` | k3s HA cluster | ha-homelab |
+| Platform | Description | Status | Used By (v1.0) |
+|----------|-------------|--------|----------------|
+| `platforms/docker/` | Docker + Swarm + Dokploy | ✅ v1.0 | base-homelab, modern-homelab, ha-homelab |
+| `platforms/kubernetes/` | k3s HA cluster | 🔲 v1.1+ | *Future StackKits only* |
 
-**Docker Platform Provides:**
+**Docker Platform Provides (v1.0):**
 ```yaml
 # platforms/docker/
-- Docker Engine installation
+- Docker Engine 27.x installation
 - Docker Compose plugin
+- Docker Swarm (for multi-node StackKits)
+- Dokploy as PaaS platform
+- Traefik v3 as reverse proxy
 - Docker networks (bridge, overlay)
-- Traefik as reverse proxy (Docker labels)
 - Volume management
 - Container health checks
 ```
 
-**Kubernetes Platform Provides:**
+**Kubernetes Platform (Planned v1.1+):**
 ```yaml
-# platforms/kubernetes/
+# platforms/kubernetes/ - PLANNED FOR v1.1+
+# Will be used by NEW StackKits, not existing ones
 - k3s installation
 - Control plane setup (1 or 3 masters)
 - CNI (Flannel by default, Cilium optional)
@@ -165,19 +183,29 @@ This architecture ensures:
 - Storage class (local-path / Longhorn)
 ```
 
+> **Note:** Kubernetes support will be added in v1.1 as separate StackKits 
+> (`k3s-homelab`, `k8s-cluster`) rather than modifying existing Docker-based StackKits.
+
 ---
 
 ### Layer 3: STACKKITS (`stackkits/`)
 
 **Purpose:** Specific use-case configurations with services and variants.
 
-**Available StackKits:**
+**Available StackKits (v1.0 - All Docker-based):**
 
-| StackKit | Nodes | Platform | Use Case |
-|----------|-------|----------|----------|
-| `base-homelab` | 1 | Docker | Single server, beginners |
-| `modern-homelab` | 2-5 | Docker | Multi-node Docker |
-| `ha-homelab` | 3+ | Kubernetes | Production-grade HA |
+| StackKit | Nodes | Platform | Orchestration | Use Case |
+|----------|-------|----------|---------------|----------|
+| `base-homelab` | 1 | Docker | Standalone | Single server, beginners |
+| `modern-homelab` | 2-5 | Docker | Docker Swarm | Multi-node hybrid |
+| `ha-homelab` | 3+ | Docker | Docker Swarm HA | Production-like HA |
+
+**Future StackKits (v1.1+ - Kubernetes):**
+
+| StackKit | Platform | Use Case |
+|----------|----------|----------|
+| `k3s-homelab` | Kubernetes | Single-node k3s learning |
+| `k8s-cluster` | Kubernetes | Multi-node k3s HA |
 
 **StackKit Structure:**
 ```
@@ -206,6 +234,7 @@ stackkits/base-homelab/
 ```
 
 ---
+
 
 ## Composition Flow
 
@@ -572,14 +601,37 @@ If you have existing deployments with the old structure:
 
 ## Summary
 
-| Layer | Location | Purpose | Examples |
-|-------|----------|---------|----------|
-| **1: CORE** | `base/` | Shared OS-level foundation | Bootstrap, UFW, SSH, Health |
-| **2: PLATFORM** | `platforms/` | Container orchestration | Docker, Kubernetes |
-| **3: STACKKIT** | `stackkits/` | Use-case configurations | base-homelab, ha-homelab |
+| Layer | Location | Purpose | v1.0 Status |
+|-------|----------|---------|-------------|
+| **1: CORE** | `base/` | Shared OS-level foundation | ✅ Bootstrap, UFW, SSH, Health |
+| **2: PLATFORM** | `platforms/` | Container orchestration | ✅ Docker (v1.0), 🔲 Kubernetes (v1.1+) |
+| **3: STACKKIT** | `stackkits/` | Use-case configurations | ✅ base, modern, ha (all Docker-based) |
+
+### v1.0 Unified Stack
+
+All StackKits use the same technology stack for simplified development and testing:
+
+| Component | Version | Purpose |
+|-----------|---------|---------|
+| Ubuntu | 24.04 LTS | Default OS (Debian 12 also supported) |
+| Docker | 27.x | Container runtime |
+| Docker Swarm | (built-in) | Multi-node orchestration |
+| Dokploy | latest | PaaS platform |
+| Traefik | v3.x | Reverse proxy |
+
+### v1.1+ Planned Additions
+
+| Feature | Description |
+|---------|-------------|
+| Kubernetes Platform | New `platforms/kubernetes/` implementation |
+| k3s-homelab | New StackKit for single-node Kubernetes learning |
+| k8s-cluster | New StackKit for multi-node Kubernetes HA |
+| Coolify Variant | Alternative PaaS option via variants |
 
 This architecture ensures:
 - ✅ **Consistency**: All homelabs get the same security baseline
-- ✅ **Flexibility**: Platforms and services are exchangeable
+- ✅ **Flexibility**: OS and PaaS are configurable
 - ✅ **Maintainability**: Changes in CORE apply everywhere
 - ✅ **Scalability**: Easy to add new platforms and StackKits
+- ✅ **Testability**: Single platform (Docker) simplifies v1.0 testing
+
