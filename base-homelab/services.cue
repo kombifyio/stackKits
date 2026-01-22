@@ -1,7 +1,14 @@
 // Package base_homelab - Service Definitions
 // 
-// Default Stack: Traefik + Dokploy + Uptime Kuma
-// Alternative Stack: Traefik + Dockge + Portainer (minimal)
+// PaaS Strategy:
+//   - Dokploy (default): For users WITHOUT a domain (ports mode, simpler)
+//   - Coolify (option):  For users WITH a domain (proxy mode, more features)
+//
+// Variants:
+//   - default: Traefik + Dokploy + Uptime Kuma (local/no-domain users)
+//   - coolify: Traefik + Coolify + Uptime Kuma (own-domain users)
+//   - beszel:  Traefik + Dokploy + Beszel (server metrics focus)
+//   - minimal: Traefik + Dockge + Portainer (lightweight)
 //
 // Monitoring Options:
 //   - Uptime Kuma (default): Simple uptime monitoring
@@ -188,6 +195,102 @@ import "github.com/kombihq/stackkits/base"
 		credentials: {
 			defaultUser: "admin"
 			note:        "Set password during first login"
+		}
+	}
+
+	restartPolicy: "unless-stopped"
+}
+
+// =============================================================================
+// ALTERNATIVE PLATFORM: COOLIFY (For users with own domain)
+// =============================================================================
+
+// #CoolifyService - Self-hosted PaaS Platform (Alternative to Dokploy)
+// Use when: User has their own domain and wants more features
+#CoolifyService: base.#ServiceDefinition & {
+	name:        "coolify"
+	displayName: "Coolify"
+	category:    "platform"
+	type:        "paas"
+	required:    false
+	enabled:     false // Not default, enabled in "coolify" variant
+	image:       "ghcr.io/coollabsio/coolify"
+	tag:         "latest"
+	description: "Self-hosted Heroku/Vercel alternative - recommended for users with own domain"
+	needs:       ["traefik"]
+
+	network: {
+		ports: [
+			{host: 8000, container: 8000, protocol: "tcp", description: "Web UI"},
+			{host: 6001, container: 6001, protocol: "tcp", description: "Websockets"},
+			{host: 6002, container: 6002, protocol: "tcp", description: "Terminal"},
+		]
+		traefik: {
+			enabled: true
+			rule:    "Host(`coolify.{{.domain}}`)"
+			tls:     true
+			port:    8000
+		}
+	}
+
+	volumes: [
+		{
+			source:      "/var/run/docker.sock"
+			target:      "/var/run/docker.sock"
+			type:        "bind"
+			readOnly:    false
+			backup:      false
+			description: "Docker socket for container management"
+		},
+		{
+			source:      "/data/coolify"
+			target:      "/data/coolify"
+			type:        "bind"
+			backup:      true
+			description: "Coolify application data and SSH keys"
+		},
+	]
+
+	environment: {
+		"APP_ID":       "{{.coolify_app_id}}"
+		"APP_KEY":      "{{.coolify_app_key}}"
+		"APP_URL":      "https://coolify.{{.domain}}"
+		"DB_CONNECTION": "sqlite"
+	}
+
+	healthCheck: {
+		enabled: true
+		http: {
+			path:   "/"
+			port:   8000
+			scheme: "http"
+		}
+		interval:    "30s"
+		timeout:     "10s"
+		retries:     3
+		startPeriod: "90s"  // Coolify takes longer to start
+	}
+
+	resources: {
+		memory:    "1g"
+		memoryMax: "2g"
+		cpus:      2.0
+	}
+
+	labels: {
+		"traefik.enable":                                        "true"
+		"traefik.http.routers.coolify.entrypoints":              "websecure"
+		"traefik.http.routers.coolify.rule":                     "Host(`coolify.{{.domain}}`)"
+		"traefik.http.routers.coolify.tls.certresolver":         "letsencrypt"
+		"traefik.http.services.coolify.loadbalancer.server.port": "8000"
+	}
+
+	output: {
+		url:         "https://coolify.{{.domain}}"
+		description: "Coolify Dashboard - Deploy applications from Git"
+		credentials: {
+			defaultUser: "admin@example.com"
+			note:        "Set email and password during first setup"
 		}
 	}
 

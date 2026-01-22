@@ -2,16 +2,21 @@
 // STACKKIT: BASE-HOMELAB - Single Server Deployment
 // =============================================================================
 //
-// Version 3.0 - Now with proper simple/advanced mode handling
+// Version 3.1 - With PaaS selection strategy
 //
 // Deployment Modes:
 //   - simple:   OpenTofu Day-1 only (initial provisioning)
 //   - advanced: OpenTofu + Terramate Day-1 + Day-2 (drift, updates, lifecycle)
 //
 // Variants:
-//   - default: Dokploy + Uptime Kuma
-//   - beszel:  Dokploy + Beszel  
-//   - minimal: Dockge + Portainer + Netdata
+//   - default: Dokploy + Uptime Kuma (for users WITHOUT own domain)
+//   - coolify: Coolify + Uptime Kuma (for users WITH own domain)
+//   - beszel:  Dokploy + Beszel (server metrics focus)
+//   - minimal: Dockge + Portainer + Netdata (lightweight)
+//
+// PaaS Selection Logic:
+//   - No domain / local network → Dokploy (simpler, port-based)
+//   - Own domain configured    → Coolify (more features, git deploys)
 //
 // Use Cases:
 //   - Personal home server
@@ -45,8 +50,8 @@ import (
 	// Deployment Mode: simple or advanced
 	deploymentMode: *"simple" | "advanced"
 
-	// Variant selection
-	variant: *"default" | "beszel" | "minimal"
+	// Variant selection (coolify requires domain)
+	variant: *"default" | "coolify" | "beszel" | "minimal"
 
 	// Compute tier (auto or explicit)
 	computeTier: *"standard" | "high" | "low"

@@ -498,4 +498,4 @@ Error: package "docker-ce" not found
 
 - [Creating StackKits](creating-stackkits.md) - Build custom StackKits
 - [Template Reference](templates.md) - OpenTofu template patterns
-- [Architecture](architecture.md) - Overall system design
+- [Architecture](ARCHITECTURE.md) - Overall system design

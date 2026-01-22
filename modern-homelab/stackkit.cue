@@ -1,10 +1,21 @@
 // Package modern_homelab - CUE Schema Definition
 // 
-// Modern Homelab = Multi-server Docker setup with hybrid (cloud + local) topology
-// Platform: Docker + Coolify
-// Network: Public + VPN Overlay (Headscale)
+// STATUS: v1.1 PLANNED - Not part of v1.0 release
 //
-// This is the main StackKit schema that extends base.
+// Modern Homelab = Multi-server Docker setup with hybrid (cloud + local) topology
+// Platform: Docker + Coolify (requires own domain)
+// Network: Public + VPN Overlay (Headscale/Tailscale)
+//
+// KEY DIFFERENCES FROM BASE-HOMELAB:
+//   - Multi-node deployment (cloud + local servers)
+//   - Coolify required (for multi-node management)
+//   - VPN overlay for secure node communication
+//   - Public access is default, not optional
+//
+// PREREQUISITES:
+//   - Own domain with DNS control
+//   - At least 2 nodes (1 cloud, 1 local)
+//   - Coolify (not Dokploy)
 
 package modern_homelab
 
@@ -15,27 +26,17 @@ import "github.com/kombihq/stackkits/base"
 // =============================================================================
 
 // #StackKitDefinition - Main schema for Modern Homelab
-#StackKitDefinition: base.#StackKitBase & {
-	version: "v0.1.0"
-	kind:    "StackKit"
-	name:    "modern-homelab"
-	
+// Extends base.#BaseStackKit with multi-node hybrid topology
+#StackKitDefinition: base.#BaseStackKit & {
+	// Metadata follows base schema
 	metadata: {
+		name:        "modern-homelab"
 		displayName: "Modern Homelab"
-		description: "Multi-server hybrid homelab with Docker + Coolify"
-		category:    "homelab"
-		tier:        "advanced"
-		platform:    "docker"  // NOT kubernetes!
+		version:     "0.1.0-alpha"
+		description: "Multi-server hybrid homelab with Docker + Coolify (v1.1 planned)"
 		author:      "KombiStack"
 		license:     "Apache-2.0"
-	}
-
-	// Modern Homelab requires: multi-node, public access, VPN overlay
-	requirements: {
-		minNodes: 2  // At least cloud + local node
-		platform: "docker"
-		publicAccess: true
-		vpnOverlay: true
+		tags: ["homelab", "hybrid", "docker", "coolify", "multi-node", "v1.1"]
 	}
 }
 

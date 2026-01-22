@@ -1,102 +1,105 @@
 # High Availability Homelab StackKit
 
-Enterprise-grade homelab with high availability, automatic failover, and distributed services.
+> ⚠️ **v1.2 PLANNED** - Not part of v1.0 or v1.1 releases
+> 
+> **Status:** Scaffolding Only  
+> **Platform:** Docker Swarm (HA)  
+> **License:** MIT
 
-> ⚠️ **Status: Scaffolding Only** - This StackKit is under development.
+---
 
-## Overview
+## ⚠️ Important Notice
 
-The HA Homelab extends the Modern Homelab with:
-- **High Availability k3s** with embedded etcd
-- **Load balancing** across multiple master nodes
-- **Distributed storage** with automatic replication
-- **Automatic failover** for all critical services
-- **Multi-site** support (optional)
+**This StackKit is a vision document and scaffolding for future development.** It is not currently functional and should not be used for production deployments.
 
-## Architecture
+- **Target Release:** v1.2 (no timeline committed)
+- **Current State:** Directory structure and documentation only
+- **Dependencies:** Requires completion of v1.0 (base-homelab) and v1.1 (modern-homelab) first
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                        High Availability Homelab                             │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│                         ┌─────────────┐                                      │
-│                         │ Load        │                                      │
-│                         │ Balancer    │                                      │
-│                         │ (HAProxy/   │                                      │
-│                         │  MetalLB)   │                                      │
-│                         └──────┬──────┘                                      │
-│                                │                                             │
-│     ┌──────────────────────────┼──────────────────────────┐                 │
-│     │                          │                          │                  │
-│     ▼                          ▼                          ▼                  │
-│ ┌──────────┐             ┌──────────┐             ┌──────────┐              │
-│ │  Master  │◄───────────►│  Master  │◄───────────►│  Master  │              │
-│ │  Node 1  │   etcd      │  Node 2  │   etcd      │  Node 3  │              │
-│ │          │   sync      │          │   sync      │          │              │
-│ └────┬─────┘             └────┬─────┘             └────┬─────┘              │
-│      │                        │                        │                     │
-│      │    ┌───────────────────┴───────────────────┐    │                     │
-│      │    │                                       │    │                     │
-│      ▼    ▼                                       ▼    ▼                     │
-│ ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐                   │
-│ │ Worker 1 │   │ Worker 2 │   │ Worker 3 │   │ Worker N │                   │
-│ └──────────┘   └──────────┘   └──────────┘   └──────────┘                   │
-│                                                                              │
-│ ┌────────────────────────────────────────────────────────────────────────┐  │
-│ │                    Distributed Storage (Longhorn/Ceph)                  │  │
-│ │                         Auto-replication across nodes                   │  │
-│ └────────────────────────────────────────────────────────────────────────┘  │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
+---
+
+## Vision Overview
+
+The **ha-homelab** StackKit will provide an enterprise-grade, highly available homelab environment using **Docker Swarm** (not Kubernetes). It is designed for 3+ nodes to ensure redundancy, automatic failover, and zero-downtime updates.
+
+### Why Docker Swarm (Not Kubernetes)?
+
+- **Simplicity:** Docker Swarm is significantly simpler to operate than Kubernetes
+- **Resource Efficient:** Lower overhead on homelab hardware
+- **Docker Native:** Leverages existing Docker Compose knowledge
+- **Sufficient for Homelab HA:** Provides the reliability needed without k8s complexity
+
+Kubernetes support may be considered in a separate StackKit beyond v1.2.
+
+## Planned Architecture
+
+This StackKit will implement a 3-layer HA architecture:
+
+1.  **Orchestration:** Docker Swarm with 3 managers (Quorum).
+2.  **Storage:** Distributed storage (GlusterFS) or shared NAS constraints.
+3.  **Networking:** Overlay networks with encrypted traffic and VIP failover (Keepalived).
+
+```mermaid
+graph TD
+    LB[Load Balancer / VIP] --> Traefik1
+    LB --> Traefik2
+    LB --> Traefik3
+
+    subgraph "Node 1 (Manager)"
+        Traefik1[Traefik]
+        Swarm1[Swarm Manager]
+        App1[App Replica]
+    end
+
+    subgraph "Node 2 (Manager)"
+        Traefik2[Traefik]
+        Swarm2[Swarm Manager]
+        App2[App Replica]
+    end
+
+    subgraph "Node 3 (Manager)"
+        Traefik3[Traefik]
+        Swarm3[Swarm Manager]
+        App3[App Replica]
+    end
+
+    Storage[Distributed Storage / NAS] <--> Node1
+    Storage <--> Node2
+    Storage <--> Node3
 ```
 
 ## Planned Features
 
-### High Availability Control Plane
-- [ ] 3+ master nodes with embedded etcd
-- [ ] Automatic leader election
-- [ ] Control plane load balancing
+When implemented, this StackKit will provide:
 
-### Distributed Storage
-- [ ] Longhorn with 3x replication
-- [ ] Optional Ceph integration
-- [ ] S3-compatible backup targets
+- **High Availability:** Tolerates failure of 1 manager node without downtime.
+- **PaaS:** Integrated **Dokploy** (Swarm Mode) for git-push deployments.
+- **Observability:** HA Prometheus/Grafana stack using federation.
+- **Storage:** Shared storage configuration templates.
 
-### Load Balancing
-- [ ] MetalLB for bare-metal LB
-- [ ] HAProxy for external access
-- [ ] Automatic health checks
+## Target Requirements
 
-### Monitoring & Alerting
-- [ ] Prometheus HA setup
-- [ ] Thanos for long-term metrics
-- [ ] PagerDuty/Slack integration
+| Resource     | Minimum | Recommended       |
+| ------------ | ------- | ----------------- |
+| **Nodes**    | 3       | 5 (3 Mgr + 2 Wkr) |
+| **CPU/Node** | 2 Cores | 4+ Cores          |
+| **RAM/Node** | 4 GB    | 8+ GB             |
+| **Network**  | 1 Gbps  | 10 Gbps           |
 
-### Disaster Recovery
-- [ ] Velero backups
-- [ ] Cross-site replication
-- [ ] RTO/RPO guarantees
+## Planned Deployment Modes
 
-## Requirements
+- **Simple:** OpenTofu-only (limited drift detection).
+- **Advanced (Recommended):** Terramate orchestration for managing updates across the cluster safely.
 
-| Resource | Minimum | Recommended |
-|----------|---------|-------------|
-| Master Nodes | 3 | 5 |
-| Worker Nodes | 2 | 3+ |
-| CPU/Node | 4 cores | 8 cores |
-| RAM/Node | 8 GB | 16 GB |
-| Disk/Node | 100 GB SSD | 256 GB NVMe |
-| Network | Gigabit | 10 Gigabit |
+---
 
-## Deployment Modes
+## Current Status
 
-Inherits from base architecture:
-- **Simple:** OpenTofu-only with Go integration
-- **Advanced:** Terramate with drift detection (recommended for HA)
+This directory contains:
+- ✅ Basic scaffolding and documentation
+- ✅ Vision architecture diagrams
+- ❌ No functional templates yet
+- ❌ No tested configurations
+- ❌ Not ready for use
 
-## Status
-
-🚧 **Under Development** - Target: Q3 2025
-
-See [ROADMAP.md](../../docs/ROADMAP.md) for timeline.
+**For a working homelab deployment, use [base-homelab](../base-homelab/) or [modern-homelab](../modern-homelab/) instead.**

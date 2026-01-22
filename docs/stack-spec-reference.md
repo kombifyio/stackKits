@@ -428,4 +428,4 @@ stackkit apply my-stack-spec.yaml
 - [kombination.yaml Reference](../../KombiStack/docs/spec/kombination-reference.md) (KombiStack)
 - [Spec-File Separation Architecture](../../KombiStack/docs/architecture/spec-file-separation.md)
 - [Creating StackKits Guide](./creating-stackkits.md)
-- [CLI Reference](./cli-reference.md)
+- [CLI Reference](./CLI.md)
