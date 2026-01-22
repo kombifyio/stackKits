@@ -9,8 +9,8 @@
 ## Infrastructure
 - OpenTofu 1.6+ executes infrastructure provisioning using Docker provider (kreuzwerker/docker), null provider for remote execution, and local provider for file generation.
 - Terramate 0.6+ orchestrates multi-node deployments with stack management, drift detection, and rolling update capabilities in advanced mode.
-- Docker 24.0+ serves as the container runtime for single-node (base-homelab) and multi-node (modern-homelab) deployments.
-- Docker Swarm provides high-availability clustering with manager node quorum, overlay networking, and routing mesh for multi-node deployments.
+- Docker 24.0+ serves as the container runtime for single-node (base-homelab) deployments, while multi-node deployments (modern-homelab, ha-homelab) use Docker Swarm clustering.
+- Docker Swarm provides high-availability clustering with manager node quorum (3+ for ha-homelab), overlay networking, and routing mesh for distributed deployments.
 
 ## Data/State
 - OpenTofu maintains infrastructure state files tracking resource lifecycle, dependencies, and configuration drift.
