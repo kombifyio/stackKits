@@ -10,4 +10,4 @@ StackKits delivers declarative infrastructure blueprints for self-hosted homelab
 - **OS Variant System** - Automatic adaptation for Ubuntu, Debian, and compute tier variants without manual template modifications
 - **IaC-First Design** - OpenTofu as the execution engine with Docker, Kubernetes, and null providers for containers, networks, and bootstrap automation
 
-*Ready-to-use templates include single-server (base-homelab), multi-node Docker (modern-homelab), and high-availability Kubernetes (ha-homelab) configurations.*
+*Ready-to-use templates include single-server (base-homelab), multi-node Docker (modern-homelab), and high-availability Docker Swarm (ha-homelab) configurations.*
