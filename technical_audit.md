@@ -52,4 +52,4 @@
 - OpenTofu HCL templates expose provider-specific resources (docker_container, docker_network, docker_volume, null_resource) enabling declarative infrastructure specification with resource dependencies and lifecycle management.
 - Terramate CLI integration provides stack operations (list, create, generate), orchestration commands (run, run --changed, run --reverse), and drift detection (run -- tofu plan -detailed-exitcode) with JSON output for programmatic consumption.
 - Output retrieval mechanisms expose service URLs, credentials, cluster join tokens, and health status through tofu output with JSON formatting enabling downstream automation and integration with monitoring systems.
-- Interactive terminal UI planned for deployment progress visualization, stack dependency graphs, drift reports, and real-time log streaming using bubbletea/lipgloss TUI framework.
+- Interactive terminal UI under consideration for future releases to provide deployment progress visualization, stack dependency graphs, drift reports, and real-time log streaming.
