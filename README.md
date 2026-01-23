@@ -1,4 +1,4 @@
-# StackKits - Declarative Infrastructure Blueprints
+# kombify StackKits (StackKits) - Declarative Infrastructure Blueprints
 
 > **IaC-First Infrastructure Templates with CUE Validation and OpenTofu Execution**
 
@@ -15,7 +15,7 @@
 - **Validated Configuration** - CUE schemas catch errors before deployment
 - **IaC-First Architecture** - OpenTofu as execution engine, not custom scripts
 - **Multi-OS Support** - Ubuntu, Debian, and more via variants
-- **Standalone or Integrated** - Use via CLI or with KombiStack Web UI
+- **Standalone or Integrated** - Use via CLI or with kombify Stack (KombiStack) Web UI
 
 ### Prerequisites
 
