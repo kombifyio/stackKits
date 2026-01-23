@@ -1,14 +1,38 @@
 # Modern Homelab StackKit
 
-> ⚠️ **Status: Scaffolding (v0.1.0-alpha)** - Structure defined, templates in progress
+> ⚠️ **v1.1 PLANNED - Not part of v1.0 release**
+> 
+> **Status: Alpha/Planning** - Architecture designed, implementation not started
+
+This StackKit is planned for **StackKits v1.1** and is **not functional** in the current release. The architecture and specifications below represent the planned design.
+
+---
+
+## Prerequisites (v1.1)
+
+This StackKit has significant requirements compared to `base-homelab`:
+
+| Requirement | Details |
+|-------------|---------|
+| **Own Domain** | You must own a domain with DNS control (e.g., Cloudflare, Hetzner DNS) |
+| **Minimum 2 Nodes** | At least 1 cloud VPS + 1 local server |
+| **PaaS Platform** | Uses **Coolify** (not Dokploy like base-homelab) |
+| **Public IP** | Cloud node requires public IPv4 |
+| **DNS Provider API** | For automated TLS certificate provisioning |
+
+> 💡 **Looking for something simpler?** Use [`base-homelab`](../base-homelab/) instead - it works on a single local machine with Dokploy and is **fully functional in v1.0**.
+
+---
+
+## What This StackKit Will Provide (v1.1)
 
 Multi-server hybrid homelab with **Docker + Coolify** for users who need:
-- Public-facing services
+- Public-facing services with automatic TLS
 - Multi-node deployments (cloud + local servers)
-- Professional PaaS experience
-- Remote access to on-premises servers
+- Professional PaaS experience via Coolify
+- Secure remote access to on-premises servers via VPN
 
-## Architecture Overview
+## Planned Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -49,20 +73,21 @@ Multi-server hybrid homelab with **Docker + Coolify** for users who need:
 
 ## Comparison: base-homelab vs modern-homelab
 
-| Feature | base-homelab | modern-homelab |
-|---------|--------------|----------------|
+| Feature | base-homelab (v1.0) | modern-homelab (v1.1 planned) |
+|---------|---------------------|-------------------------------|
+| **Status** | ✅ Functional | ⏳ Planned |
 | Nodes | Single server | Multi-server (cloud + local) |
 | Platform | Docker | Docker |
 | PaaS | Dokploy | **Coolify** |
 | Network | Local only | Public + VPN overlay |
 | Access | LAN/Tailscale | Internet + VPN |
-| DNS | Optional | Required (ACME) |
+| DNS | Optional | **Required** (ACME) |
 | Monitoring | Optional | Full PLG stack |
 | Use case | Home network | Hybrid/public services |
 
-## Core Components
+## Planned Core Components
 
-### Required Services (always deployed)
+### Required Services (planned for deployment)
 
 | Service | Role | Deployment |
 |---------|------|------------|
@@ -71,7 +96,7 @@ Multi-server hybrid homelab with **Docker + Coolify** for users who need:
 | **Tailscale Agent** | VPN client | All nodes |
 | **Coolify** | PaaS (container orchestration) | Cloud node |
 
-### Monitoring Stack (default variant)
+### Monitoring Stack (planned default variant)
 
 | Service | Role | Deployment |
 |---------|------|------------|
@@ -81,7 +106,9 @@ Multi-server hybrid homelab with **Docker + Coolify** for users who need:
 | **Promtail** | Log shipper | All nodes |
 | **Uptime Kuma** | Status page | Cloud node |
 
-## Variants
+## Planned Variants
+
+> ⚠️ These variants are designed but not implemented yet.
 
 ### default
 Full monitoring stack with Coolify, Headscale, and PLG (Prometheus/Loki/Grafana).
@@ -92,18 +119,20 @@ Just Coolify + Headscale + Uptime Kuma. No heavy monitoring.
 ### beszel
 Lightweight alternative using Beszel instead of PLG stack.
 
-## Requirements
+## Requirements (v1.1)
 
 | Resource | Minimum | Recommended |
 |----------|---------|-------------|
 | Cloud Nodes | 1 | 1-2 |
-| Local Nodes | 0 | 1+ |
+| Local Nodes | 1 | 1+ |
 | CPU (cloud) | 2 cores | 4 cores |
 | Memory (cloud) | 4 GB | 8 GB |
-| Domain | Required | Required |
-| DNS Provider | Required | Cloudflare/Hetzner |
+| **Domain** | **Required** | **Required** |
+| **DNS Provider** | **Required** | Cloudflare/Hetzner |
 
-## Quick Start
+## Example Specification (v1.1)
+
+> ⚠️ This specification format is planned and may change before v1.1 release.
 
 ```yaml
 # kombination.yaml
@@ -164,24 +193,37 @@ modern-homelab/
 
 ## Implementation Status
 
-- [x] StackKit metadata (stackkit.yaml)
-- [x] CUE schema (stackkit.cue)
+> **Target Release: v1.1**
+
+### Completed (Design Phase)
+- [x] StackKit metadata structure (stackkit.yaml)
+- [x] CUE schema design (stackkit.cue)
 - [x] Service definitions (services.cue)
-- [x] Default values (defaults.cue)
+- [x] Default values structure (defaults.cue)
+- [x] Architecture documentation
+
+### Not Started (Implementation)
 - [ ] OpenTofu templates
+- [ ] Coolify integration
+- [ ] Headscale/Tailscale automation
 - [ ] Variant configurations
 - [ ] Integration tests
+- [ ] End-to-end deployment testing
 
 ## Changelog
 
-### v0.1.0-alpha (2025-01)
-- Initial scaffolding
-- Docker + Coolify architecture (replaced k8s design)
+### v0.1.0-alpha (2025-01) - Design Phase
+- Initial architecture design
+- Docker + Coolify architecture specification
 - Service definitions: Traefik, Headscale, Coolify, PLG monitoring
-- Multi-node hybrid topology (cloud + local nodes)
-- Implemented: cert-manager, Velero
-- Added: Smart defaults by cluster tier
-- Added: OpenTofu templates
+- Multi-node hybrid topology design (cloud + local nodes)
+
+---
+
+## See Also
+
+- [`base-homelab`](../base-homelab/) - **Recommended for v1.0** - Single-node homelab with Dokploy
+- [`ha-homelab`](../ha-homelab/) - High-availability homelab (also v1.1 planned)
 
 ## License
 

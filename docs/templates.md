@@ -665,4 +665,4 @@ TF_LOG=DEBUG tofu apply
 
 - [Creating StackKits](creating-stackkits.md) - Full StackKit guide
 - [Variant System](variants.md) - OS and compute variants
-- [CLI Reference](cli-reference.md) - Command-line usage
+- [CLI Reference](CLI.md) - Command-line usage

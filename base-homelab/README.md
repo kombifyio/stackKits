@@ -4,13 +4,23 @@
 
 ## 🎯 Overview
 
-The **Base Homelab** StackKit provides everything you need to run a modern homelab on a single server. Choose from three **preconfigured variants** that work out-of-the-box:
+The **Base Homelab** StackKit provides everything you need to run a modern homelab on a single server. Choose from four **preconfigured variants** that work out-of-the-box:
 
-| Variant | Best For | Services |
-|---------|----------|----------|
-| **default** | Beginners, App Deployment | Dokploy + Uptime Kuma |
-| **beszel** | Power Users, Server Metrics | Dokploy + Beszel |
-| **minimal** | Classic Docker Experience | Dockge + Portainer + Netdata |
+| Variant | Best For | PaaS | Services |
+|---------|----------|------|----------|
+| **default** | No domain, local network | Dokploy | Dokploy + Uptime Kuma |
+| **coolify** | Own domain, Git deploys | Coolify | Coolify + Uptime Kuma |
+| **beszel** | Server metrics focus | Dokploy | Dokploy + Beszel |
+| **minimal** | Classic Docker | None | Dockge + Portainer + Netdata |
+
+### PaaS Selection Guide
+
+| Your Situation | Recommended Variant |
+|----------------|---------------------|
+| No domain, just local access | `default` (Dokploy) |
+| Have own domain, want Git deploys | `coolify` (Coolify) |
+| Want detailed server metrics | `beszel` |
+| Prefer manual Docker management | `minimal` |
 
 ## 🚀 Quick Start (5 Minutes)
 

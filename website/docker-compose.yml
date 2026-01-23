@@ -1,5 +1,4 @@
-version: '3.8'
-
+# StackKits Website - Docker Compose Configuration
 services:
   stackkits-website:
     build:
@@ -9,5 +8,11 @@ services:
     ports:
       - "8080:80"
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
     labels:
       - "com.stackkits.description=StackKits Marketing Website"
