@@ -20,12 +20,13 @@ type StackKitMetadata struct {
 
 // StackKit represents a complete stackkit.yaml file
 type StackKit struct {
-	Metadata     StackKitMetadata `yaml:"metadata" json:"metadata"`
-	SupportedOS  []string         `yaml:"supportedOS" json:"supportedOS"`
-	Requirements Requirements     `yaml:"requirements" json:"requirements"`
-	Modes        Modes            `yaml:"modes" json:"modes"`
-	Variants     []Variant        `yaml:"variants" json:"variants"`
-	Features     Features         `yaml:"features,omitempty" json:"features,omitempty"`
+	Metadata       StackKitMetadata   `yaml:"metadata" json:"metadata"`
+	SupportedOS    []string           `yaml:"supportedOS" json:"supportedOS"`
+	Requirements   Requirements       `yaml:"requirements" json:"requirements"`
+	Modes          Modes              `yaml:"modes" json:"modes"`
+	Variants       map[string]Variant `yaml:"variants" json:"variants"`
+	DefaultVariant string             `yaml:"defaultVariant,omitempty" json:"defaultVariant,omitempty"`
+	Features       Features           `yaml:"features,omitempty" json:"features,omitempty"`
 }
 
 // Requirements defines system requirements
@@ -57,10 +58,11 @@ type ModeSpec struct {
 
 // Variant defines a service variant
 type Variant struct {
-	Name        string   `yaml:"name" json:"name"`
-	Description string   `yaml:"description" json:"description"`
-	Services    []string `yaml:"services" json:"services"`
-	Default     bool     `yaml:"default,omitempty" json:"default,omitempty"`
+	DisplayName       string   `yaml:"name" json:"displayName"`
+	Description       string   `yaml:"description" json:"description"`
+	ServiceCollection string   `yaml:"serviceCollection,omitempty" json:"serviceCollection,omitempty"`
+	Services          []string `yaml:"services" json:"services"`
+	Default           bool     `yaml:"default,omitempty" json:"default,omitempty"`
 }
 
 // Features defines optional features

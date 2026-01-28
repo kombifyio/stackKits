@@ -44,7 +44,6 @@ locals {
 }
 
 provider "docker" {
-  host = "unix:///var/run/docker.sock"
 }
 
 # Data source für Traefik Network

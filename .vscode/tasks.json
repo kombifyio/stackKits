@@ -16,10 +16,7 @@
         "panel": "new",
         "focus": false
       },
-      "problemMatcher": [],
-      "runOptions": {
-        "runOn": "folderOpen"
-      }
+      "problemMatcher": []
     },
     {
       "label": "Open Beads UI in Browser",

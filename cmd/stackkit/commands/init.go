@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 
 	"github.com/kombihq/stackkits/internal/config"
 	"github.com/kombihq/stackkits/pkg/models"
@@ -86,13 +87,14 @@ func runInit(cmd *cobra.Command, args []string) error {
 	// Validate variant
 	validVariant := false
 	var availableVariants []string
-	for _, v := range stackkit.Variants {
-		availableVariants = append(availableVariants, v.Name)
-		if v.Name == initVariant {
+	for id := range stackkit.Variants {
+		availableVariants = append(availableVariants, id)
+		if id == initVariant {
 			validVariant = true
 		}
 	}
-	if !validVariant && initVariant != "default" {
+	sort.Strings(availableVariants)
+	if !validVariant {
 		return fmt.Errorf("invalid variant '%s'. Available: %v", initVariant, availableVariants)
 	}
 

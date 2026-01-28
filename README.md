@@ -2,7 +2,7 @@
 
 > **IaC-First Infrastructure Templates with CUE Validation and OpenTofu Execution**
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License](https://img.shields.io/badge/License-Apache%202.0%20%2B%20GPLv3-blue.svg)](LICENSE)
 [![CUE](https://img.shields.io/badge/CUE-v0.9-blue)](https://cuelang.org/)
 [![OpenTofu](https://img.shields.io/badge/OpenTofu-v1.6-green)](https://opentofu.org/)
 

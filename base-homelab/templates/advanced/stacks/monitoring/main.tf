@@ -47,7 +47,6 @@ locals {
 }
 
 provider "docker" {
-  host = "unix:///var/run/docker.sock"
 }
 
 data "docker_network" "traefik" {
