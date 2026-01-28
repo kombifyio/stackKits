@@ -1,0 +1,104 @@
+# StackKits Website Deploy
+# Deploys StackKits documentation website to Azure Container Apps
+
+name: Deploy Website
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'website/**'
+      - 'docs/**'
+      - 'Dockerfile.website'
+  workflow_dispatch:
+
+env:
+  ACR_NAME: acrkombifyprod
+  IMAGE_NAME: stackkits-web
+  CONTAINER_APP_NAME: ca-stackkits-web-prod
+  RESOURCE_GROUP: rg-kombify-prod
+  CONTAINER_APP_ENV: cae-kombify-prod
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    environment:
+      name: production
+      url: https://stackkits.kombify.io
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      
+      - name: Login to ACR
+        uses: azure/docker-login@v2
+        with:
+          login-server: ${{ env.ACR_NAME }}.azurecr.io
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+      
+      - name: Build and push Docker image
+        run: |
+          # Use website Dockerfile if exists, otherwise standard
+          DOCKERFILE="Dockerfile"
+          if [ -f "Dockerfile.website" ]; then
+            DOCKERFILE="Dockerfile.website"
+          fi
+          
+          docker build \
+            -f $DOCKERFILE \
+            -t ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            -t ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:latest \
+            .
+          docker push ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          docker push ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:latest
+      
+      - name: Check if Container App exists
+        id: check_app
+        run: |
+          if az containerapp show --name ${{ env.CONTAINER_APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} &>/dev/null; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Create Container App (if not exists)
+        if: steps.check_app.outputs.exists == 'false'
+        run: |
+          az containerapp create \
+            --name ${{ env.CONTAINER_APP_NAME }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --environment ${{ env.CONTAINER_APP_ENV }} \
+            --image ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            --target-port 3000 \
+            --ingress external \
+            --registry-server ${{ env.ACR_NAME }}.azurecr.io \
+            --registry-username ${{ secrets.ACR_USERNAME }} \
+            --registry-password ${{ secrets.ACR_PASSWORD }} \
+            --cpu 0.25 \
+            --memory 0.5Gi \
+            --min-replicas 0 \
+            --max-replicas 2
+      
+      - name: Update Container App (if exists)
+        if: steps.check_app.outputs.exists == 'true'
+        run: |
+          az containerapp update \
+            --name ${{ env.CONTAINER_APP_NAME }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --image ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
+      
+      - name: Deployment Summary
+        run: |
+          echo "## 🚀 StackKits Website Deployed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Image | \`${{ env.IMAGE_NAME }}:${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| URL | https://stackkits.kombify.io |" >> $GITHUB_STEP_SUMMARY

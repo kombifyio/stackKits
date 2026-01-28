@@ -169,3 +169,20 @@ jobs:
           name: stackkit-${{ matrix.os }}-${{ matrix.arch }}
           path: stackkit-*
           retention-days: 7
+
+  # Final status check for branch protection
+  ci-passed:
+    name: ✅ CI Passed
+    needs: [lint, test, cue-validation]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Check all jobs passed
+        run: |
+          if [ "${{ needs.lint.result }}" != "success" ] || \
+             [ "${{ needs.test.result }}" != "success" ] || \
+             [ "${{ needs.cue-validation.result }}" != "success" ]; then
+            echo "❌ Some jobs failed"
+            exit 1
+          fi
+          echo "✅ All CI jobs passed"
