@@ -1,50 +1,49 @@
-# Dev Homelab - Production Ready
+# Dev Homelab - VM-Based Deployment
 
 A production-ready homelab StackKit with Dokploy PAAS, Traefik reverse proxy, and Zero-Trust security architecture.
+
+**IMPORTANT:** All services run INSIDE the Ubuntu VM, not directly on the Windows host.
 
 ## Architecture Overview
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                           DEV HOMELAB ARCHITECTURE                          │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  LAYER 3: APPLICATIONS (Managed by Dokploy)                                │
-│  ┌──────────────┐  ┌──────────────┐                                         │
-│  │    Kuma      │  │    Whoami    │  ← Deployed THROUGH Dokploy UI/API     │
-│  │ (Monitoring) │  │  (Test API)  │                                         │
-│  └──────┬───────┘  └──────┬───────┘                                         │
-│         │                 │                                                 │
-│         └────────┬────────┘                                                 │
-│                  ▼                                                          │
-│  ┌──────────────────────────────────────┐                                   │
-│  │           Dokploy PAAS               │  ← Manages Kuma & Whoami          │
-│  │  ┌─────────────────────────────┐     │                                   │
-│  │  │   PostgreSQL Database       │     │                                   │
-│  │  │   (Internal Network Only)   │     │                                   │
-│  │  └─────────────────────────────┘     │                                   │
-│  └──────────────────────────────────────┘                                   │
-│                         │                                                   │
-│  LAYER 2: PLATFORM       ▼                                                  │
-│  ┌──────────────────────────────────────┐                                   │
-│  │        Traefik Reverse Proxy         │  ← Automatic HTTPS & Routing      │
-│  │  • Routes: dokploy.stack.local       │                                   │
-│  │  • Routes: kuma.stack.local          │                                   │
-│  │  • Routes: whoami.stack.local        │                                   │
-│  │  • Routes: auth.stack.local          │                                   │
-│  └──────────────────────────────────────┘                                   │
-│                         │                                                   │
-│  LAYER 1: FOUNDATION     ▼                                                  │
-│  ┌──────────────────────────────────────┐                                   │
-│  │        TinyAuth (OIDC/SSO)           │  ← No Anonymous Admin Access      │
-│  │  • Passkey-first authentication      │                                   │
-│  │  • Protects all admin interfaces     │                                   │
-│  └──────────────────────────────────────┘                                   │
-│                                                                             │
-│  Docker Networks:                                                           │
-│  • dev_net (172.21.0.0/16)     - Main application network                  │
-│  • dev_net_db (172.21.1.0/24)  - Internal database network (isolated)      │
-│                                                                             │
+│                           WINDOWS HOST                                        │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │                     Ubuntu VM (Docker-in-Docker)                     │    │
+│  │  ┌───────────────────────────────────────────────────────────────┐  │    │
+│  │  │ LAYER 3: APPLICATIONS (Managed by Dokploy)                   │  │    │
+│  │  │ ┌──────────────┐  ┌──────────────┐                            │  │    │
+│  │  │ │    Kuma      │  │    Whoami    │ ← Deployed via Dokploy UI  │  │    │
+│  │  │ │ (Monitoring) │  │  (Test API)  │                            │  │    │
+│  │  │ └──────┬───────┘  └──────┬───────┘                            │  │    │
+│  │  │        │                 │                                     │  │    │
+│  │  │        └────────┬────────┘                                     │  │    │
+│  │  │                 ▼                                              │  │    │
+│  │  │  ┌──────────────────────────────────────┐                     │  │    │
+│  │  │  │           Dokploy PAAS               │                     │  │    │
+│  │  │  └──────────────────────────────────────┘                     │  │    │
+│  │  │                    │                                           │  │    │
+│  │  │  LAYER 2: PLATFORM  ▼                                           │  │    │
+│  │  │  ┌──────────────────────────────────────┐                     │  │    │
+│  │  │  │        Traefik Reverse Proxy         │                     │  │    │
+│  │  │  └──────────────────────────────────────┘                     │  │    │
+│  │  │                    │                                           │  │    │
+│  │  │  LAYER 1: FOUNDATION ▼                                          │  │    │
+│  │  │  ┌──────────────────────────────────────┐                     │  │    │
+│  │  │  │        TinyAuth (OIDC/SSO)           │                     │  │    │
+│  │  │  └──────────────────────────────────────┘                     │  │    │
+│  │  └───────────────────────────────────────────────────────────────┘  │    │
+│  │                                                                     │    │
+│  │  Docker Daemon: tcp://vm:2375 (accessible from host CLI container) │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                                                              │
+│  Port Forwarding:                                                            │
+│    Host:80  → VM:80    (HTTP)                                                │
+│    Host:443 → VM:443   (HTTPS)                                               │
+│    Host:8080 → VM:8080 (Traefik Dashboard)                                   │
+│    Host:2222 → VM:22   (SSH)                                                 │
+│    Host:2375 → VM:2375 (Docker Daemon)                                       │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -53,72 +52,157 @@ A production-ready homelab StackKit with Dokploy PAAS, Traefik reverse proxy, an
 ### Prerequisites
 
 - Docker & Docker Compose
-- OpenTofu/Terraform
+- OpenTofu/Terraform (inside CLI container)
 - StackKit CLI (built from source)
 
-### 1. Build StackKit CLI
+### Deployment Steps
+
+**STEP 1: Build StackKit CLI**
 
 ```bash
 cd /workspace
 go build -o stackkit.exe ./cmd/stackkit
 ```
 
-### 2. Initialize the StackKit
+**STEP 2: Start ONLY the VM**
 
 ```bash
-./stackkit.exe init dev-homelab --non-interactive
+# Start only the Ubuntu VM - NO services yet
+docker compose up -d vm
+
+# Verify VM is running
+docker ps
+# Should show ONLY: stackkits-vm
 ```
 
-### 3. Deploy Infrastructure
+**STEP 3: Verify VM Docker Daemon**
 
 ```bash
-./stackkit.exe apply --auto-approve
+# Check Docker daemon is accessible on port 2375
+docker compose exec vm docker ps
+# Should show empty (no containers yet in VM)
+
+# Or from host (if docker client available)
+$env:DOCKER_HOST="tcp://localhost:2375"
+docker ps
 ```
 
-This deploys:
-- Traefik reverse proxy (ports 80, 443, 8080)
-- TinyAuth SSO proxy (auth.stack.local)
-- Dokploy PAAS (dokploy.stack.local)
-- Dokploy PostgreSQL (internal network only)
+**STEP 4: Deploy Services INTO the VM**
 
-### 4. Deploy Managed Services
+```bash
+# Initialize the StackKit INSIDE the VM (not on host!)
+docker compose run --rm -e DOCKER_HOST=tcp://vm:2375 cli stackkit init dev-homelab --non-interactive
 
-After Dokploy is running, deploy Kuma and Whoami THROUGH Dokploy:
+# Apply the configuration to the VM's Docker daemon
+docker compose run --rm -e DOCKER_HOST=tcp://vm:2375 cli stackkit apply --auto-approve
+```
+
+**STEP 5: Verify Services Are IN the VM**
+
+```bash
+# On Windows host - should ONLY show the VM container
+docker ps
+# CONTAINER ID   IMAGE          COMMAND   STATUS          NAMES
+# xxxxxxxx       stackkits-vm   "/entry…"   Up 2 minutes    stackkits-vm
+
+# Inside the VM - should show ALL services
+docker compose exec vm docker ps
+# CONTAINER ID   IMAGE                    NAMES
+# xxxxxxxx       traefik:v3.1             traefik
+# xxxxxxxx       ghcr.io/steveiliop56/…   tinyauth
+# xxxxxxxx       dokploy/dokploy:latest   dokploy
+# xxxxxxxx       postgres:16-alpine       dokploy-postgres
+```
+
+**STEP 6: Deploy Managed Services via Dokploy**
+
+After Dokploy is running inside the VM, deploy Kuma and Whoami THROUGH Dokploy:
 
 ```bash
 # Get the admin password from terraform output
-./stackkit.exe output dokploy_admin_password
+docker compose run --rm -e DOCKER_HOST=tcp://vm:2375 cli stackkit output dokploy_admin_password
 
-# Deploy managed services
-cd dev-homelab/templates/simple
-chmod +x deploy-managed-services.sh
-./deploy-managed-services.sh
+# Deploy managed services (runs inside VM)
+docker compose run --rm -e DOCKER_HOST=tcp://vm:2375 cli \
+  bash -c "cd dev-homelab/templates/simple && ./deploy-managed-services.sh"
 ```
 
 Or deploy via Dokploy UI:
 1. Open http://dokploy.stack.local
-2. Login with admin credentials
+2. Login with admin credentials (see below)
 3. Create new project → Docker Compose
-4. Upload the compose files from `/tmp/kuma-compose.yaml` and `/tmp/whoami-compose.yaml`
+4. Upload the compose files
 
-### 5. Access Services
+## First Login & Default Credentials
 
-| Service | URL | Protected |
-|---------|-----|-----------|
-| Dokploy UI | http://dokploy.stack.local | Yes (TinyAuth) |
-| Traefik Dashboard | http://traefik.stack.local | Yes (TinyAuth) |
-| Uptime Kuma | http://kuma.stack.local | Yes (TinyAuth) |
-| Whoami Test | http://whoami.stack.local | Yes (TinyAuth) |
-| TinyAuth Login | http://auth.stack.local | No (login page) |
+### 🔐 TinyAuth (Identity Provider)
+
+**URL:** http://auth.stack.local
+
+**Default Credentials:**
+- **Username:** `admin`
+- **Password:** `admin123`
+
+These credentials are set in the Terraform configuration:
+```hcl
+env = [
+  "USERS=admin:$2a$10$N9qo8uLOickgx2ZMRZoMy.MqrI0N3p9zqNVvB6fCNCkKeTLQ9b1Vy",
+  # bcrypt hash of "admin123"
+]
+```
+
+**First Login Steps:**
+1. Navigate to http://auth.stack.local
+2. Login with admin/admin123
+3. **IMMEDIATELY change the password** (security best practice)
+4. Configure additional users or OIDC provider if needed
+
+### 🔐 Dokploy (PAAS Controller)
+
+**URL:** http://dokploy.stack.local
+
+**Default Credentials:**
+- **Email:** `admin@stack.local`
+- **Password:** Auto-generated on first run
+
+**Get the password:**
+```bash
+docker compose run --rm -e DOCKER_HOST=tcp://vm:2375 cli stackkit output dokploy_admin_password
+```
+
+**First Login Steps:**
+1. Navigate to http://dokploy.stack.local
+2. You'll be redirected to TinyAuth for authentication
+3. Login with TinyAuth credentials (admin/admin123)
+4. Dokploy will prompt you to complete setup
+
+### 🔐 Uptime Kuma (Monitoring)
+
+**URL:** http://kuma.stack.local
+
+**Initial Setup:**
+1. Navigate to http://kuma.stack.local
+2. Create your admin account on first visit
+3. Kuma is protected by TinyAuth - you'll login via auth.stack.local first
+
+## Service Access Summary
+
+| Service | URL | Protected | Default Credentials |
+|---------|-----|-----------|---------------------|
+| TinyAuth Login | http://auth.stack.local | No (login page) | admin / admin123 |
+| Dokploy UI | http://dokploy.stack.local | Yes (TinyAuth) | Via TinyAuth SSO |
+| Traefik Dashboard | http://traefik.stack.local | Yes (TinyAuth) | Via TinyAuth SSO |
+| Uptime Kuma | http://kuma.stack.local | Yes (TinyAuth) | Set on first visit |
+| Whoami Test | http://whoami.stack.local | Yes (TinyAuth) | Via TinyAuth SSO |
 
 ## Security Features
 
 ### Zero-Trust Architecture
 
-1. **No Anonymous Admin Access**: All admin interfaces require authentication
-2. **Passkey-First**: Ready for passkey/WebAuthn authentication
-3. **OIDC Integration**: TinyAuth configured for external IdP (Zitadel, etc.)
-4. **mTLS Ready**: Infrastructure prepared for mutual TLS (disabled for dev)
+1. **No Anonymous Admin Access**: All admin interfaces require TinyAuth authentication
+2. **Passkey-First**: TinyAuth ready for passkey/WebAuthn authentication
+3. **OIDC Integration**: Configure external IdP (Zitadel, Keycloak, etc.)
+4. **mTLS Ready**: Infrastructure prepared for mutual TLS
 5. **Network Segmentation**: Database on isolated internal network
 
 ### Container Security Hardening
@@ -130,21 +214,61 @@ All containers implement:
 - No new privileges
 - Resource limits
 
-### Authentication
+## Troubleshooting
 
-Default credentials (change immediately):
-- **TinyAuth**: admin / [auto-generated]
-- **Dokploy**: admin@stack.local / [auto-generated]
+### Verify VM-Only Deployment
 
-Get passwords:
 ```bash
-./stackkit.exe output tinyauth_admin_password
-./stackkit.exe output dokploy_admin_password
+# This should show ONLY the VM container
+docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}"
+
+# This should show ALL services (inside VM)
+docker compose exec vm docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}"
 ```
+
+### Services Not Accessible
+
+1. Check Traefik is running IN the VM:
+   ```bash
+   docker compose exec vm docker logs traefik
+   ```
+
+2. Verify DNS resolution:
+   ```bash
+   nslookup dokploy.stack.local
+   ```
+
+3. Check Traefik dashboard: http://traefik.stack.local
+
+### Cannot Deploy to VM
+
+1. Verify Docker daemon is accessible:
+   ```bash
+   docker compose run --rm -e DOCKER_HOST=tcp://vm:2375 cli docker info
+   ```
+
+2. Check VM is healthy:
+   ```bash
+   docker compose ps vm
+   ```
+
+### Authentication Issues
+
+1. Check TinyAuth logs IN the VM:
+   ```bash
+   docker compose exec vm docker logs tinyauth
+   ```
+
+2. Verify middleware in Traefik: http://traefik.stack.local/dashboard/
+
+3. Test auth directly:
+   ```bash
+   curl -v http://auth.stack.local/api/health
+   ```
 
 ## Persistent Storage
 
-All data persists across restarts:
+All data persists across restarts (stored INSIDE the VM):
 
 | Volume | Purpose | Backup |
 |--------|---------|--------|
@@ -155,30 +279,6 @@ All data persists across restarts:
 | traefik-certs | TLS certificates | Required |
 | traefik-data | Traefik configuration | Optional |
 
-## Testing
-
-### Run E2E Tests
-
-```bash
-docker compose --profile e2e run --rm e2e
-```
-
-### Production Readiness Tests
-
-```bash
-# Enable all tests
-export TEST_PERSISTENCE=true
-export TEST_SECURITY=true
-export TEST_DOKPLOY_INTEGRATION=true
-./dev-homelab/tests/e2e_test.sh
-```
-
-### Manual Verification
-
-1. **Persistence Test**: Restart containers, verify data remains
-2. **Security Test**: Verify all admin UIs require auth
-3. **Dokploy Integration**: Confirm Kuma/Whoami visible in Dokploy UI
-
 ## Configuration
 
 ### Environment Variables
@@ -186,9 +286,7 @@ export TEST_DOKPLOY_INTEGRATION=true
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `DOMAIN` | stack.local | Base domain for services |
-| `DOKPLOY_URL` | http://dokploy.stack.local | Dokploy access URL |
-| `ENABLE_SECURITY_HARDENING` | true | Enable container security |
-| `ACME_EMAIL` | admin@stack.local | Let's Encrypt email |
+| `DOCKER_HOST` | tcp://vm:2375 | Target Docker daemon (VM) |
 
 ### Custom Domains
 
@@ -201,89 +299,12 @@ services: {
 }
 ```
 
-## Troubleshooting
-
-### Services Not Accessible
-
-1. Check Traefik is running: `docker logs traefik`
-2. Verify DNS resolution: `nslookup dokploy.stack.local`
-3. Check Traefik dashboard: http://traefik.stack.local
-
-### Dokploy Not Managing Services
-
-1. Ensure services have `dokploy.managed=true` label
-2. Check Dokploy logs: `docker logs dokploy`
-3. Verify Docker socket mount: `docker inspect dokploy | grep -A5 Mounts`
-
-### Authentication Issues
-
-1. Check TinyAuth logs: `docker logs tinyauth`
-2. Verify middleware in Traefik: http://traefik.stack.local/dashboard/
-3. Test auth directly: `curl -v http://auth.stack.local/api/health`
-
-## Production Deployment
-
-### Enable mTLS
-
-Edit `dev-homelab/defaults.cue`:
-```cue
-security: mtls: {
-    enabled: true
-    provider: "step-ca"
-    required: true
-}
-```
-
-### Enable HTTPS Redirect
-
-Edit `dev-homelab/templates/simple/main.tf`:
-```hcl
-command = [
-    # ... other options ...
-    "--entrypoints.web.http.redirections.entryPoint.to=websecure",
-    "--entrypoints.web.http.redirections.entryPoint.scheme=https",
-]
-```
-
-### External OIDC Provider
-
-Configure TinyAuth for external IdP:
-```bash
-docker run ... \
-    -e "OIDC_ISSUER=https://your-idp.com" \
-    -e "OIDC_CLIENT_ID=your-client-id" \
-    -e "OIDC_CLIENT_SECRET=your-client-secret" \
-    ghcr.io/steveiliop56/tinyauth:v3
-```
-
-## File Structure
-
-```
-dev-homelab/
-├── templates/
-│   └── simple/
-│       ├── main.tf                      # Main OpenTofu configuration
-│       ├── deploy-managed-services.sh   # Deploy Kuma/Whoami via Dokploy
-│       └── terraform.tfvars.example     # Example variables
-├── tests/
-│   └── e2e_test.sh                      # E2E test suite
-├── defaults.cue                         # Default configuration
-├── services.cue                         # Service definitions
-├── stackfile.cue                        # Complete stack definition
-└── README.md                            # This file
-```
-
 ## Architecture Compliance
 
 This StackKit implements the 3-layer architecture:
 
-- **Layer 1 (Foundation)**: Docker, networking, security hardening
-- **Layer 2 (Platform)**: Traefik, TinyAuth, network segmentation
-- **Layer 3 (Applications)**: Dokploy PAAS, Kuma, Whoami
+- **Layer 1 (Foundation)**: Docker, networking, TinyAuth identity
+- **Layer 2 (Platform)**: Traefik, Dokploy PAAS, network segmentation
+- **Layer 3 (Applications)**: Kuma, Whoami (managed by Dokploy)
 
-Security aligns with [Kombify Identity Plan](../missions/concepts/Kombify%20Identitätsplan_%20Zero-Trust%20Architektur%20für%20Homelab%20und%20SaaS.md):
-- Passkey-first authentication ready
-- No anonymous admin access
-- mTLS infrastructure ready
-- Network segmentation
-- Secret-free for agents (SPIFFE-ready)
+All services run INSIDE the Ubuntu VM for proper isolation and deployment testing.

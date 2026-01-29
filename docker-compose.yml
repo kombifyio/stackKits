@@ -1,23 +1,30 @@
 # =============================================================================
-# StackKit E2E Development Environment
+# StackKit E2E Development Environment - VM-Only Deployment
 # =============================================================================
-# 3-Layer Architecture:
-#   Layer 1 (Foundation): SSH, Identity, Base Security
-#   Layer 2 (Platform):   Docker, Traefik Reverse Proxy
-#   Layer 3 (StackKit):   Applications (Dokploy, Kuma, Whoami)
+# This docker-compose.yml ONLY starts the Ubuntu VM container.
+# All services (Traefik, TinyAuth, Dokploy, Kuma, Whoami) are deployed
+# INSIDE the VM via StackKit CLI using DOCKER_HOST=tcp://vm:2375
 #
-# Port Exposure:
-#   - Only Traefik ports are exposed: 80, 443, 8080
-#   - All services route through Traefik using Host headers
+# CORRECT DEPLOYMENT FLOW:
+#   1. docker compose up -d vm        # Start VM only
+#   2. docker compose run --rm -e DOCKER_HOST=tcp://vm:2375 cli stackkit init dev-homelab --non-interactive
+#   3. docker compose run --rm -e DOCKER_HOST=tcp://vm:2375 cli stackkit apply --auto-approve
 #
-# Usage:
-#   docker compose up -d vm           # Start VM with Layer 2+3
-#   docker compose run --rm cli       # Run CLI commands
+# VERIFICATION:
+#   docker ps                          # Should ONLY show 'stackkits-vm' container
+#   docker compose exec vm docker ps   # Should show all services (traefik, tinyauth, dokploy, etc.)
+#
+# Port Mapping:
+#   - 2222:22     SSH access to VM
+#   - 2375:2375   Docker daemon (for StackKit CLI to deploy into VM)
+#   - 80:80       HTTP (Traefik in VM)
+#   - 443:443     HTTPS (Traefik in VM)
+#   - 8080:8080   Traefik dashboard (in VM)
 # =============================================================================
 
 services:
   # ---------------------------------------------------------------------------
-  # VM Service: Docker-in-Docker for testing
+  # VM Service: Ubuntu VM with Docker daemon
   # ---------------------------------------------------------------------------
   vm:
     build:
@@ -29,32 +36,19 @@ services:
       DOCKER_TLS_CERTDIR: ""
     ports:
       # SSH access
-      - "2222:22"
-      # Docker daemon (TCP)
-      - "2375:2375"
-      # Layer 2: Traefik reverse proxy (ONLY exposed ports)
-      - "80:80"        # HTTP
-      - "443:443"      # HTTPS
-      - "8080:8080"    # Traefik dashboard
-      # NO direct service ports - all via Traefik routing:
-      # dokploy:3000 -> traefik:80 + Host: dokploy.stack.local
-      # kuma:3001 -> traefik:80 + Host: kuma.stack.local
-      # whoami:80 -> traefik:80 + Host: whoami.stack.local
+      - "${VM_SSH_PORT:-2222}:22"
+      # Docker daemon (TCP) - for StackKit CLI to deploy INTO the VM
+      - "${VM_DOCKER_PORT:-2375}:2375"
+      # Layer 2: Traefik reverse proxy (services running IN the VM)
+      - "${VM_HTTP_PORT:-80}:80"        # HTTP
+      - "${VM_HTTPS_PORT:-443}:443"     # HTTPS
+      - "${VM_TRAEFIK_PORT:-8080}:8080" # Traefik dashboard
     volumes:
-      # VM Docker data
+      # VM Docker data - persistent container storage
       - vm_docker:/var/lib/docker
-      # Layer 1: Identity data
-      - tinyauth_data:/data/tinyauth
-      # Layer 2: Platform data
-      - traefik_data:/data/traefik
-      - traefik_certs:/data/traefik-certs
-      # Layer 3: Application data
-      - dokploy_data:/data/dokploy
-      - dokploy_postgres_data:/data/dokploy-postgres
-      - kuma_data:/data/kuma
-      # SSH keys
+      # SSH keys for VM access
       - ./dev/vm/authorized_keys:/authorized_keys:ro
-      # Source code for development
+      # Source code for development (optional)
       - .:/workspace:rw
     healthcheck:
       test: ["CMD", "docker", "info"]
@@ -65,6 +59,7 @@ services:
     networks:
       stackkits-net:
         aliases:
+          - vm
           - dokploy.stack.local
           - kuma.stack.local
           - whoami.stack.local
@@ -102,7 +97,7 @@ services:
       - dns
 
   # ---------------------------------------------------------------------------
-  # StackKit CLI Service
+  # StackKit CLI Service - Deploys INTO the VM (not on host)
   # ---------------------------------------------------------------------------
   cli:
     build:
@@ -110,9 +105,9 @@ services:
       dockerfile: Dockerfile
     container_name: stackkits-cli
     environment:
+      # CRITICAL: Target the VM's Docker daemon, NOT the host
       DOCKER_HOST: tcp://vm:2375
       STACKKIT_BIN: stackkit
-      # All services route through Traefik on port 80
       DOMAIN: "stack.local"
       TRAEFIK_URL: "http://traefik.stack.local"
       AUTH_URL: "http://auth.stack.local"
@@ -151,6 +146,7 @@ services:
       dockerfile: Dockerfile
     container_name: stackkits-e2e
     environment:
+      # CRITICAL: Target the VM's Docker daemon, NOT the host
       DOCKER_HOST: tcp://vm:2375
       STACKKIT_BIN: stackkit
       TIMEOUT: "300"
@@ -164,12 +160,6 @@ services:
       WHOAMI_URL: "http://whoami.stack.local"
     volumes:
       - .:/workspace:rw
-      # Mount persistent volumes for persistence testing
-      - dokploy_data:/data/dokploy:rw
-      - dokploy_postgres_data:/data/dokploy-postgres:rw
-      - kuma_data:/data/kuma:rw
-      - traefik_certs:/data/traefik-certs:rw
-      - tinyauth_data:/data/tinyauth:rw
     working_dir: /workspace
     command: ["./dev-homelab/tests/e2e_test.sh"]
     depends_on:
@@ -193,58 +183,15 @@ services:
       - e2e
 
 # =============================================================================
-# PERSISTENT VOLUMES - Organized by Layer
+# PERSISTENT VOLUMES - ONLY for VM data
 # =============================================================================
+# Services (traefik, tinyauth, dokploy, kuma) are deployed INSIDE the VM
+# and use volumes created within the VM's Docker daemon.
 
 volumes:
-  # VM Docker data
+  # VM Docker data - stores all containers/images inside the VM
   vm_docker:
     driver: local
-
-  # Layer 1: Foundation (Identity)
-  tinyauth_data:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ${PWD}/.data/tinyauth
-
-  # Layer 2: Platform (Traefik)
-  traefik_data:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ${PWD}/.data/traefik
-
-  traefik_certs:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ${PWD}/.data/traefik-certs
-
-  # Layer 3: StackKit (Applications)
-  dokploy_data:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ${PWD}/.data/dokploy
-
-  dokploy_postgres_data:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ${PWD}/.data/dokploy-postgres
-
-  kuma_data:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ${PWD}/.data/kuma
 
 # =============================================================================
 # NETWORKS

@@ -85,7 +85,19 @@ variable "enable_dokploy_apps" {
 variable "docker_host" {
   type        = string
   description = "Docker daemon address"
-  default     = "unix:///var/run/docker.sock"
+  default     = "tcp://vm:2375"
+}
+
+variable "tinyauth_users" {
+  type        = string
+  description = "TinyAuth users configuration (bcrypt hashed)"
+  default     = "admin:$2a$10$N9qo8uLOickgx2ZMRZoMy.MqrI0N3p9zqNVvB6fCNCkKeTLQ9b1Vy"
+}
+
+variable "tinyauth_app_url" {
+  type        = string
+  description = "TinyAuth application URL"
+  default     = "http://auth.stack.local"
 }
 
 # =============================================================================
@@ -403,11 +415,12 @@ resource "docker_container" "tinyauth" {
 
   env = [
     "TZ=Europe/Berlin",
-    "APP_URL=http://${local.domains.auth}",
+    "APP_URL=${var.tinyauth_app_url}",
     "SECRET=${random_password.tinyauth_secret[0].result}",
     # Default: admin / admin123
-    "USERS=admin:$2a$10$N9qo8uLOickgx2ZMRZoMy.MqrI0N3p9zqNVvB6fCNCkKeTLQ9b1Vy",
-    "APP_WHITELIST=dokploy,traefik,kuma,whoami"
+    "USERS=${var.tinyauth_users}",
+    "APP_WHITELIST=dokploy,traefik,kuma,whoami",
+    "DISABLE_CONTINUE=true"
   ]
 
   labels {
@@ -766,49 +779,85 @@ output "whoami_url" {
 output "credentials" {
   description = "Default credentials"
   value       = var.enable_tinyauth ? "TinyAuth: admin / admin123" : null
+  sensitive   = false
+}
+
+output "tinyauth_username" {
+  description = "TinyAuth admin username"
+  value       = var.enable_tinyauth ? "admin" : null
+}
+
+output "tinyauth_password" {
+  description = "TinyAuth admin password"
+  value       = var.enable_tinyauth ? "admin123" : null
+  sensitive   = true
+}
+
+output "tinyauth_login_url" {
+  description = "TinyAuth login URL"
+  value       = var.enable_tinyauth ? "http://${local.domains.auth}" : null
+}
+
+output "dokploy_login_url" {
+  description = "Dokploy login URL"
+  value       = var.enable_dokploy ? "http://${local.domains.dokploy}" : null
 }
 
 output "architecture_summary" {
   description = "Hybrid Architecture Summary"
   value       = <<-EOT
     ╔═══════════════════════════════════════════════════════════════════╗
-    ║              DEV HOMELAB - HYBRID ARCHITECTURE                     ║
+    ║              DEV HOMELAB - VM-BASED DEPLOYMENT                     ║
     ╠═══════════════════════════════════════════════════════════════════╣
     ║                                                                   ║
-    ║  LAYER 1 (Foundation) - Managed by Terraform:                    ║
+    ║  ALL SERVICES RUN INSIDE THE UBUNTU VM (NOT on Windows host)      ║
+    ║                                                                   ║
+    ║  LAYER 1 (Foundation) - Managed by Terraform INSIDE VM:          ║
     ║    ${var.enable_tinyauth ? "✓" : "✗"} TinyAuth    → http://${local.domains.auth}           ║
     ║        Purpose: Identity & Access Control                        ║
-    ║        Why outside Dokploy: If Dokploy fails, you can still login ║
+    ║        Credentials: admin / admin123                             ║
     ║                                                                   ║
-    ║  LAYER 2 (Platform) - Managed by Terraform:                      ║
+    ║  LAYER 2 (Platform) - Managed by Terraform INSIDE VM:            ║
     ║    ${var.enable_traefik ? "✓" : "✗"} Traefik     → http://${local.domains.traefik}        ║
     ║        Purpose: Reverse Proxy & Routing                          ║
-    ║        Why outside Dokploy: Core infrastructure must be stable   ║
     ║                                                                   ║
     ║    ${var.enable_dokploy ? "✓" : "✗"} Dokploy     → http://${local.domains.dokploy}        ║
     ║        Purpose: PAAS Controller for Layer 3                      ║
-    ║        Why outside Dokploy: Self (it's the controller)           ║
+    ║        Protected by: TinyAuth SSO                                ║
     ║                                                                   ║
     ║    ${var.enable_dokploy ? "✓" : "✗"} PostgreSQL  → Internal only                     ║
     ║        Purpose: Database for Dokploy                             ║
-    ║        Why outside Dokploy: Dokploy needs it to start            ║
     ║                                                                   ║
     ║  LAYER 3 (Applications) - Managed BY Dokploy:                    ║
     ║    ${var.enable_dokploy_apps ? "✓" : "✗"} Kuma     → http://${local.domains.kuma}          ║
-    ║        Deploy: Via Dokploy UI/API using .kuma-compose.yaml       ║
+    ║        Deploy: Via Dokploy UI/API                                ║
     ║                                                                   ║
     ║    ${var.enable_dokploy_apps ? "✓" : "✗"} Whoami   → http://${local.domains.whoami}        ║
-    ║        Deploy: Via Dokploy UI/API using .whoami-compose.yaml     ║
+    ║        Deploy: Via Dokploy UI/API                                ║
     ║                                                                   ║
-    ║  🔐 Security: ${var.enable_tinyauth ? "Enabled" : "Disabled"}                                    ║
-    ║  🌐 Routing: All services via Traefik on port 80                 ║
+    ╠═══════════════════════════════════════════════════════════════════╣
+    ║  🔐 FIRST LOGIN FLOW                                              ║
+    ╠═══════════════════════════════════════════════════════════════════╣
     ║                                                                   ║
-    ║  NEXT STEPS:                                                      ║
-    ║  1. Login to TinyAuth: http://${local.domains.auth}              ║
-    ║     Credentials: admin / admin123                                 ║
-    ║  2. Access Dokploy: http://${local.domains.dokploy}              ║
-    ║  3. Deploy Kuma & Whoami via Dokploy UI                          ║
-    ║     (Compose files: .kuma-compose.yaml, .whoami-compose.yaml)    ║
+    ║  Step 1: Login to TinyAuth                                        ║
+    ║    URL: http://${local.domains.auth}                             ║
+    ║    Username: admin                                                ║
+    ║    Password: admin123                                             ║
+    ║    ⚠️  CHANGE PASSWORD IMMEDIATELY AFTER FIRST LOGIN              ║
+    ║                                                                   ║
+    ║  Step 2: Access Dokploy (via TinyAuth SSO)                        ║
+    ║    URL: http://${local.domains.dokploy}                          ║
+    ║    You'll be redirected to TinyAuth for authentication            ║
+    ║                                                                   ║
+    ║  Step 3: Deploy Layer 3 Applications                              ║
+    ║    Use Dokploy UI to deploy Kuma and Whoami                      ║
+    ║                                                                   ║
+    ╠═══════════════════════════════════════════════════════════════════╣
+    ║  🔍 VERIFICATION                                                  ║
+    ╠═══════════════════════════════════════════════════════════════════╣
+    ║                                                                   ║
+    ║  Host: docker ps                    # Should show ONLY 'vm'      ║
+    ║  VM:   docker exec vm docker ps     # Should show ALL services   ║
     ║                                                                   ║
     ╚═══════════════════════════════════════════════════════════════════╝
   EOT

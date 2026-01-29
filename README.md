@@ -83,9 +83,39 @@ StackKits/
 
 ## 🚀 Quick Start
 
+### Development/Testing with VM (Recommended for Local Dev)
+
+Deploy the **dev-homelab** StackKit inside an Ubuntu VM for isolated testing:
+
+```bash
+# 1) Start ONLY the VM (no services on host)
+docker compose up -d vm
+
+# 2) Deploy all services INSIDE the VM via StackKit CLI
+docker compose run --rm -e DOCKER_HOST=tcp://vm:2375 cli \
+  ./stackkit init dev-homelab --non-interactive
+docker compose run --rm -e DOCKER_HOST=tcp://vm:2375 cli \
+  ./stackkit apply --auto-approve
+
+# 3) Verify: Services are IN the VM, not on host
+docker ps                           # Host: should show ONLY 'stackkits-vm'
+docker compose exec vm docker ps    # VM: should show ALL services
+```
+
+**Or use the automated deployment script:**
+```bash
+./deploy-to-vm.sh
+```
+
+**First Login:**
+- **TinyAuth**: http://auth.stack.local → `admin` / `admin123`
+- **Dokploy**: http://dokploy.stack.local (via TinyAuth SSO)
+
+See [dev-homelab/README.md](dev-homelab/README.md) for complete documentation.
+
 ### CLI-Only (Standalone)
 
-**Recommended workflow (matches current CLI implementation):**
+**Recommended workflow for production deployments:**
 
 ```bash
 mkdir my-homelab
