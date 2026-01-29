@@ -22,8 +22,14 @@ package base
 		firewall: #FirewallPolicy
 	}
 
-	// Validation check
-	_valid: true
+	// Identity services MUST be configured
+	identity: {
+		// LLDAP for directory services
+		lldap: #LLDAPConfig
+
+		// Step-CA for certificate authority
+		stepCA: #StepCAConfig
+	}
 }
 
 // =============================================================================
@@ -45,9 +51,6 @@ package base
 	network: {
 		defaults: #NetworkDefaults
 	}
-
-	// Validation check
-	_valid: true
 }
 
 // =============================================================================
@@ -94,13 +97,6 @@ package base
 
 	// Metadata requirements
 	metadata: #StackKitMetadata
-
-	// Final validation - all layers must be valid
-	_valid: {
-		layer1: true
-		layer2: true
-		layer3: true
-	}
 }
 
 // =============================================================================
@@ -150,9 +146,9 @@ package base
 	layer1: #LayerMetadata & {
 		name:        "foundation"
 		version:     "1.0.0"
-		description: "System configuration, packages, and security"
-		required: ["system", "packages", "security.ssh", "security.firewall"]
-		optional: ["security.container", "security.secrets", "security.tls", "security.audit"]
+		description: "System configuration, packages, security, and identity"
+		required: ["system", "packages", "security.ssh", "security.firewall", "identity.lldap", "identity.stepCA"]
+		optional: ["security.container", "security.secrets", "security.tls", "security.audit", "identity.provider", "identity.pki", "identity.rbac"]
 	}
 
 	layer2: #LayerMetadata & {

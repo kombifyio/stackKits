@@ -113,37 +113,54 @@ import (
 	}
 
 	// -------------------------------------------------------------------------
-	// LAYER 1: FOUNDATION - Zero-Trust Identity
+	// LAYER 1: FOUNDATION - Identity Services (from base)
 	// -------------------------------------------------------------------------
-	// This integrates with the kombify Identity Plan
+	// These are inherited from base.#BaseStackKit identity section:
+	// - identity.lldap: Lightweight LDAP server
+	// - identity.stepCA: Certificate Authority
+	//
+	// Dev-homelab extends with TinyAuth as identity proxy
 	identity: {
-		// Primary provider: TinyAuth (local OIDC)
-		providers: [
-			{
-				type:    "tinyauth"
-				name:    "tinyauth"
-				primary: true
-				authMethods: ["passkey", "password"]
-				oidcEndpoint: "http://auth.stack.local"
-			},
-		]
-
-		// Zero-Trust policy
-		zeroTrust: {
+		// LLDAP: Lightweight directory (from base)
+		lldap: {
 			enabled: true
-			deviceTrust: {
-				enabled:       false // Disabled for dev
-				requireCert:   false
-				certAuthority: "step-ca"
+			domain: {
+				base: "dc=stack,dc=local"
+				organization: "Dev Homelab"
 			}
-			identityTrust: {
-				enabled:               true
-				requirePasskey:        false // Password allowed for dev
-				allowPasswordFallback: true
+			admin: {
+				username: "admin"
+				email:    "admin@stack.local"
+			}
+			traefik: {
+				enabled: true
+				host:    "lldap.stack.local"
 			}
 		}
 
-		// RBAC
+		// Step-CA: Certificate authority (from base)
+		stepCA: {
+			enabled: false // Disabled for dev (enable for production)
+			pki: {
+				rootCommonName:         "Dev Homelab Root CA"
+				intermediateCommonName: "Dev Homelab Intermediate CA"
+			}
+			traefik: {
+				enabled: true
+				host:    "ca.stack.local"
+			}
+		}
+
+		// Identity provider: TinyAuth (local OIDC proxy)
+		provider: {
+			type:         "tinyauth"
+			name:         "tinyauth"
+			primary:      true
+			authMethods:  ["passkey", "password"]
+			oidcEndpoint: "http://auth.stack.local"
+		}
+
+		// RBAC configuration
 		rbac: {
 			enabled:    true
 			roleSource: "local"
@@ -152,13 +169,6 @@ import (
 				{name: "operator", permissions: ["deploy", "update", "monitor"]},
 				{name: "viewer", permissions: ["read"]},
 			]
-		}
-
-		// Emergency access
-		emergencyAccess: {
-			enabled:          true
-			username:         "admin"
-			offlineFallback:  true
 		}
 	}
 
@@ -221,22 +231,27 @@ import (
 	// LAYER 3: STACKKIT - SERVICES
 	// -------------------------------------------------------------------------
 	services: [
+		// Layer 1: Identity Services (from base)
+		// These are deployed as infrastructure components via Terraform
+		// - lldap: Lightweight LDAP (when identity.lldap.enabled = true)
+		// - step-ca: Certificate Authority (when identity.stepCA.enabled = true)
+
 		// Layer 2: Traefik (Platform)
 		#Services.traefik,
 
-		// Layer 1: TinyAuth (Foundation)
+		// Layer 1: TinyAuth Identity Proxy (Foundation)
 		#Services.tinyauth,
 
-		// Layer 3: Dokploy Database
+		// Layer 2: Dokploy Database
 		#Services.dokployPostgres,
 
-		// Layer 3: Dokploy PAAS
+		// Layer 2: Dokploy PAAS
 		#Services.dokploy,
 
-		// Layer 3: Kuma Monitoring
+		// Layer 3: Kuma Monitoring (managed by Dokploy)
 		#Services.kuma,
 
-		// Layer 3: Whoami Test
+		// Layer 3: Whoami Test (managed by Dokploy)
 		#Services.whoami,
 	]
 
@@ -281,11 +296,19 @@ import (
 			dokploy: "http://dokploy.stack.local"
 			kuma:    "http://kuma.stack.local"
 			whoami:  "http://whoami.stack.local"
+			// Identity services (from base)
+			lldap:   "http://lldap.stack.local"
+			stepCA:  "https://ca.stack.local:8443"
 		}
 		credentials: {
 			tinyauth: {
 				username: "admin"
 				password: "admin123"
+			}
+			// LLDAP default credentials
+			lldap: {
+				username: "admin"
+				note:     "Set via LLDAP_LDAP_USER_PASS environment variable"
 			}
 		}
 	}

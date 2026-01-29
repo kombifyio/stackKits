@@ -35,6 +35,24 @@ package base
 		audit:     #AuditConfig
 	}
 
+	// Identity services (Layer 1 Foundation)
+	identity: {
+		// Lightweight LDAP server
+		lldap: #LLDAPConfig
+
+		// Certificate Authority
+		stepCA: #StepCAConfig
+
+		// Identity provider configuration (for zero-trust)
+		provider?: #IdentityProvider
+
+		// PKI configuration
+		pki?: #PKIConfig
+
+		// RBAC policy
+		rbac?: #RBACPolicy
+	}
+
 	// Network configuration
 	network: {
 		defaults: #NetworkDefaults

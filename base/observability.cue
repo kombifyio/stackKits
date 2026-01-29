@@ -39,16 +39,24 @@ package base
 	// Enable health checks
 	enabled: bool | *true
 
-	// Check command or endpoint
+	// Check command or endpoint (simple format)
 	command?: string
+
+	// HTTP health check
 	http?: {
 		path:   string
 		port:   uint16
 		scheme: "http" | "https" | *"http"
 	}
+
+	// TCP health check
 	tcp?: {
 		port: uint16
 	}
+
+	// Docker Compose style test command (array format)
+	// Example: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+	test?: [...string]
 
 	// Interval between checks
 	interval: string | *"30s"
