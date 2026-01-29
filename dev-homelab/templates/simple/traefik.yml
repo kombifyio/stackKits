@@ -1,0 +1,58 @@
+# =============================================================================
+# Traefik Static Configuration
+# =============================================================================
+# This is the static configuration for Traefik v3.1
+# For local development with Docker provider
+
+# Global configuration
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+# API and Dashboard configuration
+api:
+  dashboard: true
+  insecure: true  # Only for local development
+
+# Ping endpoint for health checks
+ping:
+  entryPoint: "traefik"
+
+# Entry points
+entryPoints:
+  web:
+    address: ":80"
+  websecure:
+    address: ":443"
+  traefik:
+    address: ":8080"
+
+# Docker provider configuration
+providers:
+  docker:
+    exposedByDefault: false
+    network: "dev_net"
+    watch: true
+
+# Certificate resolver for local development (self-signed)
+certificatesResolvers:
+  local:
+    acme:
+      email: "admin@stack.local"
+      storage: "/letsencrypt/acme.json"
+      tlsChallenge: {}
+
+# Logging configuration
+log:
+  level: INFO
+  format: common
+
+# Access logs
+accessLog:
+  format: common
+
+# Tracing (optional, disabled for dev)
+tracing: {}
+
+# Metrics (optional, disabled for dev)
+metrics: {}

@@ -1,169 +1,178 @@
 package devhomelab
 
-// Dev Homelab Service Definitions
-// Production-ready services with security, persistence, and proper management
-// Implements 3-layer architecture with explicit service types
+// =============================================================================
+// Dev Homelab Service Definitions - Hybrid Architecture
+// =============================================================================
+// Platform services (Layer 1-2) via Terraform
+// Application services (Layer 3) via Dokploy
+// =============================================================================
 
 import "github.com/kombihq/stackkits/base"
 
 // =============================================================================
-// CORE SERVICES
+#Layer1FoundationServices
 // =============================================================================
 
-// Whoami test service - deployed THROUGH Dokploy, not standalone
-#WhoamiService: base.#Service & {
-	name:        "whoami"
-	image:       "traefik/whoami:latest"
-	description: "Simple HTTP service for deployment testing - managed by Dokploy"
-	role:        "test-endpoint"
-	type:        "utility"
+// TinyAuth - Identity Proxy (Layer 1)
+#TinyAuthService: base.#ServiceDefinition & {
+	name:        "tinyauth"
+	displayName: "TinyAuth Identity Proxy"
+	image:       "ghcr.io/steveiliop56/tinyauth"
+	tag:         "v3"
+	type:        "auth"
 	
-	ports: [{
-		container: 80
-		host:      9080
-		protocol:  "tcp"
-	}]
+	// Managed by: Terraform (not Dokploy)
+	managedBy: "terraform"
+	layer:     "1-foundation"
+	
+	network: {
+		traefik: {
+			enabled: true
+			rule:    "Host(`auth.stack.local`)"
+			port:    3000
+		}
+	}
+	
+	volumes: [
+		{source: "tinyauth-data", target: "/data", type: "volume", backup: true},
+	]
+	
+	environment: {
+		"TZ":      "Europe/Berlin"
+		"APP_URL": "http://auth.stack.local"
+		"LOG_LEVEL": "info"
+	}
+	
+	labels: {
+		"traefik.enable": "true"
+		"stackkit.layer": "1-foundation"
+		"stackkit.managed-by": "terraform"
+		"traefik.http.middlewares.tinyauth.forwardauth.address": "http://tinyauth:3000/api/auth/verify"
+		"traefik.http.middlewares.tinyauth.forwardauth.authResponseHeaders": "X-User,X-Email"
+	}
 	
 	healthCheck: {
-		endpoint: "/"
+		test:     ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api/health"]
 		interval: "30s"
 		timeout:  "5s"
 		retries:  3
 	}
 	
 	resources: {
-		memory: "64m"
-		cpu:    0.1
+		memory: "128m"
+		cpus:   0.1
 	}
 	
-	// Security: Require authentication
-	security: {
-		requireAuth: true
-		authProvider: "tinyauth"
+	securityContext: {
+		runAsUser:              1000
+		runAsGroup:             1000
+		readOnlyRootFilesystem: true
+		noNewPrivileges:        true
+		capabilitiesDrop: ["ALL"]
 	}
+	
+	needs: ["traefik"]
 }
 
-// Uptime Kuma - Monitoring Service - deployed THROUGH Dokploy
-#UptimeKumaService: base.#Service & {
-	name:        "uptime-kuma"
-	image:       "louislam/uptime-kuma:1"
-	description: "Self-hosted monitoring tool - managed by Dokploy"
-	role:        "monitoring"
-	type:        "monitoring"
+// =============================================================================
+#Layer2PlatformServices
+// =============================================================================
+
+// Traefik - Reverse Proxy (Layer 2)
+#TraefikService: base.#ServiceDefinition & {
+	name:        "traefik"
+	displayName: "Traefik Reverse Proxy"
+	image:       "traefik"
+	tag:         "v3.1"
+	type:        "reverse-proxy"
 	
-	ports: [{
-		container: 3001
-		host:      3001
-		protocol:  "tcp"
-	}]
+	// Managed by: Terraform (not Dokploy)
+	managedBy: "terraform"
+	layer:     "2-platform"
 	
-	volumes: [{
-		name:   "kuma-data"
-		path:   "/app/data"
-		driver: "local"
-		backup: "required"
-	}]
+	network: {
+		ports: [
+			{host: 80, container: 80, protocol: "tcp", description: "HTTP"},
+			{host: 443, container: 443, protocol: "tcp", description: "HTTPS"},
+			{host: 8080, container: 8080, protocol: "tcp", description: "Dashboard"},
+		]
+		traefik: {
+			enabled: true
+			rule:    "Host(`traefik.stack.local`)"
+			port:    8080
+		}
+	}
+	
+	volumes: [
+		{source: "traefik-data", target: "/etc/traefik", type: "volume", backup: false},
+		{source: "traefik-certs", target: "/letsencrypt", type: "volume", backup: true},
+	]
+	
+	environment: {
+		"TZ": "Europe/Berlin"
+	}
+	
+	labels: {
+		"traefik.enable": "true"
+		"stackkit.layer": "2-platform"
+		"stackkit.managed-by": "terraform"
+	}
 	
 	healthCheck: {
-		endpoint: "/"
-		interval: "30s"
+		test:     ["CMD", "wget", "-q", "--spider", "http://localhost:8080/ping"]
+		interval: "10s"
 		timeout:  "5s"
 		retries:  3
 	}
 	
 	resources: {
-		memory: "256m"
-		cpu:    0.2
+		memory: "128m"
+		cpus:   0.2
 	}
 	
-	// Security: Require authentication
-	security: {
-		requireAuth: true
-		authProvider: "tinyauth"
+	securityContext: {
+		runAsNonRoot:           false
+		readOnlyRootFilesystem: true
+		noNewPrivileges:        true
+		capabilitiesDrop: ["ALL"]
+		capabilitiesAdd: ["NET_BIND_SERVICE"]
 	}
 }
 
-// =============================================================================
-// PLATFORM SERVICES
-// =============================================================================
-
-// Dokploy - PAAS/Management Tool (MANAGES other services)
-#DokployService: base.#Service & {
-	name:        "dokploy"
-	image:       "dokploy/dokploy:latest"
-	description: "Open-source PAAS for deploying applications - manages Kuma and Whoami"
-	role:        "paas"
-	type:        "paas"
-	
-	ports: [{
-		container: 3000
-		host:      3000
-		protocol:  "tcp"
-	}]
-	
-	volumes: [{
-		name:   "dokploy-data"
-		path:   "/etc/dokploy"
-		driver: "local"
-		backup: "required"
-	}]
-	
-	mounts: [{
-		type:   "bind"
-		source: "/var/run/docker.sock"
-		target: "/var/run/docker.sock"
-	}]
-	
-	env: {
-		"NODE_ENV": "production"
-		"TRAEFIK_ENABLED": "true"
-	}
-	
-	healthCheck: {
-		endpoint: "/api/trpc/health.live"
-		interval: "30s"
-		timeout:  "5s"
-		retries:  3
-	}
-	
-	resources: {
-		memory: "512m"
-		cpu:    0.5
-	}
-	
-	// Security: Require authentication
-	security: {
-		requireAuth: true
-		authProvider: "tinyauth"
-	}
-	
-	// Dependencies
-	dependsOn: ["dokploy-postgres", "traefik"]
-}
-
-// Dokploy PostgreSQL Database
-#DokployPostgresService: base.#Service & {
+// Dokploy PostgreSQL - Database (Layer 2)
+#DokployPostgresService: base.#ServiceDefinition & {
 	name:        "dokploy-postgres"
-	image:       "postgres:16-alpine"
-	description: "PostgreSQL database for Dokploy"
-	role:        "database"
+	displayName: "Dokploy PostgreSQL"
+	image:       "postgres"
+	tag:         "16-alpine"
 	type:        "database"
 	
-	volumes: [{
-		name:   "dokploy-postgres-data"
-		path:   "/var/lib/postgresql/data"
-		driver: "local"
-		backup: "required"
-	}]
+	// Managed by: Terraform (Dokploy needs it to start)
+	managedBy: "terraform"
+	layer:     "2-platform"
 	
-	env: {
-		"POSTGRES_USER":     "dokploy"
-		"POSTGRES_DB":       "dokploy"
-		"PGDATA":            "/var/lib/postgresql/data/pgdata"
+	network: {
+		mode:     "bridge"
+		networks: ["dev_net_db"]
+	}
+	
+	volumes: [
+		{source: "dokploy-postgres-data", target: "/var/lib/postgresql/data", type: "volume", backup: true},
+	]
+	
+	environment: {
+		"POSTGRES_USER": "dokploy"
+		"POSTGRES_DB":   "dokploy"
+		"PGDATA":        "/var/lib/postgresql/data/pgdata"
+	}
+	
+	labels: {
+		"stackkit.layer": "2-platform"
+		"stackkit.managed-by": "terraform"
 	}
 	
 	healthCheck: {
-		command:  "pg_isready -U dokploy -d dokploy"
+		test:     ["CMD-SHELL", "pg_isready -U dokploy -d dokploy"]
 		interval: "10s"
 		timeout:  "5s"
 		retries:  5
@@ -171,151 +180,190 @@ import "github.com/kombihq/stackkits/base"
 	
 	resources: {
 		memory: "256m"
-		cpu:    0.2
+		cpus:   0.2
 	}
 	
-	// Internal network only
-	networkMode: "internal"
+	securityContext: {
+		runAsUser:       999
+		noNewPrivileges: true
+		capabilitiesDrop: ["ALL"]
+	}
 }
 
-// =============================================================================
-// REVERSE PROXY & NETWORKING
-// =============================================================================
-
-// Traefik - Reverse Proxy for automatic HTTPS and routing
-#TraefikService: base.#Service & {
-	name:        "traefik"
-	image:       "traefik:v3.1"
-	description: "Cloud-native reverse proxy and load balancer"
-	role:        "proxy"
-	type:        "proxy"
+// Dokploy - PAAS Controller (Layer 2)
+#DokployService: base.#ServiceDefinition & {
+	name:        "dokploy"
+	displayName: "Dokploy PAAS"
+	image:       "dokploy/dokploy"
+	tag:         "latest"
+	type:        "paas"
 	
-	ports: [
-		{
-			container: 80
-			host:      80
-			protocol:  "tcp"
-		},
-		{
-			container: 443
-			host:      443
-			protocol:  "tcp"
-		},
-		{
-			container: 8080
-			host:      8080
-			protocol:  "tcp"
-		},
-	]
+	// Managed by: Terraform (it's the controller)
+	managedBy: "terraform"
+	layer:     "2-platform"
+	
+	network: {
+		traefik: {
+			enabled:     true
+			rule:        "Host(`dokploy.stack.local`)"
+			port:        3000
+			middlewares: ["tinyauth@docker"]
+		}
+		networks: ["dev_net", "dev_net_db"]
+	}
 	
 	volumes: [
-		{
-			name:   "traefik-data"
-			path:   "/etc/traefik"
-			driver: "local"
-		},
-		{
-			name:   "traefik-certs"
-			path:   "/letsencrypt"
-			driver: "local"
-			backup: "required"
-		},
+		{source: "dokploy-data", target: "/etc/dokploy", type: "volume", backup: true},
+		{source: "/var/run/docker.sock", target: "/var/run/docker.sock", type: "bind", readOnly: false},
 	]
 	
-	mounts: [{
-		type:   "bind"
-		source: "/var/run/docker.sock"
-		target: "/var/run/docker.sock"
-		readOnly: true
-	}]
+	environment: {
+		"DOCKER_HOST":       "unix:///var/run/docker.sock"
+		"NODE_ENV":          "production"
+		"PORT":              "3000"
+		"TRPC_PLAYGROUND":   "false"
+		"LETSENCRYPT_EMAIL": "admin@stack.local"
+		"TRAEFIK_ENABLED":   "true"
+		"TRAEFIK_NETWORK":   "dev_net"
+	}
 	
-	command: [
-		"--api.dashboard=true",
-		"--api.insecure=true",
-		"--providers.docker=true",
-		"--providers.docker.exposedbydefault=false",
-		"--entrypoints.web.address=:80",
-		"--entrypoints.websecure.address=:443",
-		"--certificatesresolvers.local.acme.tlschallenge=true",
-		"--certificatesresolvers.local.acme.storage=/letsencrypt/acme.json",
-		"--log.level=INFO",
-		"--accesslog=true",
-	]
+	labels: {
+		"traefik.enable": "true"
+		"stackkit.layer": "2-platform"
+		"stackkit.managed-by": "terraform"
+	}
 	
 	healthCheck: {
-		endpoint: "/ping"
-		port:     8080
-		interval: "10s"
-		timeout:  "5s"
-		retries:  3
+		test:     ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api/settings"]
+		interval: "30s"
+		timeout:  "10s"
+		retries:  5
+		start_period: "60s"
 	}
 	
 	resources: {
-		memory: "128m"
-		cpu:    0.2
+		memory: "512m"
+		cpus:   0.5
 	}
 	
-	// Security hardening
-	security: {
-		readOnlyRootFilesystem: true
+	securityContext: {
+		runAsNonRoot:    false
 		noNewPrivileges: true
-		capabilities: {
-			drop: ["ALL"]
-			add: ["NET_BIND_SERVICE"]
-		}
+		capabilitiesDrop: ["ALL"]
+		capabilitiesAdd: ["CHOWN", "SETGID", "SETUID"]
 	}
+	
+	needs: ["traefik", "dokploy-postgres", "tinyauth"]
 }
 
 // =============================================================================
-// SECURITY SERVICES
+#Layer3ApplicationServices
 // =============================================================================
 
-// TinyAuth - OIDC/SSO Authentication Proxy
-#TinyAuthService: base.#Service & {
-	name:        "tinyauth"
-	image:       "ghcr.io/steveiliop56/tinyauth:v3"
-	description: "Lightweight OIDC SSO proxy for protecting services"
-	role:        "auth"
-	type:        "auth"
+// These services are deployed BY Dokploy, not by Terraform
+
+// Uptime Kuma - Monitoring (Layer 3)
+#KumaService: base.#ServiceDefinition & {
+	name:        "kuma"
+	displayName: "Uptime Kuma"
+	image:       "louislam/uptime-kuma"
+	tag:         "1"
+	type:        "monitoring"
 	
-	ports: [{
-		container: 3000
-		host:      0  // No direct host port - accessed via Traefik
-		protocol:  "tcp"
-	}]
+	// Managed by: Dokploy (Layer 2 controller)
+	managedBy: "dokploy"
+	layer:     "3-application"
 	
-	volumes: [{
-		name:   "tinyauth-data"
-		path:   "/data"
-		driver: "local"
-		backup: "required"
-	}]
+	network: {
+		traefik: {
+			enabled:     true
+			rule:        "Host(`kuma.stack.local`)"
+			port:        3001
+			middlewares: ["tinyauth@docker"]
+		}
+	}
 	
-	env: {
+	volumes: [
+		{source: "kuma-data", target: "/app/data", type: "volume", backup: true},
+	]
+	
+	environment: {
 		"TZ": "Europe/Berlin"
-		"LOG_LEVEL": "info"
+	}
+	
+	labels: {
+		"traefik.enable": "true"
+		"stackkit.layer": "3-application"
+		"stackkit.managed-by": "dokploy"
 	}
 	
 	healthCheck: {
-		endpoint: "/api/health"
+		test:     ["CMD", "wget", "-q", "--spider", "http://localhost:3001/"]
+		interval: "30s"
+		timeout:  "5s"
+		retries:  3
+		start_period: "30s"
+	}
+	
+	resources: {
+		memory: "256m"
+		cpus:   0.2
+	}
+	
+	securityContext: {
+		noNewPrivileges: true
+		capabilitiesDrop: ["ALL"]
+	}
+}
+
+// Whoami - Test Service (Layer 3)
+#WhoamiService: base.#ServiceDefinition & {
+	name:        "whoami"
+	displayName: "Whoami Test"
+	image:       "traefik/whoami"
+	tag:         "latest"
+	type:        "application"
+	
+	// Managed by: Dokploy (Layer 2 controller)
+	managedBy: "dokploy"
+	layer:     "3-application"
+	
+	network: {
+		traefik: {
+			enabled:     true
+			rule:        "Host(`whoami.stack.local`)"
+			port:        80
+			middlewares: ["tinyauth@docker"]
+		}
+	}
+	
+	environment: {
+		"TZ": "Europe/Berlin"
+	}
+	
+	labels: {
+		"traefik.enable": "true"
+		"stackkit.layer": "3-application"
+		"stackkit.managed-by": "dokploy"
+	}
+	
+	healthCheck: {
+		test:     ["CMD", "wget", "-q", "--spider", "http://localhost:80/"]
 		interval: "30s"
 		timeout:  "5s"
 		retries:  3
 	}
 	
 	resources: {
-		memory: "128m"
-		cpu:    0.1
+		memory: "64m"
+		cpus:   0.1
 	}
 	
-	// Security hardening
-	security: {
-		readOnlyRootFilesystem: true
-		noNewPrivileges: true
-		capabilities: {
-			drop: ["ALL"]
-		}
-		user: "1000:1000"
+	securityContext: {
+		runAsUser:              1000
+		runAsGroup:             1000
+		noNewPrivileges:        true
+		capabilitiesDrop: ["ALL"]
 	}
 }
 
@@ -323,19 +371,16 @@ import "github.com/kombihq/stackkits/base"
 // SERVICE REGISTRY
 // =============================================================================
 
-// Service registry for dev-homelab
 #Services: {
-	// Platform services
-	traefik:          #TraefikService
-	tinyauth:         #TinyAuthService
+	// Layer 1: Foundation
+	tinyauth: #TinyAuthService
 	
-	// Database
-	dokployPostgres:  #DokployPostgresService
+	// Layer 2: Platform
+	traefik:         #TraefikService
+	dokployPostgres: #DokployPostgresService
+	dokploy:         #DokployService
 	
-	// PAAS
-	dokploy:          #DokployService
-	
-	// Managed by Dokploy (not deployed directly)
-	whoami:           #WhoamiService
-	uptimeKuma:       #UptimeKumaService
+	// Layer 3: Applications (managed by Dokploy)
+	kuma:   #KumaService
+	whoami: #WhoamiService
 }
