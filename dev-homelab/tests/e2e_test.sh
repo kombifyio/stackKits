@@ -8,7 +8,9 @@
 #   - Persistent volumes survive restart
 #   - Security: No anonymous admin access
 #   - Dokploy manages Kuma and Whoami (not standalone)
-#   - Domain resolution for .stack.local
+#   - DNS resolution for .stack.local domains
+#   - URL accessibility via domain names with HTTP status verification
+#   - Port accessibility on localhost (VM deployment)
 #
 # Environment Variables:
 #   STACKKIT_BIN  - Path to stackkit binary (default: stackkit)
@@ -123,6 +125,86 @@ wait_for_service() {
     return 0
 }
 
+# Verify URL is accessible with proper HTTP status code
+verify_url_accessible() {
+    local url=$1
+    local name=$2
+    local expected_status=${3:-200}
+    local timeout=${4:-10}
+    
+    log_info "Verifying $name at $url (expecting HTTP $expected_status)..."
+    
+    local response
+    response=$(curl -s -o /dev/null -w "%{http_code}|%{time_total}|%{redirect_url}" --max-time "$timeout" "$url" 2>&1)
+    local http_code=$(echo "$response" | cut -d'|' -f1)
+    local response_time=$(echo "$response" | cut -d'|' -f2)
+    local redirect_url=$(echo "$response" | cut -d'|' -f3)
+    
+    if [ "$http_code" = "$expected_status" ] || [ "$http_code" = "000" ]; then
+        # 000 means connection failed
+        log_fail "$name: Connection failed (no response from $url)"
+        return 1
+    elif [ "$http_code" -ge 200 ] && [ "$http_code" -lt 400 ]; then
+        log_pass "$name accessible (HTTP $http_code, ${response_time}s)"
+        if [ -n "$redirect_url" ]; then
+            log_info "  → Redirects to: $redirect_url"
+        fi
+        return 0
+    else
+        log_fail "$name returned HTTP $http_code (expected $expected_status)"
+        return 1
+    fi
+}
+
+# Test DNS resolution for service domain
+test_dns_resolution() {
+    local hostname=$1
+    local name=$2
+    
+    log_info "Testing DNS resolution for $hostname..."
+    
+    # Try to resolve using getent or nslookup
+    if command -v getent >/dev/null 2>&1; then
+        if getent hosts "$hostname" >/dev/null 2>&1; then
+            local ip=$(getent hosts "$hostname" | awk '{print $1}')
+            log_pass "$name DNS resolves to $ip"
+            return 0
+        fi
+    elif command -v nslookup >/dev/null 2>&1; then
+        if nslookup "$hostname" >/dev/null 2>&1; then
+            log_pass "$name DNS resolution successful"
+            return 0
+        fi
+    fi
+    
+    # Fallback: try to ping (just for resolution, don't wait for response)
+    if ping -c 1 -W 1 "$hostname" >/dev/null 2>&1; then
+        log_pass "$name DNS resolution successful (via ping)"
+        return 0
+    fi
+    
+    log_fail "$name DNS resolution failed for $hostname"
+    return 1
+}
+
+# Verify service responds on specific port
+verify_port_accessible() {
+    local host=$1
+    local port=$2
+    local name=$3
+    local timeout=${4:-5}
+    
+    log_info "Checking port $port on $host for $name..."
+    
+    if timeout "$timeout" bash -c "exec 3<>/dev/tcp/$host/$port" 2>/dev/null; then
+        log_pass "$name is accessible on port $port"
+        return 0
+    else
+        log_fail "$name not accessible on port $port"
+        return 1
+    fi
+}
+
 check_container_health() {
     local container=$1
     local status=$(docker ps --filter "name=$container" --format "{{.Status}}" 2>/dev/null)
@@ -221,23 +303,56 @@ else
     log_fail "TinyAuth container is not healthy"
 fi
 
-# Test 9: Domain Resolution - Dokploy
-log_test "Dokploy UI accessible via domain ($DOKPLOY_URL)"
-if wait_for_service "$DOKPLOY_URL" "Dokploy UI" 30; then
-    log_pass "Dokploy UI is accessible via domain"
-else
-    log_fail "Dokploy UI not accessible"
-fi
+# =============================================================================
+# DNS & URL ACCESSIBILITY TESTS
+# =============================================================================
 
-# Test 10: Domain Resolution - Traefik Dashboard
-log_test "Traefik dashboard accessible ($TRAEFIK_URL)"
-if wait_for_service "$TRAEFIK_URL" "Traefik Dashboard" 20; then
-    log_pass "Traefik dashboard is accessible"
-else
-    log_fail "Traefik dashboard not accessible"
-fi
+echo ""
+log_info "Running DNS resolution and URL accessibility tests..."
 
-# Test 11: Check persistent volumes exist
+# Test 9: DNS resolution for all service domains
+log_test "DNS resolution for Dokploy domain (dokploy.$DOMAIN)"
+test_dns_resolution "dokploy.$DOMAIN" "Dokploy" || true
+
+log_test "DNS resolution for Traefik domain (traefik.$DOMAIN)"
+test_dns_resolution "traefik.$DOMAIN" "Traefik" || true
+
+log_test "DNS resolution for Kuma domain (kuma.$DOMAIN)"
+test_dns_resolution "kuma.$DOMAIN" "Kuma" || true
+
+log_test "DNS resolution for Auth domain (auth.$DOMAIN)"
+test_dns_resolution "auth.$DOMAIN" "TinyAuth" || true
+
+# Test 10: URL accessibility with HTTP status verification
+log_test "URL accessibility - Dokploy UI ($DOKPLOY_URL)"
+wait_for_service "$DOKPLOY_URL" "Dokploy UI" 30
+verify_url_accessible "$DOKPLOY_URL" "Dokploy UI" 200 || true
+
+log_test "URL accessibility - Traefik Dashboard ($TRAEFIK_URL)"
+wait_for_service "$TRAEFIK_URL" "Traefik Dashboard" 20
+verify_url_accessible "$TRAEFIK_URL" "Traefik Dashboard" 200 || true
+
+log_test "URL accessibility - TinyAuth ($AUTH_URL)"
+wait_for_service "$AUTH_URL" "TinyAuth" 20
+verify_url_accessible "$AUTH_URL" "TinyAuth" 200 || true
+
+# Test 11: Port accessibility for exposed ports (VM deployment)
+log_test "Port accessibility - Dokploy on port 3000"
+verify_port_accessible "localhost" "3000" "Dokploy" || true
+
+log_test "Port accessibility - Traefik on port 80"
+verify_port_accessible "localhost" "80" "Traefik HTTP" || true
+
+log_test "Port accessibility - Traefik on port 443"
+verify_port_accessible "localhost" "443" "Traefik HTTPS" || true
+
+log_test "Port accessibility - Whoami on port $WHOAMI_PORT"
+verify_port_accessible "localhost" "$WHOAMI_PORT" "Whoami" || true
+
+log_test "Port accessibility - Uptime Kuma on port $UPTIME_KUMA_PORT"
+verify_port_accessible "localhost" "$UPTIME_KUMA_PORT" "Uptime Kuma" || true
+
+# Test 12: Check persistent volumes exist
 log_test "Persistent volumes are created with backup labels"
 VOLUMES=$(docker volume ls --format "{{.Name}}")
 REQUIRED_VOLUMES=("dokploy-data" "dokploy-postgres-data" "traefik-certs" "tinyauth-data")
@@ -406,7 +521,9 @@ if [ $FAILED -eq 0 ]; then
     echo -e "${GREEN}✓${NC} Dokploy + Traefik + TinyAuth architecture validated"
     echo -e "${GREEN}✓${NC} Persistent volumes configured"
     echo -e "${GREEN}✓${NC} Security hardening in place"
-    echo -e "${GREEN}✓${NC} Domain resolution working"
+    echo -e "${GREEN}✓${NC} DNS resolution working"
+    echo -e "${GREEN}✓${NC} URLs accessible via domain names"
+    echo -e "${GREEN}✓${NC} Ports accessible on localhost"
     echo ""
     echo "Stack is PRODUCTION READY!"
 else
