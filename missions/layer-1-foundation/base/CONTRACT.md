@@ -12,6 +12,13 @@ SSH key-only authentication.
 Basic firewall with deny-by-default incoming.
 Secrets stored in environment variables or files.
 
+## Identity (Zero-Trust)
+Passkey-first authentication via pocketid (local).
+mTLS for device trust (step-ca as certificate authority).
+RBAC via lldap groups mapped to roles (owner, operator, developer, viewer).
+Emergency admin access available.
+All settings adjustable - password auth supported if preferred.
+
 ## Observability
 Structured logging to stdout.
 Health check endpoints for all services.

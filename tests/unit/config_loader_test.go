@@ -52,7 +52,7 @@ modes:
     engine: opentofu
     default: true
 variants:
-  - name: default
+  default:
     description: Default variant
     services:
       - traefik

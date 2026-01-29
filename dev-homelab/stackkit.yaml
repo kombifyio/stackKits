@@ -9,42 +9,46 @@
 # - Pipeline and automation workflows
 # - Contract validation process
 
-name: "dev-homelab"
-version: "1.0.0"
-description: "Minimal development StackKit for testing tooling integration"
-category: "development"
-license: "MIT"
-internal: true  # Not for publication
-
-author:
-  name: "StackKits Development Team"
-  email: "dev@stackkits.io"
+apiVersion: "v1"
+kind: "StackKit"
+metadata:
+  name: "dev-homelab"
+  version: "1.0.0"
+  displayName: "Dev Homelab"
+  description: "Minimal development StackKit for testing tooling integration"
+  author: "StackKits Development Team"
+  license: "MIT"
+  repository: "internal"
 
 # Minimal requirements for testing
 supportedOS:
   - ubuntu-24.04
 
 requirements:
-  cpu: 2
-  memoryGB: 4
-  diskGB: 20
+  minimum:
+    cpu: 2
+    ram: 4
+    disk: 20
+  recommended:
+    cpu: 2
+    ram: 4
+    disk: 20
 
 # Simple mode only - no advanced features
 modes:
   simple:
+    name: "Simple"
     description: "Single Docker host with minimal services"
     default: true
-    templates:
-      - templates/simple/main.tf
-  # advanced mode intentionally omitted
+    engine: "opentofu"
 
-# No variants - single configuration
-variants: []
-
-# Minimal auto-selection - always simple mode
-autoSelect:
-  simple:
-    - "true"  # Always use simple mode
+# Single variant - minimal configuration
+variants:
+  default:
+    displayName: "Default"
+    description: "Default dev-homelab configuration"
+    services:
+      - whoami
 
 # Testing lifecycle hooks
 hooks:

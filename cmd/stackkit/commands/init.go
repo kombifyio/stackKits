@@ -12,11 +12,12 @@ import (
 )
 
 var (
-	initVariant     string
-	initComputeTier string
-	initMode        string
-	initOutputDir   string
-	initForce       bool
+	initVariant       string
+	initComputeTier   string
+	initMode          string
+	initOutputDir     string
+	initForce         bool
+	initNonInteractive bool
 )
 
 var initCmd = &cobra.Command{
@@ -38,10 +39,11 @@ Examples:
 
 func init() {
 	initCmd.Flags().StringVar(&initVariant, "variant", "default", "Service variant to use")
-	initCmd.Flags().StringVar(&initComputeTier, "compute-tier", "auto", "Compute tier (minimal, standard, performance, auto)")
+	initCmd.Flags().StringVar(&initComputeTier, "compute-tier", "minimal", "Compute tier (minimal, standard, performance)")
 	initCmd.Flags().StringVar(&initMode, "mode", "simple", "Deployment mode (simple, advanced)")
 	initCmd.Flags().StringVarP(&initOutputDir, "output", "o", "deploy", "Output directory for generated files")
 	initCmd.Flags().BoolVarP(&initForce, "force", "f", false, "Overwrite existing files")
+	initCmd.Flags().BoolVar(&initNonInteractive, "non-interactive", false, "Run in non-interactive mode (fail if input is required)")
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
@@ -51,6 +53,8 @@ func runInit(cmd *cobra.Command, args []string) error {
 	stackkitName := ""
 	if len(args) > 0 {
 		stackkitName = args[0]
+	} else if initNonInteractive {
+		return fmt.Errorf("stackkit name required in non-interactive mode")
 	} else {
 		// Interactive selection would go here
 		printError("StackKit name required. Available StackKits:")

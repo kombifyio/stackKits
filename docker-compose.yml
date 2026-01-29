@@ -1,0 +1,105 @@
+# =============================================================================
+# StackKit E2E Development Environment
+# =============================================================================
+# This compose file sets up:
+#   - vm: Docker-in-Docker Ubuntu VM for testing deployments
+#   - cli: StackKit CLI container for running E2E tests
+#
+# Usage:
+#   docker compose up -d           # Start both services
+#   docker compose up -d vm        # Start only the VM
+#   docker compose run --rm cli    # Run CLI commands
+#   docker compose run --rm cli ./dev-homelab/tests/e2e_test.sh
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # VM Service: Docker-in-Docker Ubuntu for testing
+  # ---------------------------------------------------------------------------
+  vm:
+    build:
+      context: ./dev/vm
+      dockerfile: Dockerfile
+    container_name: stackkits-vm
+    privileged: true
+    environment:
+      DOCKER_TLS_CERTDIR: ""
+    ports:
+      - "2222:22"      # SSH access
+      - "2375:2375"    # Docker daemon (TCP)
+      - "9080:9080"    # whoami service (for dev-homelab testing)
+    volumes:
+      - vm_docker:/var/lib/docker
+      - ./dev/vm/authorized_keys:/authorized_keys:ro
+    healthcheck:
+      test: ["CMD", "docker", "info"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    networks:
+      - stackkits-net
+
+  # ---------------------------------------------------------------------------
+  # StackKit CLI Service
+  # ---------------------------------------------------------------------------
+  cli:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: stackkits-cli
+    environment:
+      DOCKER_HOST: tcp://vm:2375
+      STACKKIT_BIN: stackkit
+      WHOAMI_PORT: "9080"
+    volumes:
+      # Mount project source for development
+      - .:/workspace:rw
+      # SSH keys for VM access
+      - ./dev/vm/authorized_keys:/root/.ssh/authorized_keys:ro
+    working_dir: /workspace
+    # Keep container running for exec
+    command: ["tail", "-f", "/dev/null"]
+    depends_on:
+      vm:
+        condition: service_healthy
+    networks:
+      - stackkits-net
+    profiles:
+      - cli
+
+  # ---------------------------------------------------------------------------
+  # E2E Test Runner Service
+  # ---------------------------------------------------------------------------
+  e2e:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: stackkits-e2e
+    environment:
+      DOCKER_HOST: tcp://vm:2375
+      STACKKIT_BIN: stackkit
+      WHOAMI_PORT: "9080"
+      TIMEOUT: "300"
+    volumes:
+      - .:/workspace:rw
+    working_dir: /workspace
+    command: ["./dev-homelab/tests/e2e_test.sh"]
+    depends_on:
+      vm:
+        condition: service_healthy
+    networks:
+      - stackkits-net
+    profiles:
+      - e2e
+
+volumes:
+  vm_docker:
+    driver: local
+
+networks:
+  stackkits-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/16

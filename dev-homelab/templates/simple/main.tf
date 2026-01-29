@@ -70,8 +70,14 @@ data "external" "hostname" {
 # DOCKER PROVIDER
 # =============================================================================
 
+variable "docker_host" {
+  type        = string
+  description = "Docker daemon address"
+  default     = "unix:///var/run/docker.sock"
+}
+
 provider "docker" {
-  host = "unix:///var/run/docker.sock"
+  host = var.docker_host
 }
 
 # =============================================================================
