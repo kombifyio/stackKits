@@ -15,7 +15,7 @@ metadata:
     - docker
     - traefik
     - dokploy
-    - beginner
+    - professional
 
 # Supported operating systems
 supportedOS:

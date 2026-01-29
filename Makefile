@@ -67,7 +67,7 @@ deps:
 	$(GOMOD) tidy
 
 # Run all tests
-test: test-unit test-integration
+test: test-unit test-integration test-cue
 
 # Run unit tests
 test-unit:
@@ -78,6 +78,44 @@ test-unit:
 test-integration:
 	@echo "Running integration tests..."
 	$(GOTEST) -v -race ./tests/integration/...
+
+# Run CUE validation tests
+test-cue:
+	@echo "Running CUE validation tests..."
+	cue vet ./base/...
+	cue vet ./base-homelab/...
+	cue vet ./dev-homelab/...
+	cue vet ./modern-homelab/...
+	@echo "✓ All CUE schemas valid"
+
+# Run base-homelab tests
+test-base-homelab:
+	@echo "Running base-homelab tests..."
+	cd base-homelab && ./tests/run_tests.sh
+
+# Run dev-homelab tests (quick validation)
+test-dev-homelab:
+	@echo "Running dev-homelab validation..."
+	cue vet ./dev-homelab/...
+	@echo "✓ dev-homelab schemas valid"
+
+# Run dev-homelab e2e (requires Docker and CLI)
+test-e2e-dev-homelab:
+	@echo "Running dev-homelab E2E tests..."
+	cd dev-homelab && ./tests/e2e_test.sh
+
+# Run base-homelab e2e (requires Docker)
+test-e2e-base-homelab:
+	@echo "Running base-homelab E2E tests..."
+	@echo "TODO: Implement E2E tests for base-homelab"
+
+# Run full e2e suite
+test-e2e: test-e2e-dev-homelab test-e2e-base-homelab
+
+# Run full validation suite (3-layer architecture)
+test-validation:
+	@echo "Running 3-layer validation tests..."
+	./tests/run_validation.sh
 
 # Run tests with coverage
 test-coverage:
@@ -129,19 +167,32 @@ help:
 	@echo ""
 	@echo "Usage: make [target]"
 	@echo ""
-	@echo "Targets:"
+	@echo "Build Targets:"
 	@echo "  build           Build the CLI binary"
 	@echo "  build-all       Build for all platforms"
 	@echo "  install         Install CLI to GOPATH/bin"
 	@echo "  clean           Remove build artifacts"
 	@echo "  deps            Download dependencies"
-	@echo "  test            Run all tests"
-	@echo "  test-unit       Run unit tests only"
-	@echo "  test-integration Run integration tests"
+	@echo ""
+	@echo "Test Targets:"
+	@echo "  test            Run all tests (unit + integration + cue)"
+	@echo "  test-unit       Run Go unit tests"
+	@echo "  test-integration Run Go integration tests"
+	@echo "  test-cue        Run CUE schema validation"
 	@echo "  test-coverage   Run tests with coverage report"
+	@echo "  test-validation Run 3-layer validation suite"
+	@echo ""
+	@echo "StackKit-Specific Tests:"
+	@echo "  test-base-homelab     Run base-homelab schema tests"
+	@echo "  test-dev-homelab      Run dev-homelab validation"
+	@echo "  test-e2e-dev-homelab  Run dev-homelab E2E (requires Docker)"
+	@echo "  test-e2e-base-homelab Run base-homelab E2E (requires Docker)"
+	@echo "  test-e2e              Run full E2E suite"
+	@echo ""
+	@echo "Other Targets:"
 	@echo "  lint            Run golangci-lint"
 	@echo "  fmt             Format code with go fmt"
-	@echo "  validate-cue    Validate CUE schemas"
+	@echo "  validate-cue    Validate CUE schemas (legacy, use test-cue)"
 	@echo "  run ARGS=...    Run CLI in development mode"
 	@echo "  docs            Generate documentation"
 	@echo "  dev-setup       Install development tools"

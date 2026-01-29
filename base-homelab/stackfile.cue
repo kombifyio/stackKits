@@ -219,7 +219,7 @@ import (
 		description: "Single-server homelab with Docker, Dokploy and monitoring"
 		author:      "KombiStack Team"
 		license:     "MIT"
-		tags: ["homelab", "single-node", "docker", "dokploy", "beginner"]
+		tags: ["homelab", "single-node", "docker", "dokploy", "professional"]
 
 		minKombiStackVersion: "1.0.0"
 	}

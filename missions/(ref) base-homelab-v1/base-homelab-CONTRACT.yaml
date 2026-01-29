@@ -1,0 +1,33 @@
+# Base Homelab Contract
+
+name: base-homelab
+version: "2.0"
+audience: beginner
+
+layers:
+  base: stackkits.io/base
+  platform: docker
+
+services:
+  network:
+    - traefik
+  platform:
+    coolify: hasDomain
+    dokploy: noDomain
+  monitoring:
+    uptime-kuma: default
+    beszel: alternative
+  utilities:
+    - dozzle
+    - whoami
+
+variants:
+  coolify: hasDomain
+  dokploy: noDomain or localDomain
+  beszel: userChoice
+
+acceptance:
+  - services start
+  - UIs accessible
+  - can deploy app
+  - destroy cleans up

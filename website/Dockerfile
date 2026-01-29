@@ -15,6 +15,9 @@ COPY . .
 # Build the app
 RUN npm run build
 
+# Copy CLI binaries to dist
+RUN mkdir -p /app/dist/cli && cp -r /app/public/cli/* /app/dist/cli/ 2>/dev/null || true
+
 # Production stage
 FROM nginx:alpine
 

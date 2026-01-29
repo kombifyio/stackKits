@@ -1,8 +1,8 @@
 # StackKits Website - Azure Deployment
 
-**Stand:** Januar 2026
+**Status:** Deployed (28.01.2026)
 
-Die StackKits-Dokumentationswebsite wird als Azure Container App deployt.
+The StackKits website is deployed as an Azure Container App with Azure Front Door for CDN and SSL termination.
 
 ## Architektur
 

@@ -20,16 +20,19 @@
 //   7. Domain type → TLS mode auto-selection
 // =============================================================================
 
-package base_homelab
+package tests
 
-import "list"
+import (
+	homelab "github.com/kombihq/stackkits/base-homelab"
+	"list"
+)
 
 // =============================================================================
 // POSITIVE BOUNDARY TESTS (Must pass CUE vet)
 // =============================================================================
 
 // Test: Coolify with valid public domain passes
-_testCoolifyPublicDomain: #BaseHomelabStack & {
+_testCoolifyPublicDomain: homelab.homelab.#BaseHomelabStack & {
 	meta: name: "coolify-public"
 	variant:     "coolify"
 	computeTier: "high"
@@ -55,7 +58,7 @@ _testCoolifyPublicDomain: #BaseHomelabStack & {
 }
 
 // Test: Default variant with local domain → ports mode
-_testDefaultLocalPorts: #BaseHomelabStack & {
+_testDefaultLocalPorts: homelab.#BaseHomelabStack & {
 	meta: name: "default-local"
 	variant:     "default"
 	computeTier: "standard"
@@ -88,7 +91,7 @@ _testDefaultLocalPortsCheck: {
 }
 
 // Test: Public domain auto-selects ACME TLS
-_testPublicDomainACME: #BaseHomelabStack & {
+_testPublicDomainACME: homelab.#BaseHomelabStack & {
 	meta: name: "public-acme"
 	variant:     "default"
 	computeTier: "standard"
@@ -119,7 +122,7 @@ _testPublicDomainACMECheck: {
 }
 
 // Test: Low compute with minimal variant (valid combo)
-_testLowComputeMinimal: #BaseHomelabStack & {
+_testLowComputeMinimal: homelab.#BaseHomelabStack & {
 	meta: name: "low-minimal"
 	variant:     "minimal"
 	computeTier: "low"
@@ -147,7 +150,7 @@ _testLowComputeMinimal: #BaseHomelabStack & {
 }
 
 // Test: Beszel variant with monitoring exclusivity (no uptimeKuma)
-_testBeszelExclusive: #BaseHomelabStack & {
+_testBeszelExclusive: homelab.#BaseHomelabStack & {
 	meta: name: "beszel-only"
 	variant:     "beszel"
 	computeTier: "standard"
@@ -174,7 +177,7 @@ _testBeszelExclusive: #BaseHomelabStack & {
 }
 
 // Test: Dokploy enabled → coolify cannot be enabled
-_testPaaSMutualExclusivity: #BaseHomelabStack & {
+_testPaaSMutualExclusivity: homelab.#BaseHomelabStack & {
 	meta: name: "paas-exclusive"
 	variant:     "default"
 	computeTier: "standard"
@@ -202,7 +205,7 @@ _testPaaSMutualExclusivity: #BaseHomelabStack & {
 }
 
 // Test: Authelia requires Traefik (traefik is always enabled)
-_testAutheliaRequiresTraefik: #BaseHomelabStack & {
+_testAutheliaRequiresTraefik: homelab.#BaseHomelabStack & {
 	meta: name: "authelia-test"
 	variant:     "default"
 	computeTier: "standard"
@@ -229,7 +232,7 @@ _testAutheliaRequiresTraefik: #BaseHomelabStack & {
 }
 
 // Test: Dockge forces PaaS off (minimal variant logic)
-_testDockgeForcesPaasOff: #BaseHomelabStack & {
+_testDockgeForcesPaasOff: homelab.#BaseHomelabStack & {
 	meta: name: "dockge-no-paas"
 	variant:     "minimal"
 	computeTier: "low"
@@ -339,7 +342,7 @@ _testPublicTLSDefault: {
 // --- NEGATIVE TEST: Coolify + .local domain ---
 // Expected error: domain constraint fails (!~ local/lan/home/internal/test)
 //
-// _invalidCoolifyLocalDomain: #BaseHomelabStack & {
+// _invalidCoolifyLocalDomain: homelab.#BaseHomelabStack & {
 //     meta: name: "bad-coolify"
 //     variant: "coolify"
 //     computeTier: "high"
@@ -359,7 +362,7 @@ _testPublicTLSDefault: {
 // --- NEGATIVE TEST: Both PaaS platforms enabled ---
 // Expected error: coolify.enabled conflicts with dokploy.enabled constraint
 //
-// _invalidBothPaas: #BaseHomelabStack & {
+// _invalidBothPaas: homelab.#BaseHomelabStack & {
 //     meta: name: "bad-paas"
 //     variant: "default"
 //     computeTier: "standard"
@@ -381,7 +384,7 @@ _testPublicTLSDefault: {
 // --- NEGATIVE TEST: Low compute + coolify ---
 // Expected error: variant != "coolify" when computeTier == "low"
 //
-// _invalidLowComputeCoolify: #BaseHomelabStack & {
+// _invalidLowComputeCoolify: homelab.#BaseHomelabStack & {
 //     meta: name: "bad-compute"
 //     variant: "coolify"         // ← REJECTED: low compute cannot run coolify
 //     computeTier: "low"
@@ -398,7 +401,7 @@ _testPublicTLSDefault: {
 // --- NEGATIVE TEST: Coolify with insufficient resources ---
 // Expected error: cpuCores >= 4 && ramGB >= 8 required for coolify
 //
-// _invalidCoolifyResources: #BaseHomelabStack & {
+// _invalidCoolifyResources: homelab.#BaseHomelabStack & {
 //     meta: name: "bad-resources"
 //     variant: "coolify"
 //     computeTier: "standard"
@@ -431,7 +434,7 @@ _testPublicTLSDefault: {
 // --- NEGATIVE TEST: Invalid stack name (uppercase) ---
 // Expected error: name must match ^[a-z][a-z0-9-]*$
 //
-// _invalidStackName: #BaseHomelabStack & {
+// _invalidStackName: homelab.#BaseHomelabStack & {
 //     meta: name: "MyStack"     // ← REJECTED: uppercase not allowed
 //     variant: "default"
 //     computeTier: "standard"
@@ -443,7 +446,7 @@ _testPublicTLSDefault: {
 // --- NEGATIVE TEST: Two nodes in base-homelab (max 1) ---
 // Expected error: list.MaxItems constraint (max 1 node)
 //
-// _invalidTwoNodes: #BaseHomelabStack & {
+// _invalidTwoNodes: homelab.#BaseHomelabStack & {
 //     meta: name: "bad-nodes"
 //     variant: "default"
 //     computeTier: "standard"

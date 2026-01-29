@@ -19,8 +19,8 @@ const stackkits: StackKit[] = [
   {
     id: 'base-homelab',
     name: 'Base Homelab',
-    tagline: 'Perfect for beginners',
-    description: 'Single-server setup with Docker, reverse proxy, and monitoring. Everything you need to start your homelab journey.',
+    tagline: 'Single-server, local-only',
+    description: 'Single-server setup with Docker, reverse proxy, and monitoring. Everything you need for a professional homelab.',
     icon: <Server className="w-6 h-6" />,
     status: 'available',
     nodes: '1 Node',

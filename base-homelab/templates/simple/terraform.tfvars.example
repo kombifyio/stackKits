@@ -38,7 +38,7 @@ access_mode = "ports"
 # Choose your service stack:
 #
 # ┌─────────────────────────────────────────────────────────────────────────┐
-# │  VARIANT: "default" (Recommended for beginners)                         │
+# │  VARIANT: "default" (Recommended for quick start)                         │
 # ├─────────────────────────────────────────────────────────────────────────┤
 # │  • Dokploy     → deploy.{domain}  - PaaS for deploying apps (like Vercel)│
 # │  • Uptime Kuma → status.{domain}  - Monitor your services                │

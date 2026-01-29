@@ -93,7 +93,7 @@ export function GetStarted() {
                     Ready to Deploy Your First StackKit?
                   </h3>
                   <p className="text-gray-600 mb-6">
-                    Start with Base Homelab - the perfect entry point for beginners. 
+                    Start with Base Homelab - the perfect starting point for single-server deployments. 
                     It includes everything you need to get started with your self-hosted infrastructure.
                   </p>
                   <div className="flex flex-col sm:flex-row gap-4">
