@@ -1,0 +1,12 @@
+name: workspace
+stackkit: dev-homelab
+variant: default
+mode: simple
+network:
+    mode: local
+    subnet: 172.20.0.0/16
+compute:
+    tier: minimal
+ssh:
+    user: root
+    port: 22
