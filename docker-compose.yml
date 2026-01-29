@@ -4,9 +4,10 @@
 # This compose file sets up:
 #   - vm: Docker-in-Docker Ubuntu VM for testing deployments
 #   - cli: StackKit CLI container for running E2E tests
+#   - dns: DNS server for .stack.local domain resolution
 #
 # Usage:
-#   docker compose up -d           # Start both services
+#   docker compose up -d           # Start all services
 #   docker compose up -d vm        # Start only the VM
 #   docker compose run --rm cli    # Run CLI commands
 #   docker compose run --rm cli ./dev-homelab/tests/e2e_test.sh
@@ -27,9 +28,25 @@ services:
     ports:
       - "2222:22"      # SSH access
       - "2375:2375"    # Docker daemon (TCP)
+      # Traefik ports for routing
+      - "80:80"        # HTTP (Traefik)
+      - "443:443"      # HTTPS (Traefik)
+      - "8080:8080"    # Traefik dashboard
+      # Direct access ports (deprecated, use Traefik)
       - "9080:9080"    # whoami service (for dev-homelab testing)
+      - "3001:3001"    # Uptime Kuma (monitoring dashboard)
+      - "3000:3000"    # Dokploy (PAAS management)
     volumes:
+      # Persistent Docker data
       - vm_docker:/var/lib/docker
+      # Service persistent volumes
+      - dokploy_data:/dokploy-data
+      - dokploy_postgres_data:/dokploy-postgres-data
+      - kuma_data:/kuma-data
+      - traefik_data:/traefik-data
+      - traefik_certs:/traefik-certs
+      - tinyauth_data:/tinyauth-data
+      # SSH authorized keys
       - ./dev/vm/authorized_keys:/authorized_keys:ro
     healthcheck:
       test: ["CMD", "docker", "info"]
@@ -38,7 +55,45 @@ services:
       retries: 30
       start_period: 30s
     networks:
-      - stackkits-net
+      stackkits-net:
+        aliases:
+          - dokploy.stack.local
+          - kuma.stack.local
+          - whoami.stack.local
+          - auth.stack.local
+          - traefik.stack.local
+    # Add DNS configuration for .stack.local
+    dns:
+      - 127.0.0.11
+    dns_search:
+      - stack.local
+
+  # ---------------------------------------------------------------------------
+  # DNS Service: Local DNS for .stack.local domains
+  # ---------------------------------------------------------------------------
+  dns:
+    image: jpillora/dnsmasq:latest
+    container_name: stackkits-dns
+    ports:
+      - "53:53/udp"
+      - "53:53/tcp"
+    environment:
+      # DNS configuration for .stack.local domain
+      DNSMASQ_OPTS: |
+        --address=/stack.local/172.30.0.10
+        --address=/dokploy.stack.local/172.30.0.10
+        --address=/kuma.stack.local/172.30.0.10
+        --address=/whoami.stack.local/172.30.0.10
+        --address=/auth.stack.local/172.30.0.10
+        --address=/traefik.stack.local/172.30.0.10
+        --listen-address=0.0.0.0
+    networks:
+      stackkits-net:
+        ipv4_address: 172.30.0.53
+    cap_add:
+      - NET_ADMIN
+    profiles:
+      - dns
 
   # ---------------------------------------------------------------------------
   # StackKit CLI Service
@@ -52,11 +107,19 @@ services:
       DOCKER_HOST: tcp://vm:2375
       STACKKIT_BIN: stackkit
       WHOAMI_PORT: "9080"
+      UPTIME_KUMA_PORT: "3001"
+      # Domain configuration for testing
+      DOMAIN: "stack.local"
+      DOKPLOY_URL: "http://dokploy.stack.local"
+      TRAEFIK_URL: "http://traefik.stack.local"
     volumes:
       # Mount project source for development
       - .:/workspace:rw
       # SSH keys for VM access
       - ./dev/vm/authorized_keys:/root/.ssh/authorized_keys:ro
+      # Persistent volumes for testing
+      - dokploy_data:/data/dokploy:rw
+      - kuma_data:/data/kuma:rw
     working_dir: /workspace
     # Keep container running for exec
     command: ["tail", "-f", "/dev/null"]
@@ -64,7 +127,15 @@ services:
       vm:
         condition: service_healthy
     networks:
-      - stackkits-net
+      stackkits-net:
+        aliases:
+          - dokploy.stack.local
+          - kuma.stack.local
+          - whoami.stack.local
+    dns:
+      - 172.30.0.53
+    dns_search:
+      - stack.local
     profiles:
       - cli
 
@@ -80,22 +151,109 @@ services:
       DOCKER_HOST: tcp://vm:2375
       STACKKIT_BIN: stackkit
       WHOAMI_PORT: "9080"
+      UPTIME_KUMA_PORT: "3001"
       TIMEOUT: "300"
+      # Production readiness test configuration
+      TEST_PERSISTENCE: "true"
+      TEST_SECURITY: "true"
+      TEST_DOKPLOY_INTEGRATION: "true"
+      DOMAIN: "stack.local"
+      DOKPLOY_URL: "http://dokploy.stack.local"
+      TRAEFIK_URL: "http://traefik.stack.local"
+      KUMA_URL: "http://kuma.stack.local"
+      WHOAMI_URL: "http://whoami.stack.local"
+      AUTH_URL: "http://auth.stack.local"
     volumes:
       - .:/workspace:rw
+      # Mount persistent volumes for persistence testing
+      - dokploy_data:/data/dokploy:rw
+      - dokploy_postgres_data:/data/dokploy-postgres:rw
+      - kuma_data:/data/kuma:rw
+      - traefik_certs:/data/traefik-certs:rw
+      - tinyauth_data:/data/tinyauth:rw
     working_dir: /workspace
     command: ["./dev-homelab/tests/e2e_test.sh"]
     depends_on:
       vm:
         condition: service_healthy
+      dns:
+        condition: service_started
     networks:
-      - stackkits-net
+      stackkits-net:
+        aliases:
+          - dokploy.stack.local
+          - kuma.stack.local
+          - whoami.stack.local
+          - auth.stack.local
+          - traefik.stack.local
+    dns:
+      - 172.30.0.53
+    dns_search:
+      - stack.local
     profiles:
       - e2e
 
+# =============================================================================
+# PERSISTENT VOLUMES
+# =============================================================================
+# All volumes configured to survive restarts
+
 volumes:
+  # VM Docker data
   vm_docker:
     driver: local
+  
+  # Dokploy persistent data
+  dokploy_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PWD}/.data/dokploy
+  
+  # Dokploy PostgreSQL data
+  dokploy_postgres_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PWD}/.data/dokploy-postgres
+  
+  # Uptime Kuma data
+  kuma_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PWD}/.data/kuma
+  
+  # Traefik configuration
+  traefik_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PWD}/.data/traefik
+  
+  # Traefik certificates
+  traefik_certs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PWD}/.data/traefik-certs
+  
+  # TinyAuth data
+  tinyauth_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PWD}/.data/tinyauth
+
+# =============================================================================
+# NETWORKS
+# =============================================================================
 
 networks:
   stackkits-net:
@@ -103,3 +261,4 @@ networks:
     ipam:
       config:
         - subnet: 172.30.0.0/16
+          gateway: 172.30.0.1
