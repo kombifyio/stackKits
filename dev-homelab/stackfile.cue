@@ -4,17 +4,22 @@ package devhomelab
 // Dev Homelab Stackfile - 3-Layer Architecture
 // =============================================================================
 //
-// Layer 1 (Foundation): Identity & Security
-//   - TinyAuth: Identity proxy with passkey-first auth
+// Layer 1 (Foundation): System, Security & Core Identity
+//   - System: Timezone, packages, users
+//   - Security: SSH, Firewall, Container security
+//   - Core Identity: LLDAP (directory), Step-CA (PKI)
+//   - These are infrastructure-level identity services
 //
-// Layer 2 (Platform): Docker Runtime + Traefik
-//   - Docker: Container runtime
-//   - Traefik: Reverse proxy and ingress
+// Layer 2 (Platform): Runtime, PAAS & Platform Identity
+//   - Platform Runtime: Docker, networking
+//   - Ingress: Traefik reverse proxy
+//   - PAAS: Dokploy (platform management)
+//   - Platform Identity: TinyAuth (identity proxy for apps)
 //
-// Layer 3 (StackKit): Applications
-//   - Dokploy: PAAS for application deployment
-//   - Kuma: Uptime monitoring
-//   - Whoami: Test service
+// Layer 3 (Applications): User Applications
+//   - Kuma: Uptime monitoring (deployed via PAAS)
+//   - Whoami: Test service (deployed via PAAS)
+//   - User applications deployed through Layer 2 PAAS
 //
 // Security: Zero-Trust Architecture with mandatory authentication
 // =============================================================================
@@ -113,15 +118,17 @@ import (
 	}
 
 	// -------------------------------------------------------------------------
-	// LAYER 1: FOUNDATION - Identity Services (from base)
+	// LAYER 1: FOUNDATION - Core Identity Services (from base)
 	// -------------------------------------------------------------------------
-	// These are inherited from base.#BaseStackKit identity section:
-	// - identity.lldap: Lightweight LDAP server
-	// - identity.stepCA: Certificate Authority
+	// These are infrastructure-level identity services:
+	// - identity.lldap: Lightweight LDAP server (directory services)
+	// - identity.stepCA: Certificate Authority (PKI infrastructure)
 	//
-	// Dev-homelab extends with TinyAuth as identity proxy
+	// NOTE: TinyAuth is a PLATFORM identity service (Layer 2), not a core
+	// identity service. It provides application-level authentication proxying
+	// using Layer 1 identity as the backend.
 	identity: {
-		// LLDAP: Lightweight directory (from base)
+		// LLDAP: Lightweight directory (from base) - Layer 1
 		lldap: {
 			enabled: true
 			domain: {
@@ -138,7 +145,7 @@ import (
 			}
 		}
 
-		// Step-CA: Certificate authority (from base)
+		// Step-CA: Certificate authority (from base) - Layer 1
 		stepCA: {
 			enabled: false // Disabled for dev (enable for production)
 			pki: {
@@ -151,13 +158,15 @@ import (
 			}
 		}
 
-		// Identity provider: TinyAuth (local OIDC proxy)
+		// Layer 1 identity provider configuration
+		// References Layer 2 platform identity (TinyAuth)
 		provider: {
-			type:         "tinyauth"
+			type:         "tinyauth"  // Points to Layer 2 platform identity
 			name:         "tinyauth"
 			primary:      true
 			authMethods:  ["passkey", "password"]
 			oidcEndpoint: "http://auth.stack.local"
+			// NOTE: The actual TinyAuth service is defined in Layer 2
 		}
 
 		// RBAC configuration
@@ -173,9 +182,88 @@ import (
 	}
 
 	// -------------------------------------------------------------------------
+	// LAYER 2: PLATFORM - Platform Identity Services
+	// -------------------------------------------------------------------------
+	// Platform-level identity services provide authentication/authorization
+	// for applications running on the platform. These are distinct from
+	// Layer 1 core identity services (LLDAP, Step-CA).
+	platformIdentity: {
+		// TinyAuth: Platform identity proxy (Layer 2)
+		tinyauth: {
+			enabled:       true
+			version:       "v3"
+			image:         "ghcr.io/steveiliop56/tinyauth"
+			installMethod: "container"
+			appUrl:        "http://auth.stack.local"
+			traefik: {
+				enabled:        true
+				middlewareName: "tinyauth"
+				authResponseHeaders: ["X-User", "X-Email"]
+			}
+			storage: {
+				dataVolume: "tinyauth-data"
+				backup:     true
+			}
+		}
+
+		// PocketID: OIDC provider (optional, disabled by default)
+		pocketid: {
+			enabled:       false
+			version:       "latest"
+			publicAppUrl:  "http://id.stack.local"
+			database: {
+				type: "sqlite"
+			}
+			traefik: {
+				enabled: true
+				host:    "id.stack.local"
+			}
+		}
+	}
+
+	// -------------------------------------------------------------------------
+	// LAYER 2: PLATFORM - PAAS Configuration
+	// -------------------------------------------------------------------------
+	// PAAS (Platform as a Service) management belongs in Layer 2
+	// These are infrastructure controllers, not user applications.
+	paas: {
+		// Dokploy: PAAS controller (Layer 2)
+		type:          "dokploy"
+		installMethod: "container"
+		dokploy: {
+			enabled: true
+			version: "latest"
+			image:   "dokploy/dokploy"
+			port:    3000
+			database: {
+				external:        false
+				postgresVersion: "16-alpine"
+			}
+			traefik: {
+				enabled: true
+				host:    "dokploy.stack.local"
+				tls:     true
+			}
+			storage: {
+				dataVolume: "dokploy-data"
+				backup:     true
+			}
+		}
+	}
+
+	// -------------------------------------------------------------------------
 	// LAYER 2: PLATFORM - Docker Configuration
 	// -------------------------------------------------------------------------
 	platform: "docker"
+
+	// Ingress controller configuration
+	ingress: {
+		type: "traefik"
+		traefik: {
+			enabled: true
+			version: "v3.1"
+		}
+	}
 
 	// Extend Docker platform configuration
 	docker: docker.#DockerConfig & {
@@ -228,31 +316,23 @@ import (
 	}
 
 	// -------------------------------------------------------------------------
-	// LAYER 3: STACKKIT - SERVICES
+	// LAYER 3: APPLICATIONS - User Services
 	// -------------------------------------------------------------------------
+	// These services are user applications deployed via the Layer 2 PAAS.
+	// Layer 2 services (Traefik, TinyAuth, Dokploy) are configured above
+	// in the platform, platformIdentity, and paas sections.
 	services: [
-		// Layer 1: Identity Services (from base)
-		// These are deployed as infrastructure components via Terraform
-		// - lldap: Lightweight LDAP (when identity.lldap.enabled = true)
-		// - step-ca: Certificate Authority (when identity.stepCA.enabled = true)
+		// Layer 2: Infrastructure services (Traefik, TinyAuth, Dokploy)
+		// These are deployed by Terraform as platform infrastructure
+		#Services.traefik,          // Layer 2: Ingress controller
+		#Services.tinyauth,          // Layer 2: Platform identity proxy
+		#Services.dokployPostgres,   // Layer 2: PAAS database
+		#Services.dokploy,           // Layer 2: PAAS controller
 
-		// Layer 2: Traefik (Platform)
-		#Services.traefik,
-
-		// Layer 1: TinyAuth Identity Proxy (Foundation)
-		#Services.tinyauth,
-
-		// Layer 2: Dokploy Database
-		#Services.dokployPostgres,
-
-		// Layer 2: Dokploy PAAS
-		#Services.dokploy,
-
-		// Layer 3: Kuma Monitoring (managed by Dokploy)
-		#Services.kuma,
-
-		// Layer 3: Whoami Test (managed by Dokploy)
-		#Services.whoami,
+		// Layer 3: User applications (deployed BY Dokploy)
+		// These are managed by the Layer 2 PAAS, not by Terraform directly
+		#Services.kuma,              // Layer 3: Uptime monitoring
+		#Services.whoami,            // Layer 3: Test service
 	]
 
 	// -------------------------------------------------------------------------

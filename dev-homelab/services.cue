@@ -12,8 +12,15 @@ import "github.com/kombihq/stackkits/base"
 // =============================================================================
 #Layer1FoundationServices
 // =============================================================================
+// NOTE: Layer 1 foundation services are from base (LLDAP, Step-CA).
+// TinyAuth is a Layer 2 platform identity service, defined below.
 
-// TinyAuth - Identity Proxy (Layer 1)
+// =============================================================================
+#Layer2PlatformServices
+// =============================================================================
+
+// TinyAuth - Platform Identity Proxy (Layer 2)
+// Provides application-level authentication/authorization
 #TinyAuthService: base.#ServiceDefinition & {
 	name:        "tinyauth"
 	displayName: "TinyAuth Identity Proxy"
@@ -23,7 +30,7 @@ import "github.com/kombihq/stackkits/base"
 	
 	// Managed by: Terraform (not Dokploy)
 	managedBy: "terraform"
-	layer:     "1-foundation"
+	layer:     "2-platform"
 	
 	network: {
 		traefik: {
@@ -45,8 +52,9 @@ import "github.com/kombihq/stackkits/base"
 	
 	labels: {
 		"traefik.enable": "true"
-		"stackkit.layer": "1-foundation"
+		"stackkit.layer": "2-platform"
 		"stackkit.managed-by": "terraform"
+		"stackkit.category":   "platform-identity"
 		"traefik.http.middlewares.tinyauth.forwardauth.address": "http://tinyauth:3000/api/auth/verify"
 		"traefik.http.middlewares.tinyauth.forwardauth.authResponseHeaders": "X-User,X-Email"
 	}
@@ -73,10 +81,6 @@ import "github.com/kombihq/stackkits/base"
 	
 	needs: ["traefik"]
 }
-
-// =============================================================================
-#Layer2PlatformServices
-// =============================================================================
 
 // Traefik - Reverse Proxy (Layer 2)
 #TraefikService: base.#ServiceDefinition & {
@@ -372,10 +376,10 @@ import "github.com/kombihq/stackkits/base"
 // =============================================================================
 
 #Services: {
-	// Layer 1: Foundation
+	// Layer 2: Platform Identity
 	tinyauth: #TinyAuthService
 	
-	// Layer 2: Platform
+	// Layer 2: Platform Infrastructure
 	traefik:         #TraefikService
 	dokployPostgres: #DokployPostgresService
 	dokploy:         #DokployService
