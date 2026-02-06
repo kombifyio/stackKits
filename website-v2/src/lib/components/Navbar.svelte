@@ -18,9 +18,9 @@
 	];
 
 	const kombifyTools: NavItem[] = [
-		{ href: 'https://kombify.dev', label: 'kombify Cloud', description: 'Managed platform for your digital home', external: true },
-		{ href: 'https://kombify.dev', label: 'kombify Stack', description: 'Orchestration and control plane', external: true },
-		{ href: 'https://kombify.dev', label: 'kombify Sim', description: 'Discovery and simulation engine', external: true }
+		{ href: 'https://kombify.io', label: 'kombify Cloud', description: 'The guided platform for modern self-hosted infrastructure', external: true },
+		{ href: 'https://stack.kombify.io', label: 'kombify Stack', description: 'Hybrid cloud control plane - unify home and cloud', external: true },
+		{ href: 'https://sim.kombify.io', label: 'kombify Sim', description: 'Simulate and test your homelab before deployment', external: true }
 	];
 
 	const mobileNavItems: NavItem[] = [
@@ -204,7 +204,7 @@
 								<!-- Bottom featured -->
 								<div class="mt-4 border-t border-border pt-4">
 									<a
-										href="https://kombify.dev"
+										href="https://kombify.io"
 										target="_blank"
 										rel="noopener"
 										class="flex items-center gap-3 rounded-lg bg-linear-to-r from-primary/10 to-primary/5 p-3 transition-colors hover:from-primary/20 hover:to-primary/10"
@@ -213,7 +213,7 @@
 											<Globe class="h-5 w-5 text-primary" />
 										</div>
 										<div class="flex-1">
-											<div class="text-sm font-medium">Explore kombify.dev</div>
+											<div class="text-sm font-medium">Explore kombify.io</div>
 											<p class="text-xs text-muted-foreground">The guided platform for modern self-hosted infrastructure</p>
 										</div>
 										<ExternalLink class="h-4 w-4 text-muted-foreground" />
@@ -281,7 +281,7 @@
 				</div>
 				<div class="mt-3 pt-3 border-t border-border">
 					<a
-						href="https://kombify.dev"
+						href="https://kombify.io"
 						target="_blank"
 						rel="noopener"
 						onclick={() => (mobileMenuOpen = false)}

@@ -25,7 +25,7 @@ jobs:
     
     environment:
       name: ${{ github.ref_name == 'main' && 'production' || 'test' }}
-      url: ${{ github.ref_name == 'main' && 'https://stackkits.kombify.io' || 'https://stackkits-test.kombify.io' }}
+      url: ${{ github.ref_name == 'main' && 'https://stackkits.kombify.io' || '' }}
 
     env:
       RESOURCE_GROUP: rg-kombify-prod
@@ -93,11 +93,26 @@ jobs:
             --resource-group ${{ env.RESOURCE_GROUP }} \
             --image ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
       
+      - name: Get Container App URL
+        id: get_url
+        run: |
+          FQDN=$(az containerapp show \
+            --name ${{ env.CONTAINER_APP_NAME }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --query "properties.configuration.ingress.fqdn" -o tsv)
+          echo "fqdn=$FQDN" >> $GITHUB_OUTPUT
+
       - name: Deployment Summary
         run: |
-          echo "## 🚀 StackKits Website Deployed" >> $GITHUB_STEP_SUMMARY
+          echo "## StackKits Website Deployed" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
           echo "| Image | \`${{ env.IMAGE_NAME }}:${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| URL | https://stackkits.kombify.io |" >> $GITHUB_STEP_SUMMARY
+          echo "| Environment | ${{ github.ref_name == 'main' && 'production' || 'test' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| ACA URL | https://${{ steps.get_url.outputs.fqdn }} |" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            echo "| Custom Domain | https://stackkits.kombify.io |" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "| Branch | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Commit | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY

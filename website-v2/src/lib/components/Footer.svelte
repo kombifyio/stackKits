@@ -21,8 +21,8 @@
 	];
 
 	const companyLinks = [
-		{ label: 'kombify Platform', href: 'https://kombify.dev', external: true },
-		{ label: 'About', href: 'https://kombify.dev', external: true },
+		{ label: 'kombify Platform', href: 'https://kombify.io', external: true },
+		{ label: 'About', href: 'https://kombify.io', external: true },
 		{ label: 'Contact', href: 'mailto:info@kombify.io', external: true }
 	];
 
