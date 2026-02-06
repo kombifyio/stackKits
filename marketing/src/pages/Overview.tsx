@@ -23,7 +23,7 @@ const stackKits: StackKit[] = [
     name: 'Base Homelab',
     status: 'Available',
     icon: <Server size={32} />,
-    description: 'Single server, Docker-based setup perfect for beginners starting their homelab journey.',
+    description: 'Single-server, Docker-based setup for professional local-only or single-domain homelabs.',
     features: [
       'Single server deployment',
       'Docker containerization',
@@ -33,7 +33,7 @@ const stackKits: StackKit[] = [
       'Dozzle log viewer'
     ],
     details: [
-      'Perfect for beginners new to homelabs',
+      'Professional single-server infrastructure',
       'Minimal hardware requirements',
       'Quick setup with validated configurations',
       'Includes essential services out of the box',

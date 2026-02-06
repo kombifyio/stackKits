@@ -70,7 +70,7 @@ If you prefer clean hostnames + optional HTTPS, set `access_mode = "proxy"` and 
 
 ## 📦 Variant Comparison
 
-### 🟢 Default (Recommended for Beginners)
+### 🟢 Default (Recommended for Quick Start)
 
 Perfect for deploying web applications with built-in PaaS functionality.
 

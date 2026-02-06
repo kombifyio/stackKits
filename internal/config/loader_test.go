@@ -182,7 +182,8 @@ modes:
     default: true
 
 variants:
-  - name: default
+  default:
+    name: Default
     description: Full services
     services: [traefik, dokploy]
     default: true

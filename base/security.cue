@@ -106,26 +106,27 @@ package base
 }
 
 // #ContainerSecurityContext defines container security settings
+// Based on Docker hardening best practices
 #ContainerSecurityContext: {
 	// Run as non-root
 	runAsNonRoot: bool | *true
 
-	// User ID
+	// User ID (e.g., 99:100 for nobody:users on Unraid)
 	runAsUser?: int
 
 	// Group ID
 	runAsGroup?: int
 
-	// Read-only root filesystem
+	// Read-only root filesystem (recommended for security)
 	readOnlyRootFilesystem: bool | *false
 
-	// Privileged mode
+	// Privileged mode (never enable unless absolutely required)
 	privileged: bool | *false
 
-	// Capabilities to add
+	// Capabilities to add (only if strictly needed after dropping ALL)
 	capabilitiesAdd: [...string] | *[]
 
-	// Capabilities to drop
+	// Capabilities to drop (drop ALL by default, add back only what's needed)
 	capabilitiesDrop: [...string] | *["ALL"]
 
 	// Seccomp profile
@@ -134,8 +135,106 @@ package base
 	// AppArmor profile
 	appArmorProfile?: string
 
-	// No new privileges
+	// No new privileges (prevent privilege escalation)
 	noNewPrivileges: bool | *true
+
+	// Disable TTY and stdin (reduces attack surface)
+	tty: bool | *false
+	stdinOpen: bool | *false
+}
+
+// #ContainerResourceLimits defines resource constraints
+// Prevents containers from consuming all host resources
+#ContainerResourceLimits: {
+	// Memory limit (e.g., "512m", "2g")
+	memLimit?: string
+
+	// Memory reservation (soft limit)
+	memReservation?: string
+
+	// CPU limit (number of CPUs, e.g., 2.5)
+	cpus?: number
+
+	// CPU shares (relative weight)
+	cpuShares?: int
+
+	// PID limit (prevent fork bombs)
+	pidsLimit: int | *512
+}
+
+// #ContainerTmpfs defines tmpfs mount configuration
+// Prevents payload execution from /tmp
+#ContainerTmpfs: {
+	// Mount path
+	path: string | *"/tmp"
+
+	// Options: noexec prevents execution, nosuid ignores SUID, nodev ignores devices
+	options: string | *"rw,noexec,nosuid,nodev"
+
+	// Size limit
+	size: string | *"512m"
+}
+
+// #ContainerLogging defines container log settings
+// Prevents logging bombs that could fill disk
+#ContainerLogging: {
+	// Log driver
+	driver: "json-file" | "syslog" | "journald" | "none" | *"json-file"
+
+	// Options for json-file driver
+	options: {
+		// Max size per log file
+		maxSize: string | *"50m"
+		// Number of log files to keep
+		maxFile: string | *"5"
+	}
+}
+
+// #ContainerNetworkSecurity defines network isolation settings
+#ContainerNetworkSecurity: {
+	// Network mode
+	networkMode: "bridge" | "host" | "none" | "custom" | *"bridge"
+
+	// Custom network name (if networkMode = custom)
+	networkName?: string
+
+	// Isolate in DMZ network for public-facing containers
+	dmzIsolation: bool | *false
+
+	// Disable inter-container communication (ICC)
+	disableICC: bool | *false
+
+	// DNS servers (override container DNS)
+	dnsServers: [...string] | *[]
+}
+
+// #DockerHardeningProfile combines all container security settings
+#DockerHardeningProfile: {
+	// Profile name
+	name: "minimal" | "standard" | "hardened" | "paranoid" | *"standard"
+
+	// Security context
+	securityContext: #ContainerSecurityContext
+
+	// Resource limits
+	resourceLimits: #ContainerResourceLimits
+
+	// Tmpfs configuration for /tmp
+	tmpfs?: #ContainerTmpfs
+
+	// Logging configuration
+	logging: #ContainerLogging
+
+	// Network security
+	networkSecurity: #ContainerNetworkSecurity
+
+	// Volume mount policy
+	volumePolicy: {
+		// Prefer read-only mounts for data
+		preferReadOnly: bool | *true
+		// Allowed bind mount paths (empty = no restrictions)
+		allowedBindPaths: [...string] | *[]
+	}
 }
 
 // #SecretsPolicy defines how secrets are managed
@@ -221,4 +320,243 @@ package base
 
 	// Syscalls to audit
 	syscalls: [...string] | *[]
+}
+
+// =============================================================================
+// ZERO-TRUST IDENTITY ARCHITECTURE (kombify Identity Plan)
+// =============================================================================
+
+// #IdentityProvider defines the identity provider configuration
+#IdentityProvider: {
+	// Provider type (pocketid for local passkeys, lldap for directory, external for any OIDC)
+	type: "pocketid" | "lldap" | "external" | *"pocketid"
+
+	// Provider name
+	name: string
+
+	// OIDC endpoint (for pocketid, external OIDC providers)
+	oidcEndpoint?: string
+
+	// LDAP endpoint (for lldap)
+	ldapEndpoint?: string
+
+	// Client ID for OIDC
+	clientId?: string
+
+	// Whether this is the primary provider
+	primary: bool | *false
+
+	// Supported auth methods
+	authMethods: [...#AuthMethod] | *["passkey"]
+
+	// Scopes to request
+	scopes: [...string] | *["openid", "profile", "email", "groups"]
+}
+
+// #AuthMethod defines supported authentication methods
+#AuthMethod: "passkey" | "password" | "mfa" | "certificate" | "oauth"
+
+// #ZeroTrustPolicy defines the zero-trust security policy
+// All settings are defaults - users can adjust any setting to match their needs
+#ZeroTrustPolicy: {
+	// Enable zero-trust mode (recommended default, can be disabled)
+	enabled: bool | *true
+
+	// Device trust via mTLS
+	deviceTrust: {
+		enabled:       bool | *true
+		requireCert:   bool | *true
+		certAuthority: string | *"step-ca"
+		// SCEP enrollment enabled
+		scepEnrollment: bool | *true
+	}
+
+	// Identity trust via OIDC
+	identityTrust: {
+		enabled: bool | *true
+		// Passkey recommended by default, but password auth is fully supported
+		requirePasskey: bool | *true
+		// Password fallback - set to true if you prefer username+password
+		allowPasswordFallback: bool | *false
+		// MFA for admin operations (optional)
+		requireMfaForAdmin: bool | *true
+	}
+
+	// Network segmentation
+	networkSegmentation: {
+		enabled: bool | *true
+		zones: [...#NetworkZone] | *[
+				{name: "mgmt", access: "admin-only"},
+				{name: "apps", access: "authenticated"},
+				{name: "dmz", access: "public"},
+		]
+	}
+}
+
+// #NetworkZone defines a network zone for segmentation
+#NetworkZone: {
+	name:   string
+	access: "public" | "authenticated" | "admin-only" | "internal-only"
+	// CIDR range (optional)
+	cidr?: string
+	// VLAN ID (optional)
+	vlanId?: int
+}
+
+// #PKIConfig defines PKI and certificate authority settings
+#PKIConfig: {
+	// PKI backend
+	backend: "step-ca" | "vault-pki" | "cfssl" | "manual" | *"step-ca"
+
+	// CA endpoint
+	caEndpoint?: string
+
+	// ACME endpoint for automated certificate issuance
+	acmeEndpoint?: string
+
+	// SCEP endpoint for device enrollment
+	scepEndpoint?: string
+
+	// Default certificate validity (hours)
+	certValidityHours: int | *720 // 30 days
+
+	// Intermediate CA configuration
+	intermediate?: {
+		commonName: string
+		validityDays: int | *365
+	}
+
+	// Enable mTLS for internal services
+	internalMTLS: bool | *true
+
+	// SPIFFE configuration for workload identity
+	spiffe?: {
+		enabled:     bool | *true
+		trustDomain: string
+	}
+}
+
+// #ServiceIdentity defines identity for workloads/agents
+#ServiceIdentity: {
+	// Identity type
+	type: "spiffe" | "mtls" | "oauth-client" | *"mtls"
+
+	// SPIFFE ID (if type = spiffe)
+	spiffeId?: string
+
+	// OAuth2 client credentials (if type = oauth-client)
+	oauth?: {
+		clientId: string
+		scopes: [...string]
+	}
+
+	// Certificate common name (if type = mtls)
+	certCN?: string
+
+	// Short-lived credential rotation
+	rotationEnabled: bool | *true
+	rotationInterval: string | *"24h"
+}
+
+// #RBACPolicy defines role-based access control
+#RBACPolicy: {
+	// Enable RBAC
+	enabled: bool | *true
+
+	// Role source (lldap groups, IdP claims, local)
+	roleSource: "lldap" | "idp-claims" | "local" | *"lldap"
+
+	// Standard roles (from kombify identity plan)
+	roles: [...#Role] | *[
+			{name: "owner", permissions: ["*"]},
+			{name: "operator", permissions: ["deploy", "update", "monitor", "backup"]},
+			{name: "developer", permissions: ["deploy", "logs", "exec"]},
+			{name: "viewer", permissions: ["read", "logs"]},
+	]
+
+	// Map external groups to internal roles
+	groupMappings: [...#GroupMapping] | *[]
+}
+
+// #Role defines a role with permissions
+#Role: {
+	name: string
+	permissions: [...string]
+	// Optional: restrict to specific resources
+	resources?: [...string]
+}
+
+// #GroupMapping maps IdP groups to internal roles
+#GroupMapping: {
+	externalGroup: string
+	internalRole:  string
+}
+
+// #AccessProfile defines access configuration presets
+#AccessProfile: "local-only" | "tunnel-only" | "vpn-only" | "vpn-plus-tunnel" | "full-zero-trust"
+
+// #ExternalAccess defines how the homelab is accessed from outside
+#ExternalAccess: {
+	// Access profile preset
+	profile: #AccessProfile | *"local-only"
+
+	// Cloudflare Tunnel configuration
+	tunnel?: {
+		enabled:     bool | *false
+		tunnelToken: string
+		// Public hostnames exposed via tunnel
+		hostnames: [...string]
+	}
+
+	// VPN configuration
+	vpn?: {
+		enabled:  bool | *false
+		type:     "wireguard" | "openvpn" | "tailscale" | *"wireguard"
+		endpoint: string
+		// Identity-aware VPN (connects to same IdP)
+		identityAware: bool | *false
+	}
+
+	// Require mTLS even for tunneled traffic
+	requireMTLSForTunnel: bool | *true
+
+	// Require OIDC login after VPN/tunnel
+	requireOIDCAfterAccess: bool | *true
+}
+
+// #EmergencyAccess defines disaster recovery access paths
+#EmergencyAccess: {
+	// Enable emergency admin account
+	enabled: bool | *true
+
+	// Username for emergency access
+	username: string | *"emergency-admin"
+
+	// Restrict to management VLAN only
+	restrictToMgmtVLAN: bool | *true
+
+	// Allowed source IPs (empty = mgmt VLAN only)
+	allowedSources: [...string] | *[]
+
+	// Offline mode fallback (use local lldap when IdP unreachable)
+	offlineFallback: bool | *true
+}
+
+// #IdentityLifecycle defines provisioning and offboarding
+#IdentityLifecycle: {
+	// Automated provisioning from SaaS layer
+	autoProvision: bool | *true
+
+	// Provision source
+	provisionSource: "kombifysphere" | "lldap" | "manual" | *"lldap"
+
+	// Offboarding policy
+	offboarding: {
+		// Immediate token invalidation
+		immediateTokenRevoke: bool | *true
+		// Remove from all groups
+		removeGroupMemberships: bool | *true
+		// Archive activity logs
+		archiveActivity: bool | *true
+	}
 }

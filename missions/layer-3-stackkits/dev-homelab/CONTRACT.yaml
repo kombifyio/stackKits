@@ -1,0 +1,25 @@
+name: dev-homelab
+version: "1.0"
+audience: internal
+status: development-only
+
+layers:
+  foundation: minimal
+  platform: docker
+
+services:
+  network:
+    - docker-network
+  utilities:
+    - whoami
+
+variants: none
+
+acceptance:
+  - init creates spec
+  - validate passes
+  - plan succeeds
+  - apply deploys
+  - whoami responds
+  - status shows healthy
+  - destroy cleans up

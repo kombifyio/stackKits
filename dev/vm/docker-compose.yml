@@ -1,0 +1,29 @@
+services:
+  vm-ubuntu:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: stackkits-vm-ubuntu
+    privileged: true
+    environment:
+      DOCKER_TLS_CERTDIR: ""
+    ports:
+      - "2222:22"
+      - "2375:2375"
+      - "80:80"
+      - "443:443"
+      - "8080:8080"
+      - "8888:8888"
+      - "3000:3000"
+      - "3001:3001"
+      - "8090:8090"
+      - "5001:5001"
+      - "9000:9000"
+      - "19999:19999"
+      - "9080:9080"
+    volumes:
+      - vm_docker:/var/lib/docker
+      - ./authorized_keys:/authorized_keys:ro
+
+volumes:
+  vm_docker:

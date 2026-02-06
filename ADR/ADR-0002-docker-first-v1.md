@@ -58,7 +58,7 @@ We **keep the 3-layer architecture** but with Docker as the only implemented pla
 │  │             │   │             │   │             │                        │
 │  │ • 1 Node    │   │ • 2-5 Nodes │   │ • 3+ Nodes  │                        │
 │  │ • Dokploy   │   │ • Dokploy   │   │ • Dokploy   │                        │
-│  │ • Beginner  │   │ • Swarm     │   │ • Swarm HA  │                        │
+│  │ • Local     │   │ • Swarm     │   │ • Swarm HA  │                        │
 │  └──────┬──────┘   └──────┬──────┘   └──────┬──────┘                        │
 │         └─────────────────┼─────────────────┘                               │
 │                           │                                                  │
@@ -117,7 +117,7 @@ We **keep the 3-layer architecture** but with Docker as the only implemented pla
 | **Dokploy Mode** | Standalone | Swarm | Swarm + replicas |
 | **Network** | Local | Hybrid | Hybrid + failover |
 | **VPN** | None | Headscale | Headscale |
-| **Complexity** | Beginner | Intermediate | Advanced |
+| **Complexity** | Single-Server | Intermediate | Advanced |
 | **Use Case** | Single server | Home + VPS | Production-like |
 
 ## Future: Kubernetes Support (v1.1+)

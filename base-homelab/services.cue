@@ -1,5 +1,10 @@
 // Package base_homelab - Service Definitions
-// 
+//
+// Layer Architecture:
+//   Layer 1 (Foundation): System, security, core identity (LLDAP, Step-CA from base)
+//   Layer 2 (Platform): Traefik, PAAS (Dokploy/Coolify), Platform Identity (TinyAuth, PocketID)
+//   Layer 3 (Applications): Uptime Kuma, Beszel, Whoami, etc. (user applications)
+//
 // PaaS Strategy:
 //   - Dokploy (default): For users WITHOUT a domain (ports mode, simpler)
 //   - Coolify (option):  For users WITH a domain (proxy mode, more features)
@@ -9,10 +14,15 @@
 //   - coolify: Traefik + Coolify + Uptime Kuma (own-domain users)
 //   - beszel:  Traefik + Dokploy + Beszel (server metrics focus)
 //   - minimal: Traefik + Dockge + Portainer (lightweight)
+//   - secure:  Traefik + Dokploy + TinyAuth + Uptime Kuma (with auth)
 //
 // Monitoring Options:
 //   - Uptime Kuma (default): Simple uptime monitoring
 //   - Beszel (alternative): Lightweight server metrics
+//
+// Platform Identity Options (Layer 2):
+//   - TinyAuth: Lightweight identity proxy (simple, fast)
+//   - PocketID: Full OIDC provider (SSO, more features)
 //
 // This file defines all available services for the Base Homelab StackKit.
 
@@ -97,6 +107,9 @@ import "github.com/kombihq/stackkits/base"
 		"traefik.http.routers.api.rule":             "Host(`traefik.{{.domain}}`)"
 		"traefik.http.routers.api.service":          "api@internal"
 		"traefik.http.routers.api.tls.certresolver": "letsencrypt"
+		// Layer classification
+		"stackkit.layer":      "2-platform"
+		"stackkit.managed-by": "terraform"
 	}
 
 	// Output URL for this service
@@ -112,10 +125,180 @@ import "github.com/kombihq/stackkits/base"
 }
 
 // =============================================================================
-// DEFAULT PLATFORM: DOKPLOY
+// LAYER 2: PLATFORM IDENTITY SERVICES
 // =============================================================================
 
-// #DokployService - Self-hosted PaaS Platform (Default)
+// #TinyAuthService - Lightweight Identity Proxy (Layer 2)
+#TinyAuthService: base.#ServiceDefinition & {
+	name:        "tinyauth"
+	displayName: "TinyAuth"
+	category:    "platform-identity"
+	type:        "auth"
+	required:    false
+	enabled:     false // Disabled by default in base-homelab
+	image:       "ghcr.io/steveiliop56/tinyauth"
+	tag:         "v3"
+	description: "Lightweight identity proxy for application authentication"
+	needs:       ["traefik"]
+
+	network: {
+		ports: [
+			{host: 3002, container: 3000, protocol: "tcp", description: "Web UI"},
+		]
+		traefik: {
+			enabled: true
+			rule:    "Host(`auth.{{.domain}}`)"
+			tls:     true
+			port:    3000
+		}
+	}
+
+	volumes: [
+		{
+			source:      "tinyauth-data"
+			target:      "/data"
+			type:        "volume"
+			backup:      true
+			description: "TinyAuth data and users"
+		},
+	]
+
+	environment: {
+		"TZ":      "Europe/Berlin"
+		"APP_URL": "https://auth.{{.domain}}"
+	}
+
+	healthCheck: {
+		enabled: true
+		http: {
+			path:   "/api/health"
+			port:   3000
+			scheme: "http"
+		}
+		interval:    "30s"
+		timeout:     "5s"
+		retries:     3
+		startPeriod: "10s"
+	}
+
+	resources: {
+		memory:    "128m"
+		memoryMax: "256m"
+		cpus:      0.25
+	}
+
+	labels: {
+		"traefik.enable":                                           "true"
+		"traefik.http.routers.tinyauth.entrypoints":                "websecure"
+		"traefik.http.routers.tinyauth.rule":                       "Host(`auth.{{.domain}}`)"
+		"traefik.http.routers.tinyauth.tls.certresolver":           "letsencrypt"
+		"traefik.http.services.tinyauth.loadbalancer.server.port":  "3000"
+		"traefik.http.middlewares.tinyauth.forwardauth.address":      "http://tinyauth:3000/api/auth/verify"
+		"traefik.http.middlewares.tinyauth.forwardauth.authResponseHeaders": "X-User,X-Email"
+		// Layer classification
+		"stackkit.layer":      "2-platform"
+		"stackkit.managed-by": "terraform"
+		"stackkit.category":   "platform-identity"
+	}
+
+	output: {
+		url:         "https://auth.{{.domain}}"
+		description: "TinyAuth - Identity proxy for applications"
+		credentials: {
+			note: "Configure users on first access"
+		}
+	}
+
+	restartPolicy: "unless-stopped"
+}
+
+// #PocketIDService - OIDC Provider (Layer 2)
+#PocketIDService: base.#ServiceDefinition & {
+	name:        "pocketid"
+	displayName: "PocketID"
+	category:    "platform-identity"
+	type:        "auth"
+	required:    false
+	enabled:     false // Disabled by default
+	image:       "stonith404/pocket-id"
+	tag:         "latest"
+	description: "Self-hosted OIDC provider for single sign-on"
+	needs:       ["traefik"]
+
+	network: {
+		ports: [
+			{host: 3003, container: 3000, protocol: "tcp", description: "Web UI"},
+		]
+		traefik: {
+			enabled: true
+			rule:    "Host(`id.{{.domain}}`)"
+			tls:     true
+			port:    3000
+		}
+	}
+
+	volumes: [
+		{
+			source:      "pocketid-data"
+			target:      "/app/data"
+			type:        "volume"
+			backup:      true
+			description: "PocketID database and config"
+		},
+	]
+
+	environment: {
+		"TZ":            "Europe/Berlin"
+		"PUBLIC_APP_URL": "https://id.{{.domain}}"
+	}
+
+	healthCheck: {
+		enabled: true
+		http: {
+			path:   "/api/health"
+			port:   3000
+			scheme: "http"
+		}
+		interval:    "30s"
+		timeout:     "5s"
+		retries:     3
+		startPeriod: "30s"
+	}
+
+	resources: {
+		memory:    "256m"
+		memoryMax: "512m"
+		cpus:      0.5
+	}
+
+	labels: {
+		"traefik.enable":                                      "true"
+		"traefik.http.routers.pocketid.entrypoints":           "websecure"
+		"traefik.http.routers.pocketid.rule":                  "Host(`id.{{.domain}}`)"
+		"traefik.http.routers.pocketid.tls.certresolver":      "letsencrypt"
+		"traefik.http.services.pocketid.loadbalancer.server.port": "3000"
+		// Layer classification
+		"stackkit.layer":      "2-platform"
+		"stackkit.managed-by": "terraform"
+		"stackkit.category":   "platform-identity"
+	}
+
+	output: {
+		url:         "https://id.{{.domain}}"
+		description: "PocketID - OIDC provider for SSO"
+		credentials: {
+			note: "Configure on first access"
+		}
+	}
+
+	restartPolicy: "unless-stopped"
+}
+
+// =============================================================================
+// DEFAULT PLATFORM: DOKPLOY (Layer 2 PAAS)
+// =============================================================================
+
+// #DokployService - Self-hosted PaaS Platform (Layer 2)
 #DokployService: base.#ServiceDefinition & {
 	name:        "dokploy"
 	displayName: "Dokploy"
@@ -187,6 +370,9 @@ import "github.com/kombihq/stackkits/base"
 		"traefik.http.routers.dokploy.rule":                    "Host(`deploy.{{.domain}}`)"
 		"traefik.http.routers.dokploy.tls.certresolver":        "letsencrypt"
 		"traefik.http.services.dokploy.loadbalancer.server.port": "3000"
+		// Layer classification
+		"stackkit.layer":      "2-platform"
+		"stackkit.managed-by": "terraform"
 	}
 
 	output: {
@@ -283,6 +469,9 @@ import "github.com/kombihq/stackkits/base"
 		"traefik.http.routers.coolify.rule":                     "Host(`coolify.{{.domain}}`)"
 		"traefik.http.routers.coolify.tls.certresolver":         "letsencrypt"
 		"traefik.http.services.coolify.loadbalancer.server.port": "8000"
+		// Layer classification
+		"stackkit.layer":      "2-platform"
+		"stackkit.managed-by": "terraform"
 	}
 
 	output: {
@@ -361,6 +550,9 @@ import "github.com/kombihq/stackkits/base"
 		"traefik.http.routers.uptime-kuma.rule":                    "Host(`status.{{.domain}}`)"
 		"traefik.http.routers.uptime-kuma.tls.certresolver":        "letsencrypt"
 		"traefik.http.services.uptime-kuma.loadbalancer.server.port": "3001"
+		// Layer classification - deployed via PAAS (Dokploy)
+		"stackkit.layer":      "3-application"
+		"stackkit.managed-by": "dokploy"
 	}
 
 	output: {
@@ -434,6 +626,9 @@ import "github.com/kombihq/stackkits/base"
 		"traefik.http.routers.beszel.rule":                    "Host(`monitor.{{.domain}}`)"
 		"traefik.http.routers.beszel.tls.certresolver":        "letsencrypt"
 		"traefik.http.services.beszel.loadbalancer.server.port": "8090"
+		// Layer classification - deployed via PAAS (Dokploy)
+		"stackkit.layer":      "3-application"
+		"stackkit.managed-by": "dokploy"
 	}
 
 	output: {
@@ -512,6 +707,9 @@ import "github.com/kombihq/stackkits/base"
 		"traefik.http.routers.dozzle.rule":                    "Host(`logs.{{.domain}}`)"
 		"traefik.http.routers.dozzle.tls.certresolver":        "letsencrypt"
 		"traefik.http.services.dozzle.loadbalancer.server.port": "8080"
+		// Layer classification - Platform observability, deployed via Terraform
+		"stackkit.layer":      "2-platform"
+		"stackkit.managed-by": "terraform"
 	}
 
 	output: {
@@ -579,6 +777,9 @@ import "github.com/kombihq/stackkits/base"
 		"traefik.http.routers.whoami.rule":                    "Host(`whoami.{{.domain}}`)"
 		"traefik.http.routers.whoami.tls.certresolver":        "letsencrypt"
 		"traefik.http.services.whoami.loadbalancer.server.port": "80"
+		// Layer classification - deployed via PAAS (Dokploy)
+		"stackkit.layer":      "3-application"
+		"stackkit.managed-by": "dokploy"
 	}
 
 	output: {
@@ -675,6 +876,9 @@ import "github.com/kombihq/stackkits/base"
 		"traefik.http.routers.dockge.rule":                    "Host(`dockge.{{.domain}}`)"
 		"traefik.http.routers.dockge.tls.certresolver":        "letsencrypt"
 		"traefik.http.services.dockge.loadbalancer.server.port": "5001"
+		// Layer classification - Platform management, deployed via Terraform
+		"stackkit.layer":      "2-platform"
+		"stackkit.managed-by": "terraform"
 	}
 
 	output: {
@@ -757,6 +961,9 @@ import "github.com/kombihq/stackkits/base"
 		"traefik.http.routers.portainer.rule":                    "Host(`portainer.{{.domain}}`)"
 		"traefik.http.routers.portainer.tls.certresolver":        "letsencrypt"
 		"traefik.http.services.portainer.loadbalancer.server.port": "9000"
+		// Layer classification - Platform management, deployed via Terraform
+		"stackkit.layer":      "2-platform"
+		"stackkit.managed-by": "terraform"
 	}
 
 	output: {
@@ -866,6 +1073,9 @@ import "github.com/kombihq/stackkits/base"
 		"traefik.http.routers.netdata.rule":                    "Host(`netdata.{{.domain}}`)"
 		"traefik.http.routers.netdata.tls.certresolver":        "letsencrypt"
 		"traefik.http.services.netdata.loadbalancer.server.port": "19999"
+		// Layer classification - deployed via PAAS (Dokploy)
+		"stackkit.layer":      "3-application"
+		"stackkit.managed-by": "dokploy"
 	}
 
 	output: {
@@ -901,6 +1111,16 @@ import "github.com/kombihq/stackkits/base"
 	#WhoamiService,
 ]
 
+// #DefaultServicesWithAuth - With platform identity (TinyAuth)
+#DefaultServicesWithAuth: [
+	#TraefikService,
+	#TinyAuthService,
+	#DokployService,
+	#UptimeKumaService,
+	#DozzleService,
+	#WhoamiService,
+]
+
 // #MinimalServices - Minimal variant (Dockge + Portainer)
 #MinimalServices: [
 	#TraefikService,
@@ -908,4 +1128,14 @@ import "github.com/kombihq/stackkits/base"
 	#PortainerService,
 	#NetdataService,
 	#DozzleService,
+]
+
+// #SecureServices - With TinyAuth authentication
+#SecureServices: [
+	#TraefikService,
+	#TinyAuthService,
+	#DokployService,
+	#UptimeKumaService,
+	#DozzleService,
+	#WhoamiService,
 ]

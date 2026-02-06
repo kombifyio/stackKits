@@ -294,20 +294,17 @@ func TestHealthStatus(t *testing.T) {
 func TestVariant(t *testing.T) {
 	t.Run("defines variant", func(t *testing.T) {
 		variant := Variant{
-			Name:        "minimal",
 			Description: "Minimal service set",
 			Services:    []string{"traefik", "dockge"},
 			Default:     false,
 		}
 
-		assert.Equal(t, "minimal", variant.Name)
 		assert.Len(t, variant.Services, 2)
 		assert.False(t, variant.Default)
 	})
 
 	t.Run("default variant", func(t *testing.T) {
 		variant := Variant{
-			Name:        "default",
 			Description: "Full service set",
 			Services:    []string{"traefik", "dokploy", "uptime-kuma"},
 			Default:     true,

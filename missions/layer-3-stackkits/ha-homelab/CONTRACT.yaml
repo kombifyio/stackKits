@@ -1,0 +1,41 @@
+name: ha-homelab
+version: "1.0"
+audience: advanced
+
+layers:
+  foundation: extended
+  platform: docker-swarm
+
+cluster:
+  minNodes: 3
+  managers: 3
+  workers: 0+
+
+services:
+  network:
+    - traefik (HA)
+    - keepalived
+  platform:
+    - coolify
+  storage:
+    glusterfs: default
+    longhorn: alternative
+  monitoring:
+    - uptime-kuma
+    - prometheus
+    - grafana
+    - alertmanager
+  backup:
+    - velero
+    - restic
+
+variants:
+  standard: 3 nodes
+  extended: 5+ nodes, dedicated managers
+
+acceptance:
+  - cluster forms
+  - failover works
+  - data persists
+  - recovery under 5min
+  - destroy cleans up

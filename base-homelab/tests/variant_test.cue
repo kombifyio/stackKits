@@ -1,10 +1,13 @@
 // Test variants for base-homelab
-package base_homelab
+package tests
 
-import "list"
+import (
+	homelab "github.com/kombihq/stackkits/base-homelab"
+	"list"
+)
 
 // Test: Default variant configuration
-testDefaultStack: #BaseHomelabStack & {
+testDefaultStack: homelab.#BaseHomelabStack & {
 	meta: {
 		name:    "test-default"
 		version: "3.1.0"
@@ -38,7 +41,7 @@ testDefaultStack: #BaseHomelabStack & {
 }
 
 // Test: Coolify variant (requires domain)
-testCoolifyStack: #BaseHomelabStack & {
+testCoolifyStack: homelab.#BaseHomelabStack & {
 	meta: {
 		name:    "test-coolify"
 		version: "3.1.0"
@@ -72,7 +75,7 @@ testCoolifyStack: #BaseHomelabStack & {
 }
 
 // Test: Beszel variant (monitoring focus)
-testBeszelStack: #BaseHomelabStack & {
+testBeszelStack: homelab.#BaseHomelabStack & {
 	meta: {
 		name:    "test-beszel"
 		version: "3.1.0"
@@ -106,7 +109,7 @@ testBeszelStack: #BaseHomelabStack & {
 }
 
 // Test: Minimal variant (low resources)
-testMinimalStack: #BaseHomelabStack & {
+testMinimalStack: homelab.#BaseHomelabStack & {
 	meta: {
 		name:    "test-minimal"
 		version: "3.1.0"

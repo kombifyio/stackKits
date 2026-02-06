@@ -1,0 +1,51 @@
+# =============================================================================
+# TinyAuth Users Configuration
+# =============================================================================
+# Default credentials for dev-homelab:
+# Username: admin
+# Password: admin123
+#
+# To generate a new bcrypt hash:
+#   htpasswd -bnBC 10 "" "yourpassword" | tr -d ':\n'
+#
+# OR using Python:
+#   python3 -c "import bcrypt; print(bcrypt.hashpw(b'yourpassword', bcrypt.gensalt(rounds=10)).decode())"
+
+users:
+  - username: admin
+    password: "$2a$10$N9qo8uLOickgx2ZMRZoMy.MqrI0N3p9zqNVvB6fCNCkKeTLQ9b1Vy"
+    email: admin@stack.local
+    name: Administrator
+
+# OAuth/OIDC configuration (optional - configure for production)
+oauth:
+  # Example: GitHub OAuth
+  # github:
+  #   client_id: "your-github-client-id"
+  #   client_secret: "your-github-client-secret"
+  #   redirect_url: "http://auth.stack.local/auth/github/callback"
+  
+  # Example: Generic OIDC
+  # oidc:
+  #   issuer: "https://accounts.google.com"
+  #   client_id: "your-client-id"
+  #   client_secret: "your-client-secret"
+  #   redirect_url: "http://auth.stack.local/auth/oidc/callback"
+
+# App whitelist - these apps will be protected by TinyAuth
+apps:
+  - name: dokploy
+    url: http://dokploy:3000
+  - name: kuma
+    url: http://kuma:3001
+  - name: whoami
+    url: http://whoami:80
+  - name: traefik
+    url: http://traefik:8080
+
+# Session configuration
+session:
+  # 7 days in seconds
+  max_age: 604800
+  # Cookie name
+  name: tinyauth_session

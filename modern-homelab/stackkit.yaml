@@ -220,7 +220,7 @@ variants:
 # | VPN             | None                | Headscale/Tailscale      | Headscale            |
 # | Public Access   | Optional add-on     | Default enabled          | Default enabled      |
 # | Monitoring      | Basic (Uptime Kuma) | Full stack (Prometheus)  | HA Prometheus        |
-# | Complexity      | Beginner            | Intermediate             | Advanced             |
+# | Complexity      | Single-Server       | Multi-Server             | High-Availability    |
 # =============================================================================
 
 # Auto-selection rules

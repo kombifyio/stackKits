@@ -1,0 +1,32 @@
+# Dev Homelab Stack Specification
+# ================================
+# Minimal default spec for development testing
+
+version: "1"
+kind: StackSpec
+
+metadata:
+  name: dev-homelab
+  description: "Development environment for tooling integration"
+
+# Minimal infrastructure
+infrastructure:
+  mode: simple
+  provider: docker
+
+# Single container for testing
+services:
+  whoami:
+    enabled: true
+    port: 9080
+
+# Minimal network
+network:
+  name: dev_net
+  subnet: "172.21.0.0/16"
+  accessMode: ports
+
+# Testing output
+testing:
+  enabled: true
+  validateHealth: true

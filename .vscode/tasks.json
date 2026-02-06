@@ -1,0 +1,57 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Start Beads UI",
+      "type": "shell",
+      "command": "node \"${env:USERPROFILE}/.claude/tools/beads-ui/bin/bdui.js\" start --port 34672 --open",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "BD_BIN": "C:/Users/mako1/go/bin/bd.exe"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "focus": false
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Open Beads UI in Browser",
+      "type": "shell",
+      "command": "start http://localhost:34672",
+      "windows": {
+        "command": "start http://localhost:34672"
+      },
+      "linux": {
+        "command": "xdg-open http://localhost:34672"
+      },
+      "osx": {
+        "command": "open http://localhost:34672"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Beads: Check Ready Tasks",
+      "type": "shell",
+      "command": "C:/Users/mako1/go/bin/bd.exe ready",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Beads: List All Tasks",
+      "type": "shell",
+      "command": "C:/Users/mako1/go/bin/bd.exe list",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    }
+  ]
+}

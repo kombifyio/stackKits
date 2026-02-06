@@ -12,6 +12,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// getDockerHost returns the Docker host from environment or empty string
+func getDockerHost() string {
+	if host := os.Getenv("DOCKER_HOST"); host != "" {
+		return host
+	}
+	return ""
+}
+
 var (
 	genOutputDir string
 	genForce     bool
@@ -187,6 +195,12 @@ func copyFile(src, dst string) error {
 // generateTfvars generates terraform.tfvars content from spec
 func generateTfvars(spec *models.StackSpec) string {
 	var lines []string
+
+	// Docker host from environment (for remote Docker daemon)
+	dockerHost := getDockerHost()
+	if dockerHost != "" {
+		lines = append(lines, fmt.Sprintf(`docker_host = %q`, dockerHost))
+	}
 
 	// Basic settings
 	if spec.Domain != "" {

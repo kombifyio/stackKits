@@ -172,11 +172,11 @@ func (e *Executor) run(ctx context.Context, args ...string) (*Result, error) {
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
-	// Set environment
-	cmd.Env = append(os.Environ(),
-		"TF_IN_AUTOMATION=1",
-		"TF_INPUT=0",
-	)
+	// Set environment - preserve existing env vars including DOCKER_HOST
+	env := os.Environ()
+	env = append(env, "TF_IN_AUTOMATION=1")
+	env = append(env, "TF_INPUT=0")
+	cmd.Env = env
 
 	err := cmd.Run()
 	duration := time.Since(start)
