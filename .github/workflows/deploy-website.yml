@@ -5,27 +5,32 @@ name: Deploy Website
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev0.1]
     paths:
-      - 'website/**'
+      - 'website-v2/**'
       - 'docs/**'
-      - 'Dockerfile.website'
+      - '.github/workflows/deploy-website.yml'
   workflow_dispatch:
 
 env:
   ACR_NAME: acrkombifyprod
   IMAGE_NAME: stackkits-web
-  CONTAINER_APP_NAME: ca-stackkits-web-prod
-  RESOURCE_GROUP: rg-kombify-prod
-  CONTAINER_APP_ENV: cae-kombify-prod
+  WEBSITE_DIR: website-v2
+  WEBSITE_PORT: 80
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    if: github.ref_name == 'main' || github.ref_name == 'dev0.1'
     
     environment:
-      name: production
-      url: https://stackkits.kombify.io
+      name: ${{ github.ref_name == 'main' && 'production' || 'test' }}
+      url: ${{ github.ref_name == 'main' && 'https://stackkits.kombify.io' || 'https://stackkits-test.kombify.io' }}
+
+    env:
+      RESOURCE_GROUP: rg-kombify-prod
+      CONTAINER_APP_ENV: cae-kombify-prod
+      CONTAINER_APP_NAME: ${{ github.ref_name == 'main' && 'ca-stackkits-web-prod' || 'ca-stackkits-web-test' }}
     
     steps:
       - name: Checkout
@@ -45,17 +50,11 @@ jobs:
       
       - name: Build and push Docker image
         run: |
-          # Use website Dockerfile if exists, otherwise standard
-          DOCKERFILE="Dockerfile"
-          if [ -f "Dockerfile.website" ]; then
-            DOCKERFILE="Dockerfile.website"
-          fi
-          
           docker build \
-            -f $DOCKERFILE \
+            -f ${{ env.WEBSITE_DIR }}/Dockerfile \
             -t ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }} \
             -t ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:latest \
-            .
+            ${{ env.WEBSITE_DIR }}
           docker push ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
           docker push ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:latest
       
@@ -76,7 +75,7 @@ jobs:
             --resource-group ${{ env.RESOURCE_GROUP }} \
             --environment ${{ env.CONTAINER_APP_ENV }} \
             --image ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }} \
-            --target-port 3000 \
+            --target-port ${{ env.WEBSITE_PORT }} \
             --ingress external \
             --registry-server ${{ env.ACR_NAME }}.azurecr.io \
             --registry-username ${{ secrets.ACR_USERNAME }} \
@@ -92,7 +91,8 @@ jobs:
           az containerapp update \
             --name ${{ env.CONTAINER_APP_NAME }} \
             --resource-group ${{ env.RESOURCE_GROUP }} \
-            --image ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            --image ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            --target-port ${{ env.WEBSITE_PORT }}
       
       - name: Deployment Summary
         run: |

@@ -1,0 +1,364 @@
+// =============================================================================
+// KOMBIFY ADMINISTRATION - PRISMA SCHEMA
+// =============================================================================
+// This schema is the SOURCE OF TRUTH for StackKit management.
+// CUE validation rules are generated FROM this database.
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================================================
+// ENUMS
+// =============================================================================
+
+/// Lifecycle state for tools, stackkits, patterns, and validation rules
+enum LifecycleState {
+  DRAFT      // Initial state, not yet reviewed
+  EVALUATED  // Under evaluation, being tested
+  APPROVED   // Approved for production use
+  DEPRECATED // Marked for removal, still functional
+  ARCHIVED   // No longer active, kept for history
+}
+
+/// The 3-layer architecture types
+enum LayerType {
+  FOUNDATION  // Layer 1: System, security, identity (LLDAP, Step-CA)
+  PLATFORM    // Layer 2: Container runtime, PAAS, platform identity
+  APPLICATION // Layer 3: User applications deployed via PAAS
+}
+
+/// Setting classification for perma vs flexible settings
+enum SettingType {
+  PERMA    // Immutable after deployment
+  FLEXIBLE // Can be changed via Day-2 operations
+}
+
+/// Decision (ADR) status
+enum DecisionStatus {
+  PROPOSED     // Initial proposal
+  UNDER_REVIEW // Being discussed/evaluated
+  APPROVED     // Decision made, implemented
+  REJECTED     // Decision rejected
+  SUPERSEDED   // Replaced by newer decision
+}
+
+// =============================================================================
+// STACKKITS CATALOG
+// =============================================================================
+
+/// StackKit definitions - the main product catalog
+model StackKit {
+  id               String         @id @default(uuid())
+  /// Unique machine-readable name (e.g., "base-homelab")
+  name             String         @unique
+  /// Human-readable display name
+  displayName      String
+  /// Long description (markdown supported)
+  description      String?
+  /// Semantic version (e.g., "3.0.0")
+  version          String
+  /// Foundation module reference (e.g., "base", "minimal", "extended")
+  foundationModule String         @default("base")
+  /// Platform type (e.g., "docker", "docker-swarm")
+  platformType     String         @default("docker")
+  /// Current lifecycle state
+  lifecycleState   LifecycleState @default(DRAFT)
+  /// Author name or team
+  author           String?
+  /// License identifier
+  license          String?        @default("MIT")
+  /// Homepage URL
+  homepageUrl      String?
+  /// Repository URL (e.g., GitHub)
+  repositoryUrl    String?
+  /// Tags for categorization
+  tags             String[]       @default([])
+  /// Minimum required CLI version
+  minCliVersion    String?
+
+  // Timestamps
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  publishedAt      DateTime?
+  deprecatedAt     DateTime?
+
+  // Relations
+  tools            StackKitTool[]
+
+  @@index([lifecycleState])
+  @@index([platformType])
+}
+
+// =============================================================================
+// TOOLS INVENTORY
+// =============================================================================
+
+/// All available tools that can be used in StackKits
+model Tool {
+  id             String         @id @default(uuid())
+  /// Unique machine-readable name (e.g., "traefik", "dokploy")
+  name           String         @unique
+  /// Human-readable display name
+  displayName    String
+  /// Tool description
+  description    String?
+  /// Which layer this tool belongs to
+  layer          LayerType
+  /// Category within the layer (e.g., "reverse-proxy", "paas", "monitoring")
+  category       String
+  /// Docker image name
+  image          String
+  /// Default tag/version
+  defaultTag     String         @default("latest")
+  /// Current lifecycle state
+  lifecycleState LifecycleState @default(DRAFT)
+  /// Tool homepage
+  homepageUrl    String?
+  /// Documentation URL
+  docsUrl        String?
+  /// GitHub/source repository URL
+  sourceUrl      String?
+
+  // Timestamps
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  // Relations
+  stackkits      StackKitTool[]
+
+  @@index([layer])
+  @@index([category])
+  @@index([lifecycleState])
+}
+
+// =============================================================================
+// STACKKIT-TOOL RELATIONSHIPS
+// =============================================================================
+
+/// Junction table linking StackKits to Tools with metadata
+model StackKitTool {
+  id          String   @id @default(uuid())
+  stackkitId  String
+  toolId      String
+  /// Is this tool required for the StackKit?
+  isRequired  Boolean  @default(false)
+  /// Is this tool enabled by default?
+  isDefault   Boolean  @default(false)
+  /// Which variant is this tool for? (null = all variants)
+  variantName String?
+  /// Deploy order (lower = earlier)
+  deployOrder Int      @default(0)
+  /// Additional configuration notes
+  configNotes String?
+
+  // Timestamps
+  createdAt   DateTime @default(now())
+
+  // Relations
+  stackkit    StackKit @relation(fields: [stackkitId], references: [id], onDelete: Cascade)
+  tool        Tool     @relation(fields: [toolId], references: [id], onDelete: Cascade)
+
+  @@unique([stackkitId, toolId, variantName])
+  @@index([stackkitId])
+  @@index([toolId])
+}
+
+// =============================================================================
+// CUE VALIDATION RULES REGISTRY (SOURCE OF TRUTH FOR CUE GENERATION)
+// =============================================================================
+
+/// Validation rules that are exported to CUE schemas
+model ValidationRule {
+  id             String         @id @default(uuid())
+  /// Unique rule code (e.g., "L1_MISSING_LLDAP")
+  code           String         @unique
+  /// Which layer this rule applies to
+  layer          LayerType
+  /// Field path in the schema (e.g., "identity.lldap")
+  fieldPath      String
+  /// Rule type: required, type, constraint, custom
+  ruleType       String
+  /// CUE expression for validation
+  cueExpression  String
+  /// Error message shown when validation fails
+  errorMessage   String
+  /// Hint for fixing the validation error
+  hint           String?
+  /// Severity: error, warning, info
+  severity       String         @default("error")
+  /// Current lifecycle state
+  lifecycleState LifecycleState @default(DRAFT)
+  /// Is this rule auto-generated from schema analysis?
+  isAutoGenerated Boolean       @default(false)
+
+  // Timestamps
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([layer])
+  @@index([ruleType])
+  @@index([lifecycleState])
+}
+
+// =============================================================================
+// SETTINGS CLASSIFICATION
+// =============================================================================
+
+/// Classification of all settings as perma or flexible
+model Setting {
+  id                String      @id @default(uuid())
+  /// Which layer this setting belongs to
+  layer             LayerType
+  /// Full path in schema (e.g., "security.ssh.port")
+  path              String
+  /// Human-readable name
+  name              String
+  /// Classification: perma or flexible
+  settingType       SettingType
+  /// Description of what this setting does
+  description       String?
+  /// Why is it classified this way?
+  whyClassification String?
+  /// How to change if flexible
+  changeMethod      String?
+  /// Default value as JSON
+  defaultValue      Json?
+  /// CUE type constraint
+  cueType           String?
+
+  // Timestamps
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  @@unique([layer, path])
+  @@index([layer])
+  @@index([settingType])
+}
+
+// =============================================================================
+// PATTERN LIBRARY
+// =============================================================================
+
+/// Reusable patterns for StackKit development
+model Pattern {
+  id               String         @id @default(uuid())
+  /// Unique pattern name
+  name             String         @unique
+  /// Category (e.g., "authentication", "networking", "deployment")
+  category         String
+  /// Which layer this pattern applies to (null = cross-layer)
+  layer            LayerType?
+  /// Pattern description
+  description      String
+  /// What problem does this solve?
+  problemStatement String?
+  /// How does it solve it?
+  solution         String
+  /// Example CUE code
+  cueExample       String?
+  /// Current lifecycle state
+  lifecycleState   LifecycleState @default(DRAFT)
+  /// When was it evaluated?
+  evaluatedAt      DateTime?
+  /// Who evaluated it?
+  evaluatedBy      String?
+  /// Evaluation notes
+  evaluationNotes  String?
+  /// Related ADR number (e.g., "ADR-0003")
+  relatedAdr       String?
+  /// Tags for searchability
+  tags             String[]       @default([])
+
+  // Timestamps
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@index([category])
+  @@index([layer])
+  @@index([lifecycleState])
+}
+
+// =============================================================================
+// DECISION REGISTRY (ADRs)
+// =============================================================================
+
+/// Architecture Decision Records stored in database
+model Decision {
+  id                     String         @id @default(uuid())
+  /// ADR number (e.g., "ADR-0004")
+  adrNumber              String?        @unique
+  /// Decision title
+  title                  String
+  /// Context: What situation prompted this decision?
+  context                String
+  /// Decision: What was decided?
+  decision               String
+  /// Positive consequences
+  consequencesPositive   String?
+  /// Negative consequences/trade-offs
+  consequencesNegative   String?
+  /// Alternatives considered as JSON array
+  alternativesConsidered Json?
+  /// Current status
+  status                 DecisionStatus @default(PROPOSED)
+  /// Which layers are affected?
+  affectedLayers         LayerType[]
+  /// Which StackKits are affected? (names, not IDs for flexibility)
+  affectedStackKits      String[]       @default([])
+
+  // Timestamps and people
+  proposedAt             DateTime       @default(now())
+  decidedAt              DateTime?
+  supersededAt           DateTime?
+  proposedBy             String?
+  decidedBy              String?
+
+  // Self-referential relation for superseded decisions
+  supersededById         String?
+  supersededBy           Decision?      @relation("SupersededBy", fields: [supersededById], references: [id])
+  supersedes             Decision[]     @relation("SupersededBy")
+
+  // Timestamps
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+
+  @@index([status])
+  @@index([adrNumber])
+}
+
+// =============================================================================
+// AUDIT LOG
+// =============================================================================
+
+/// Audit trail for all changes
+model AuditLog {
+  id            String   @id @default(uuid())
+  /// Which table was changed
+  tableName     String
+  /// ID of the changed record
+  recordId      String
+  /// What action: INSERT, UPDATE, DELETE
+  action        String
+  /// Previous values (for UPDATE/DELETE)
+  oldValues     Json?
+  /// New values (for INSERT/UPDATE)
+  newValues     Json?
+  /// Which fields changed
+  changedFields String[]
+  /// Who made the change
+  changedBy     String?
+  /// When it happened
+  changedAt     DateTime @default(now())
+  /// Optional reason/comment
+  reason        String?
+
+  @@index([tableName, recordId])
+  @@index([changedAt])
+}

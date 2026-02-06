@@ -107,6 +107,9 @@ import "github.com/kombihq/stackkits/base"
 		"traefik.http.routers.api.rule":             "Host(`traefik.{{.domain}}`)"
 		"traefik.http.routers.api.service":          "api@internal"
 		"traefik.http.routers.api.tls.certresolver": "letsencrypt"
+		// Layer classification
+		"stackkit.layer":      "2-platform"
+		"stackkit.managed-by": "terraform"
 	}
 
 	// Output URL for this service
@@ -192,8 +195,10 @@ import "github.com/kombihq/stackkits/base"
 		"traefik.http.services.tinyauth.loadbalancer.server.port":  "3000"
 		"traefik.http.middlewares.tinyauth.forwardauth.address":      "http://tinyauth:3000/api/auth/verify"
 		"traefik.http.middlewares.tinyauth.forwardauth.authResponseHeaders": "X-User,X-Email"
-		"stackkit.layer":                                           "2-platform"
-		"stackkit.category":                                        "platform-identity"
+		// Layer classification
+		"stackkit.layer":      "2-platform"
+		"stackkit.managed-by": "terraform"
+		"stackkit.category":   "platform-identity"
 	}
 
 	output: {
@@ -272,8 +277,10 @@ import "github.com/kombihq/stackkits/base"
 		"traefik.http.routers.pocketid.rule":                  "Host(`id.{{.domain}}`)"
 		"traefik.http.routers.pocketid.tls.certresolver":      "letsencrypt"
 		"traefik.http.services.pocketid.loadbalancer.server.port": "3000"
-		"stackkit.layer":                                      "2-platform"
-		"stackkit.category":                                   "platform-identity"
+		// Layer classification
+		"stackkit.layer":      "2-platform"
+		"stackkit.managed-by": "terraform"
+		"stackkit.category":   "platform-identity"
 	}
 
 	output: {
@@ -363,6 +370,9 @@ import "github.com/kombihq/stackkits/base"
 		"traefik.http.routers.dokploy.rule":                    "Host(`deploy.{{.domain}}`)"
 		"traefik.http.routers.dokploy.tls.certresolver":        "letsencrypt"
 		"traefik.http.services.dokploy.loadbalancer.server.port": "3000"
+		// Layer classification
+		"stackkit.layer":      "2-platform"
+		"stackkit.managed-by": "terraform"
 	}
 
 	output: {
@@ -459,6 +469,9 @@ import "github.com/kombihq/stackkits/base"
 		"traefik.http.routers.coolify.rule":                     "Host(`coolify.{{.domain}}`)"
 		"traefik.http.routers.coolify.tls.certresolver":         "letsencrypt"
 		"traefik.http.services.coolify.loadbalancer.server.port": "8000"
+		// Layer classification
+		"stackkit.layer":      "2-platform"
+		"stackkit.managed-by": "terraform"
 	}
 
 	output: {
@@ -537,6 +550,9 @@ import "github.com/kombihq/stackkits/base"
 		"traefik.http.routers.uptime-kuma.rule":                    "Host(`status.{{.domain}}`)"
 		"traefik.http.routers.uptime-kuma.tls.certresolver":        "letsencrypt"
 		"traefik.http.services.uptime-kuma.loadbalancer.server.port": "3001"
+		// Layer classification - deployed via PAAS (Dokploy)
+		"stackkit.layer":      "3-application"
+		"stackkit.managed-by": "dokploy"
 	}
 
 	output: {
@@ -610,6 +626,9 @@ import "github.com/kombihq/stackkits/base"
 		"traefik.http.routers.beszel.rule":                    "Host(`monitor.{{.domain}}`)"
 		"traefik.http.routers.beszel.tls.certresolver":        "letsencrypt"
 		"traefik.http.services.beszel.loadbalancer.server.port": "8090"
+		// Layer classification - deployed via PAAS (Dokploy)
+		"stackkit.layer":      "3-application"
+		"stackkit.managed-by": "dokploy"
 	}
 
 	output: {
@@ -688,6 +707,9 @@ import "github.com/kombihq/stackkits/base"
 		"traefik.http.routers.dozzle.rule":                    "Host(`logs.{{.domain}}`)"
 		"traefik.http.routers.dozzle.tls.certresolver":        "letsencrypt"
 		"traefik.http.services.dozzle.loadbalancer.server.port": "8080"
+		// Layer classification - Platform observability, deployed via Terraform
+		"stackkit.layer":      "2-platform"
+		"stackkit.managed-by": "terraform"
 	}
 
 	output: {
@@ -755,6 +777,9 @@ import "github.com/kombihq/stackkits/base"
 		"traefik.http.routers.whoami.rule":                    "Host(`whoami.{{.domain}}`)"
 		"traefik.http.routers.whoami.tls.certresolver":        "letsencrypt"
 		"traefik.http.services.whoami.loadbalancer.server.port": "80"
+		// Layer classification - deployed via PAAS (Dokploy)
+		"stackkit.layer":      "3-application"
+		"stackkit.managed-by": "dokploy"
 	}
 
 	output: {
@@ -851,6 +876,9 @@ import "github.com/kombihq/stackkits/base"
 		"traefik.http.routers.dockge.rule":                    "Host(`dockge.{{.domain}}`)"
 		"traefik.http.routers.dockge.tls.certresolver":        "letsencrypt"
 		"traefik.http.services.dockge.loadbalancer.server.port": "5001"
+		// Layer classification - Platform management, deployed via Terraform
+		"stackkit.layer":      "2-platform"
+		"stackkit.managed-by": "terraform"
 	}
 
 	output: {
@@ -933,6 +961,9 @@ import "github.com/kombihq/stackkits/base"
 		"traefik.http.routers.portainer.rule":                    "Host(`portainer.{{.domain}}`)"
 		"traefik.http.routers.portainer.tls.certresolver":        "letsencrypt"
 		"traefik.http.services.portainer.loadbalancer.server.port": "9000"
+		// Layer classification - Platform management, deployed via Terraform
+		"stackkit.layer":      "2-platform"
+		"stackkit.managed-by": "terraform"
 	}
 
 	output: {
@@ -1042,6 +1073,9 @@ import "github.com/kombihq/stackkits/base"
 		"traefik.http.routers.netdata.rule":                    "Host(`netdata.{{.domain}}`)"
 		"traefik.http.routers.netdata.tls.certresolver":        "letsencrypt"
 		"traefik.http.services.netdata.loadbalancer.server.port": "19999"
+		// Layer classification - deployed via PAAS (Dokploy)
+		"stackkit.layer":      "3-application"
+		"stackkit.managed-by": "dokploy"
 	}
 
 	output: {

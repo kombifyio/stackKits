@@ -379,13 +379,17 @@ package base
 		firewall: #FirewallPolicy
 	}
 
-	// Identity services MUST be configured
+	// Identity services MUST be configured (Zero-Trust requirement)
 	identity: {
-		// LLDAP for directory services
-		lldap: #LLDAPConfig
+		// LLDAP for directory services - REQUIRED and MUST be enabled
+		lldap: #LLDAPConfig & {
+			enabled: true // Zero-Trust: LLDAP MUST be enabled for all StackKits
+		}
 
-		// Step-CA for certificate authority
-		stepCA: #StepCAConfig
+		// Step-CA for certificate authority - REQUIRED and MUST be enabled
+		stepCA: #StepCAConfig & {
+			enabled: true // Zero-Trust: Step-CA MUST be enabled for mTLS
+		}
 	}
 }
 

@@ -10,13 +10,13 @@ package devhomelab
 import "github.com/kombihq/stackkits/base"
 
 // =============================================================================
-#Layer1FoundationServices
+// LAYER 1: FOUNDATION SERVICES
 // =============================================================================
 // NOTE: Layer 1 foundation services are from base (LLDAP, Step-CA).
 // TinyAuth is a Layer 2 platform identity service, defined below.
 
 // =============================================================================
-#Layer2PlatformServices
+// LAYER 2: PLATFORM SERVICES
 // =============================================================================
 
 // TinyAuth - Platform Identity Proxy (Layer 2)
@@ -261,7 +261,7 @@ import "github.com/kombihq/stackkits/base"
 }
 
 // =============================================================================
-#Layer3ApplicationServices
+// LAYER 3: APPLICATION SERVICES
 // =============================================================================
 
 // These services are deployed BY Dokploy, not by Terraform

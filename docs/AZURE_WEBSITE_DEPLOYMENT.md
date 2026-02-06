@@ -12,10 +12,10 @@ Azure Front Door
     └── stackkits.kombify.io
             │
             ▼
-    Azure Container Apps
-    ca-stackkits-web-prod
-            │
-            └── Port 3000 (Docusaurus)
+        Azure Container Apps
+        ca-stackkits-web-prod
+          │
+          └── Port 80 (Nginx static Svelte build)
 ```
 
 ## Ressourcen
@@ -40,7 +40,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'website/**'
+      - 'website-v2/**'
 
 jobs:
   deploy:
@@ -57,9 +57,8 @@ jobs:
         run: az acr login --name acrkombifyprod
       
       - name: Build and Push
-        working-directory: website
         run: |
-          docker build -t acrkombifyprod.azurecr.io/stackkits-web:${{ github.sha }} .
+          docker build -t acrkombifyprod.azurecr.io/stackkits-web:${{ github.sha }} -f website-v2/Dockerfile website-v2
           docker push acrkombifyprod.azurecr.io/stackkits-web:${{ github.sha }}
       
       - name: Deploy
@@ -73,14 +72,14 @@ jobs:
 ### Manuelles Deployment
 
 ```bash
-cd website
+cd website-v2
 
 # Azure Login
 az login
 az acr login --name acrkombifyprod
 
 # Build
-docker build -t acrkombifyprod.azurecr.io/stackkits-web:latest .
+docker build -t acrkombifyprod.azurecr.io/stackkits-web:latest -f website-v2/Dockerfile website-v2
 
 # Push
 docker push acrkombifyprod.azurecr.io/stackkits-web:latest
@@ -95,9 +94,9 @@ az containerapp update \
 ## Lokale Entwicklung
 
 ```bash
-cd website
-bun install
-bun run dev    # http://localhost:3000
+cd website-v2
+npm install
+npm run dev    # http://localhost:5281
 ```
 
 ## Verifikation

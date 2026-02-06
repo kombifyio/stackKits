@@ -1,0 +1,39 @@
+{
+  "name": "kombify-admin",
+  "version": "1.0.0",
+  "description": "Kombify Administration - StackKits management backend",
+  "main": "index.js",
+  "scripts": {
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:push": "prisma db push",
+    "db:seed": "ts-node prisma/seed.ts",
+    "db:studio": "prisma studio",
+    "db:reset": "prisma migrate reset",
+    "generate:cue": "ts-node scripts/generate-cue.ts",
+    "generate:cue:all": "ts-node scripts/generate-cue.ts all",
+    "generate:cue:validation": "ts-node scripts/generate-cue.ts validation-rules",
+    "generate:cue:settings": "ts-node scripts/generate-cue.ts settings"
+  },
+  "keywords": [
+    "stackkits",
+    "kombify",
+    "administration",
+    "cue",
+    "validation"
+  ],
+  "author": "KombiStack Team",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "prisma": "^5.7.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.7.0"
+  },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
+  }
+}

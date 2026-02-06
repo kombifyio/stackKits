@@ -96,8 +96,8 @@
 |------|----------|------------|--------|
 | [marketing/Dockerfile](../marketing/Dockerfile) | **L3** ⭐ | Multi-stage build, production-ready nginx | **Preserve** |
 | [marketing/docker-compose.yml](../marketing/docker-compose.yml) | **L2** 🟢 | Health checks, proper networking | **Maintain** |
-| [website/Dockerfile](../website/Dockerfile) | **L2** 🟢 | Multi-stage build, similar to marketing | **Maintain** |
-| [website/docker-compose.yml](../website/docker-compose.yml) | **L1** 🟡 | Uses deprecated version key | **Refactor** - remove version, add health checks |
+| [website-v2/Dockerfile](../website-v2/Dockerfile) | **L2** 🟢 | Multi-stage build, similar to marketing | **Maintain** |
+| [website-v2/docker-compose.yml](../website-v2/docker-compose.yml) | **L1** 🟡 | Uses deprecated version key | **Refactor** - remove version, add health checks |
 
 ### 2.3 StackKit Templates (IaC)
 
@@ -125,7 +125,7 @@
 | Path | Maturity | Assessment | Action |
 |------|----------|------------|--------|
 | marketing/ | **L2** Green | Complete Vite+React+Tailwind project with Docker | **Maintain** |
-| website/ | **L1** Yellow | Boilerplate README (Vite template), lacks project-specific docs | **Refactor** - add proper README |
+| website-v2/ | **L1** Yellow | Boilerplate README (Vite template), lacks project-specific docs | **Refactor** - add proper README |
 
 ---
 
@@ -179,7 +179,7 @@ This repo does not rely on an in-repo `_archive/` folder. If you need to retain 
 
 | Issue | Files | Resolution |
 |-------|-------|------------|
-| Two web projects | marketing/, website/ | **Clarify purpose** - consolidate or differentiate |
+| Two web projects | marketing/, website-v2/ | **Clarify purpose** - consolidate or differentiate |
 | German + English docs | DEFAULT_SPECS_README.md | **Translate** - standardize on English |
 
 ---
@@ -243,7 +243,7 @@ The stackkit CLI is functional as a basic wrapper but lacks deep integration log
 
 ### Short-term (Week 3-4)
 6. [ ] Keep CLI.md aligned with actual CLI implementation
-7. [ ] Consolidate or differentiate marketing/ vs website/
+7. [ ] Consolidate or differentiate marketing/ vs website-v2/
 8. [ ] Translate DEFAULT_SPECS_README.md to English
 9. [ ] Decide modern-homelab platform (Docker+Coolify recommended)
 

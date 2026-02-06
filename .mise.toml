@@ -1,0 +1,98 @@
+# kombify StackKits - mise configuration
+# https://mise.jdx.dev/
+
+[tools]
+go = "1.24.0"
+node = "20"
+
+[env]
+GOTOOLCHAIN = "auto"
+
+[tasks.build]
+description = "Build CLI binary"
+run = "go build -o build/stackkit ./cmd/stackkit"
+
+[tasks.test]
+description = "Run all tests (unit + integration + CUE)"
+run = [
+  "go test -v -race -short ./pkg/... ./internal/...",
+  "go test -v -race ./tests/integration/..."
+]
+
+[tasks.test-unit]
+description = "Run Go unit tests"
+run = "go test -v -race -short ./pkg/... ./internal/..."
+
+[tasks.test-cue]
+description = "Run CUE schema validation"
+run = [
+  "cue vet ./base/...",
+  "cue vet ./base-homelab/...",
+  "cue vet ./dev-homelab/...",
+  "cue vet ./modern-homelab/..."
+]
+
+[tasks.test-validation]
+description = "Run 3-layer validation suite"
+run = "./tests/run_validation.sh"
+
+[tasks.test-coverage]
+description = "Run tests with coverage"
+run = [
+  "mkdir -p coverage",
+  "go test -v -race -coverprofile=coverage/coverage.out -covermode=atomic ./pkg/... ./internal/...",
+  "go tool cover -html=coverage/coverage.out -o coverage/coverage.html"
+]
+
+[tasks.lint]
+description = "Run Go linters"
+run = "golangci-lint run ./..."
+
+[tasks.fmt]
+description = "Format code"
+run = "go fmt ./..."
+
+[tasks.deps]
+description = "Download dependencies"
+run = [
+  "go mod download",
+  "go mod tidy"
+]
+
+[tasks.clean]
+description = "Remove build artifacts"
+run = [
+  "rm -rf build/",
+  "rm -rf coverage/"
+]
+
+[tasks.install]
+description = "Install CLI to GOPATH/bin"
+run = [
+  "go build -o build/stackkit ./cmd/stackkit",
+  "cp build/stackkit $(go env GOPATH)/bin/"
+]
+
+# --- Website Tasks ---
+
+[tasks.web-dev]
+description = "Start website dev server"
+dir = "website-v2"
+run = "npm run dev"
+
+[tasks.web-build]
+description = "Build website for production"
+dir = "website-v2"
+run = "npm run build"
+
+[tasks.web-preview]
+description = "Preview production build"
+dir = "website-v2"
+run = "npm run preview"
+
+[tasks.web-docker]
+description = "Build and run website Docker container locally"
+run = [
+  "docker build -t stackkits-web:local -f website-v2/Dockerfile website-v2",
+  "docker run --rm -p 8081:80 stackkits-web:local"
+]

@@ -35,16 +35,12 @@ package dev_homelab
 		// Common ports that might conflict
 		common: [80, 443, 8080, 3000, 5000, 5432, 6379, 8000, 9000]
 
-		// Check if any configured port conflicts with common ports
-		hasConflict: false | true
-		hasConflict: [
-			if ports.ssh == 80 || ports.ssh == 443 || ports.ssh == 8080 then true,
-			if ports.docker == 80 || ports.docker == 443 || ports.docker == 8080 then true,
-			if ports.http == 80 || ports.http == 443 || ports.http == 8080 then true,
-			if ports.https == 80 || ports.https == 443 || ports.https == 8080 then true,
-			if ports.traefik == 80 || ports.traefik == 443 || ports.traefik == 8080 then true,
-			false,
-		][0]
+		// Check if any configured port conflicts with common ports (80, 443, 8080)
+		hasConflict: ports.ssh == 80 || ports.ssh == 443 || ports.ssh == 8080 ||
+			ports.docker == 80 || ports.docker == 443 || ports.docker == 8080 ||
+			ports.http == 80 || ports.http == 443 || ports.http == 8080 ||
+			ports.https == 80 || ports.https == 443 || ports.https == 8080 ||
+			ports.traefik == 80 || ports.traefik == 443 || ports.traefik == 8080
 	}
 
 	// Recommendations based on port selection
@@ -62,22 +58,11 @@ package dev_homelab
 	// Docker daemon must be accessible
 	dockerHost: string | *"tcp://vm:2375"
 
-	// Supported Docker host patterns
-	_validHosts: [
-		"tcp://vm:2375",
-		"tcp://localhost:2375",
-		"tcp://127.0.0.1:2375",
-		"unix:///var/run/docker.sock",
-	]
-
-	// Validate Docker host format
-	isValidHost: true | false
-	isValidHost: [
-		for host in _validHosts {
-			if dockerHost == host {true}
-		},
-		false,
-	][0]
+	// Validate Docker host format (must be one of supported patterns)
+	isValidHost: dockerHost == "tcp://vm:2375" ||
+		dockerHost == "tcp://localhost:2375" ||
+		dockerHost == "tcp://127.0.0.1:2375" ||
+		dockerHost == "unix:///var/run/docker.sock"
 }
 
 // Complete environment validation

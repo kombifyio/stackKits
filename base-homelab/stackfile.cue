@@ -225,7 +225,67 @@ import (
 	}
 
 	// Variant selection
-	variant: "default" | "beszel" | "minimal" | *"default"
+	variant: "default" | "coolify" | "beszel" | "minimal" | "secure" | *"default"
+
+	// ==========================================================================
+	// LAYER 1: FOUNDATION IDENTITY (Zero-Trust - REQUIRED)
+	// ==========================================================================
+
+	// Layer 1 Identity services - REQUIRED for all StackKits
+	identity: {
+		// LLDAP - Lightweight LDAP directory service
+		lldap: base.#LLDAPConfig & {
+			enabled: true // Zero-Trust: MUST be enabled
+			domain: {
+				base:         string | *"dc=homelab,dc=local"
+				organization: "Homelab"
+			}
+			admin: {
+				email: string | *"admin@homelab.local"
+			}
+		}
+
+		// Step-CA - Certificate Authority for mTLS
+		stepCA: base.#StepCAConfig & {
+			enabled: true // Zero-Trust: MUST be enabled for mTLS
+			pki: {
+				rootCommonName:         "Homelab Root CA"
+				intermediateCommonName: "Homelab Intermediate CA"
+			}
+		}
+	}
+
+	// ==========================================================================
+	// LAYER 2: PLATFORM CONFIGURATION
+	// ==========================================================================
+
+	// Platform type declaration
+	platform: base.#PlatformType | *"docker"
+
+	// PAAS configuration (Dokploy or Coolify based on variant)
+	paas: base.#PAASConfig & {
+		type: *"dokploy" | "coolify"
+		installMethod: "container"
+
+		dokploy: base.#DokployConfig & {
+			enabled: variant != "coolify"
+		}
+
+		coolify: base.#CoolifyConfig & {
+			enabled: variant == "coolify"
+		}
+	}
+
+	// Platform Identity (TinyAuth for secure variant)
+	platformIdentity: base.#PlatformIdentityConfig & {
+		tinyauth: base.#TinyAuthConfig & {
+			enabled: variant == "secure"
+		}
+	}
+
+	// ==========================================================================
+	// LAYER 1: SYSTEM CONFIGURATION
+	// ==========================================================================
 
 	// System defaults for homelab
 	system: {

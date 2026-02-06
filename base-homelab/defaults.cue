@@ -1,6 +1,48 @@
 // Package base_homelab - Smart defaults and compute tier logic
 package base_homelab
 
+// =============================================================================
+// SERVICE VARIANT BASE SCHEMA
+// =============================================================================
+
+// #ServiceConfig defines per-service configuration within a variant
+#ServiceConfig: {
+	enabled:     bool
+	description: string
+	port?:       int
+	ports?: [...int]
+	config?: {...}
+}
+
+// #ServiceVariant is the base schema for all service variants
+// All variant definitions (default, coolify, beszel, minimal) extend this
+#ServiceVariant: {
+	name:           string
+	description:    string
+	requiresDomain: bool | *false
+
+	// Resource requirements (optional)
+	requirements?: {
+		minCpu:    int
+		minMemory: int
+		minDisk:   int
+	}
+
+	// Service configurations (keyed by service name)
+	services: {
+		[serviceName=string]: #ServiceConfig
+	}
+
+	// Features enabled by this variant
+	features?: {
+		[featureName=string]: bool
+	}
+}
+
+// =============================================================================
+// SMART DEFAULTS
+// =============================================================================
+
 // #SmartDefaults provides intelligent defaults based on compute tier
 #SmartDefaults: {
 	// Input: detected compute tier

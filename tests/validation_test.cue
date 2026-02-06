@@ -13,7 +13,7 @@ import (
 	"github.com/kombihq/stackkits/platforms/docker"
 	// TODO: Re-enable when kubernetes platform is implemented
 	// "github.com/kombihq/stackkits/platforms/kubernetes"
-	"github.com/kombihq/stackkits/base-homelab":base_homelab
+	base_homelab "github.com/kombihq/stackkits/base-homelab"
 )
 
 // =============================================================================

@@ -19,7 +19,23 @@
 
 ---
 
-## 🏗️ Architecture Position
+## � Domain Routing (Azure Front Door)
+
+> **⚠️ IMPORTANT**: All kombify.io subdomains are routed through Azure Front Door.  
+> See [AZURE_INFRASTRUCTURE.md](https://github.com/kombify/kombify-administration/blob/main/docs/AZURE_INFRASTRUCTURE.md) for the complete routing architecture.
+
+| Property | Value |
+|----------|-------|
+| **Public URL** | `https://stackkits.kombify.io` |
+| **AFD Profile** | `afd-kombify-prod` |
+| **Origin Group** | `og-stackkits` |
+| **Route Name** | `route-stackkits` |
+
+**To update routing**, modify the AFD configuration in `rg-kombify-prod`, NOT DNS records.
+
+---
+
+## �🏗️ Architecture Position
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -59,7 +75,7 @@ StackKits/
 ├── cmd/               # Go CLI tools
 ├── pkg/               # Go libraries
 ├── tests/             # CUE validation tests
-└── website/           # Documentation site
+└── website-v2/        # Documentation site (Svelte)
 ```
 
 ---
@@ -81,7 +97,7 @@ StackKits/
 ## 🚀 Deployment Pipeline
 
 ### Trigger Conditions
-- **Website:** Push to `main` with changes in `website/`
+- **Website:** Push to `main` with changes in `website-v2/`
 - **Package:** Manual release process
 
 ### Pipeline Stages
