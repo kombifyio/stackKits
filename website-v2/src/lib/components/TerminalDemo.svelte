@@ -17,7 +17,7 @@
 		{ type: 'output', text: 'Checking dependencies...', delay: 600 },
 		{ type: 'progress', text: '[################] 100%', delay: 1200 },
 		{ type: 'success', text: 'Environment validated', delay: 1800 },
-		{ type: 'command', text: '$ stackkit init base-homelab', delay: 2600 },
+		{ type: 'command', text: '$ stackkit init base', delay: 2600 },
 		{ type: 'output', text: 'Validating configuration with CUE...', delay: 3200 },
 		{ type: 'success', text: 'Configuration valid', delay: 3800 },
 		{ type: 'output', text: 'Deploying Traefik...', delay: 4200 },

@@ -35,9 +35,9 @@
 			<Server class="w-4 h-4" />
 			{kit.pattern}
 		</div>
-		<div class="flex items-center gap-1 {kit.cloud ? 'text-primary' : ''}">
+		<div class="flex items-center gap-1 text-primary">
 			<Cloud class="w-4 h-4" />
-			{kit.cloud ? 'Cloud-Ready' : 'Local Only'}
+			Local & Cloud
 		</div>
 	</div>
 

@@ -32,9 +32,9 @@ StackKits are **architecture patterns**, not node-count definitions.
 
 | StackKit | Pattern | Core Idea | Status |
 | --- | --- | --- | --- |
-| **base** | Single-environment | All services in one deployment target. Docker Compose. | ✅ Available |
-| **modern** | Hybrid infrastructure | Bridges local + cloud. VPN overlay, distributed services. | 🚧 Schema Only |
-| **ha** | High-availability cluster | Redundancy, failover, quorum. Cluster-first architecture. | 🚧 Schema Only |
+| **Base Kit** | Single environment | All services in one deployment target — local or cloud VPS. | ✅ Available |
+| **Modern Homelab Kit** | Hybrid infrastructure | Bridges local + cloud. VPN overlay, distributed services. | 🚧 Schema Only |
+| **High Availability Kit** | HA cluster | Redundancy, failover, quorum. Cluster-first architecture. | 🚧 Schema Only |
 
 ### Node-Context (Auto-Detected)
 
@@ -77,9 +77,9 @@ StackKits uses a strict **3-layer architecture** for maximum reusability:
 ┌─────────────────────────────────────────────────────────────┐
 │  LAYER 3: STACKKITS (stackkits/)                            │
 │  Use-case specific configurations with services             │
-│  • base-homelab: Single-node Docker + Dokploy               │
-│  • modern-homelab: Multi-node Docker + Dokploy              │
-│  • ha-homelab: Docker Swarm HA (3+ Nodes)                   │
+│  • base-homelab: Single-environment Docker + Dokploy        │
+│  • modern-homelab: Hybrid Docker + VPN overlay               │
+│  • ha-homelab: Docker Swarm HA cluster                       │
 ├─────────────────────────────────────────────────────────────┤
 │  LAYER 2: PLATFORMS (platforms/)                            │
 │  Container orchestration layer                              │
@@ -98,9 +98,9 @@ StackKits/
 ├── base/                       # Layer 1: CORE (Shared)
 │   ├── stackkit.cue
 │   └── ...
-├── base-homelab/               # Layer 2: STACKKIT (Base)
-├── modern-homelab/             # Layer 2: STACKKIT (Modern)
-├── ha-homelab/                 # Layer 2: STACKKIT (HA)
+├── base-homelab/               # Base Kit
+├── modern-homelab/             # Modern Homelab Kit
+├── ha-homelab/                 # High Availability Kit
 │
 ├── ADR/                        # Architectural Decisions
 ├── docs/                       # Canonical project docs

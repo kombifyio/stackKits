@@ -9,7 +9,7 @@
 			audience: 'Enthusiasts & Tinkerers',
 			description: 'Run a complete homelab with reverse proxy, monitoring, backup, and TLS — all validated and reproducible. No more fragile docker-compose files scattered across your server.',
 			features: ['Automated TLS certificates', 'Centralized monitoring', 'Scheduled backups', 'Reverse proxy with auto-discovery'],
-			stackkit: 'base-homelab'
+			stackkit: 'base'
 		},
 		{
 			icon: Lock,
@@ -17,7 +17,7 @@
 			audience: 'Privacy-Conscious Users',
 			description: 'Host your own cloud storage, email, password manager, and communication tools. Own your data instead of renting it from Big Tech.',
 			features: ['Nextcloud / Immich for photos', 'Vaultwarden password manager', 'Private VPN access', 'Encrypted backups'],
-			stackkit: 'base-homelab'
+			stackkit: 'base'
 		},
 		{
 			icon: Cpu,
@@ -25,7 +25,7 @@
 			audience: 'AI Enthusiasts & Developers',
 			description: 'Run local LLMs, image generation, and AI workflows on your own hardware. Full GPU passthrough support with validated configurations.',
 			features: ['Ollama / LocalAI integration', 'GPU passthrough configs', 'Model management', 'Private AI — your data stays local'],
-			stackkit: 'modern-homelab'
+			stackkit: 'modern'
 		},
 		{
 			icon: Cloud,
@@ -33,7 +33,7 @@
 			audience: 'Small Teams & Startups',
 			description: 'Combine local servers with cloud resources. Secure overlay networking connects your on-prem and cloud nodes into a unified environment.',
 			features: ['WireGuard overlay networking', 'Multi-node orchestration', 'Cloud provider integration', 'Consistent configuration across nodes'],
-			stackkit: 'modern-homelab'
+			stackkit: 'modern'
 		},
 		{
 			icon: Database,
@@ -41,7 +41,7 @@
 			audience: 'Digital Media Collectors',
 			description: 'Professional media server setup with automated organization, transcoding, and multi-device streaming. Proper storage management included.',
 			features: ['Plex / Jellyfin setup', 'Automated media management', 'Storage tiering & monitoring', 'Remote access via VPN'],
-			stackkit: 'base-homelab'
+			stackkit: 'base'
 		},
 		{
 			icon: Users,
@@ -49,7 +49,7 @@
 			audience: 'Developers & DevOps Engineers',
 			description: 'Reproducible development infrastructure with CI/CD, container registry, Git hosting, and observability. Professional-grade but self-hosted.',
 			features: ['Gitea / Forgejo hosting', 'Container registry', 'CI/CD pipelines', 'Observability stack'],
-			stackkit: 'modern-homelab'
+			stackkit: 'modern'
 		}
 	];
 

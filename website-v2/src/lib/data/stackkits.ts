@@ -14,14 +14,14 @@ export interface StackKit {
 export const stackkits: StackKit[] = [
 	{
 		id: 'base',
-		name: 'Base',
+		name: 'Base Kit',
 		tagline: 'Single-environment pattern',
 		description:
-			'All services in one deployment target. Docker Compose, context-aware defaults, composable Add-Ons. Works on any hardware — from Pi to powerful server.',
+			'All services in one deployment target — local server or cloud VPS. Docker Compose, context-aware defaults, composable Add-Ons. Works on any hardware.',
 		icon: 'server',
 		status: 'available',
-		pattern: 'Single-Environment',
-		cloud: false,
+		pattern: 'Single Environment',
+		cloud: true,
 		features: [
 			'Docker Compose deployments',
 			'Context-aware defaults (local/cloud/pi)',
@@ -33,7 +33,7 @@ export const stackkits: StackKit[] = [
 	},
 	{
 		id: 'modern',
-		name: 'Modern',
+		name: 'Modern Homelab Kit',
 		tagline: 'Hybrid infrastructure pattern',
 		description:
 			'Bridge local and cloud environments with VPN overlay networking. Distributed services across heterogeneous nodes with Coolify management.',
@@ -52,7 +52,7 @@ export const stackkits: StackKit[] = [
 	},
 	{
 		id: 'ha',
-		name: 'HA',
+		name: 'High Availability Kit',
 		tagline: 'High-availability cluster pattern',
 		description:
 			'No single point of failure. Docker Swarm cluster with automatic failover, quorum consensus, and data replication.',

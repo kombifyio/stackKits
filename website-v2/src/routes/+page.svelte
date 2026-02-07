@@ -120,7 +120,7 @@
 					<div class="space-y-3 font-mono text-sm">
 						<div class="text-primary">$ stackkit prepare</div>
 						<div class="text-success">&check; Environment validated</div>
-						<div class="text-primary mt-4">$ stackkit init base-homelab</div>
+						<div class="text-primary mt-4">$ stackkit init base</div>
 						<div class="text-success">&check; Your homelab is running!</div>
 					</div>
 					<p class="mt-6 text-sm text-muted-foreground">Two commands. Validated. Reproducible. Done.</p>
@@ -243,9 +243,9 @@
 <section class="py-20">
 	<div class="max-w-4xl mx-auto px-6 text-center">
 		<ScrollReveal>
-			<h2 class="text-3xl font-bold mb-4">Ready to simplify your homelab?</h2>
+			<h2 class="text-3xl font-bold mb-4">Ready to simplify your infrastructure?</h2>
 			<p class="text-muted-foreground mb-8">
-				Start with our base-homelab StackKit and deploy your infrastructure today.
+				Start with our Base Kit and deploy your infrastructure today.
 			</p>
 			<a href="/get-started" class="btn btn-primary btn-lg">
 				Get Started Now

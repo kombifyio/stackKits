@@ -27,11 +27,11 @@ A StackKit defines **how infrastructure is architecturally organized**, not how 
 
 | StackKit | Architecture Pattern | Core Idea |
 |----------|---------------------|-----------|
-| **base** | Single-environment | All services in one deployment target. Docker Compose, one logical unit. |
-| **modern** | Hybrid infrastructure | Bridges local and cloud. VPN overlay, distributed services, public endpoints. |
-| **ha** | High-availability cluster | Redundancy, failover, quorum-based consensus. Cluster-first architecture. |
+| **Base Kit** | Single environment | All services in one deployment target — local server or cloud VPS. Docker Compose, one logical unit. |
+| **Modern Homelab Kit** | Hybrid infrastructure | Bridges local and cloud. VPN overlay, distributed services, public endpoints. |
+| **High Availability Kit** | HA cluster | Redundancy, failover, quorum-based consensus. Cluster-first architecture. |
 
-**Key Insight:** A `base` StackKit can run on 3 nodes (e.g., Raspberry Pi cluster with shared apps). An `ha` StackKit can run on 1 powerful node (simulated HA with local redundancy). The StackKit defines the *pattern*, not the *scale*.
+**Key Insight:** A Base Kit can run on a single cloud VPS or a home server — the environment doesn't change the architecture pattern. A Modern Homelab Kit requires at least one local node (the "homelab" part) bridged with cloud. The StackKit defines the *pattern*, not the *scale*.
 
 ```
 StackKit ≠ Server Count
@@ -237,7 +237,7 @@ The `stackkit` CLI operates completely independently. No network access, no API,
 
 ```bash
 # Full workflow at Level 0
-stackkit init base-homelab          # Create kombination.yaml
+stackkit init base-homelab          # Create kombination.yaml with Base Kit defaults
 stackkit validate                   # CUE validation
 stackkit generate                   # Produce OpenTofu files
 stackkit apply                      # Provision infrastructure
@@ -435,17 +435,17 @@ github.com/kombihq/stackkits/
 │   ├── cloud.cue                  # Cloud provider defaults
 │   └── pi.cue                     # Raspberry Pi defaults
 │
-├── base-homelab/                   # StackKit: base pattern
+├── base-homelab/                   # Base Kit
 │   ├── stackfile.cue
 │   ├── services.cue
 │   └── defaults.cue
 │
-├── modern-homelab/                 # StackKit: modern/hybrid pattern
+├── modern-homelab/                 # Modern Homelab Kit
 │   ├── stackfile.cue
 │   ├── services.cue
 │   └── defaults.cue
 │
-└── ha-homelab/                     # StackKit: HA cluster pattern
+└── ha-homelab/                     # High Availability Kit
     ├── stackfile.cue
     ├── services.cue
     └── defaults.cue
@@ -478,9 +478,9 @@ The proven 3-layer architecture remains the structural backbone:
 
 ## 6. StackKit Redefinitions
 
-### base (Single-Environment Pattern)
+### Base Kit (Single-Environment Pattern)
 
-**Philosophy:** Everything runs in one logical environment. Simple, predictable, easy to reason about.
+**Philosophy:** Everything runs in one logical environment. Simple, predictable, easy to reason about. Works identically on a home server or cloud VPS.
 
 | Aspect | Definition |
 |--------|-----------|
@@ -490,11 +490,11 @@ The proven 3-layer architecture remains the structural backbone:
 | **Networking** | Single Docker network, Traefik ingress |
 | **Identity** | LLDAP + Step-CA (L1), TinyAuth (L2) |
 | **Node Count** | Typically 1, but supports N (all running same stack) |
-| **Best For** | First homelab, single VPS, learning |
+| **Best For** | First homelab, single VPS, learning, solo server |
 
-### modern (Hybrid Infrastructure Pattern)
+### Modern Homelab Kit (Hybrid Infrastructure Pattern)
 
-**Philosophy:** Bridge multiple environments. Local + cloud, private + public, connected via overlay network.
+**Philosophy:** Bridge multiple environments. Always includes a local component ("homelab") bridged with cloud resources via overlay network.
 
 | Aspect | Definition |
 |--------|-----------|
@@ -506,7 +506,7 @@ The proven 3-layer architecture remains the structural backbone:
 | **Node Count** | 2+ (at least one local, one remote) |
 | **Best For** | Hybrid setups, public-facing services, growing homelabs |
 
-### ha (High-Availability Cluster Pattern)
+### High Availability Kit (HA Cluster Pattern)
 
 **Philosophy:** No single point of failure. Services survive node failures. Data is replicated.
 
@@ -518,7 +518,7 @@ The proven 3-layer architecture remains the structural backbone:
 | **Networking** | Swarm overlay + Keepalived VIP |
 | **Identity** | LLDAP cluster + Step-CA HA (L1), Authentik (L2) |
 | **Node Count** | 3+ (odd number for quorum) recommended |
-| **Best For** | Production workloads, critical services, uptime SLAs |
+| **Best For** | Production workloads, critical services, uptime SLAs, startups |
 
 ---
 
@@ -629,15 +629,15 @@ services:
 
 1. Create `addons/` directory structure with CUE schema
 2. Create `contexts/` directory with local/cloud/pi defaults
-3. Refactor `base-homelab/` variants into add-ons
+3. Refactor `base-homelab/` variants into add-ons (Base Kit)
 4. Fix CUE package declaration bugs (`base/platform/*.cue`, `base/schema/*.cue`)
 5. Align Go↔CUE naming (compute tiers, platform types)
-6. Complete `base-homelab` E2E testing
+6. Complete Base Kit E2E testing
 
 ### P1: StackKit Alignment (Weeks 5–8)
 
-7. Redefine `modern-homelab` as hybrid infrastructure pattern
-8. Redefine `ha-homelab` as HA cluster pattern
+7. Redefine `modern-homelab` as Modern Homelab Kit (hybrid infrastructure pattern)
+8. Redefine `ha-homelab` as High Availability Kit (HA cluster pattern)
 9. Implement context-driven defaults resolution in CUE
 10. Update `stackkit` CLI for Add-On support (`stackkit addon add/list/remove`)
 11. Align CUE module path with kombify Stack (`github.com/kombihq/stackkits`)

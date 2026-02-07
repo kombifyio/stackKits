@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-StackKits v4 introduces a fundamental redesign around **three concepts** (StackKit as architecture pattern, Node-Context, and composable Add-Ons) plus a **Progressive Capability Model** (Levels 0–4). This roadmap focuses on implementing these concepts while completing the already functional `base-homelab` StackKit.
+StackKits v4 introduces a fundamental redesign around **three concepts** (StackKit as architecture pattern, Node-Context, and composable Add-Ons) plus a **Progressive Capability Model** (Levels 0–4). This roadmap focuses on implementing these concepts while completing the already functional Base Kit.
 
 ### Current State Assessment
 
@@ -40,7 +40,7 @@ Phase 4 (Weeks 13-16):  Operations — Day-2, marketplace, documentation
 
 ## Phase 1: Foundation (Weeks 1–4)
 
-**Goal:** Fix existing bugs, establish Add-On and Context infrastructure, complete base-homelab.
+**Goal:** Fix existing bugs, establish Add-On and Context infrastructure, complete Base Kit.
 
 ### 1.1 CUE Bug Fixes (P0)
 
@@ -102,7 +102,7 @@ contexts/
 - [ ] Implement context-driven TLS strategy (self-signed vs Let's Encrypt)
 - [ ] Implement context-driven resource limits
 
-### 1.4 base-homelab E2E Testing
+### 1.4 Base Kit E2E Testing
 
 - [ ] Create test environment (local VM or Docker via kombify Sim)
 - [ ] Test full OpenTofu deployment flow
@@ -127,17 +127,17 @@ contexts/
 
 **Goal:** Complete all three StackKits as architecture patterns, not node-count definitions.
 
-### 2.1 base-homelab Refinement
+### 2.1 Base Kit Refinement
 
 - [ ] Remove old `variants/` directory (replaced by Add-Ons and Contexts)
 - [ ] Consolidate to single schema (`#BaseHomelabKit` only)
 - [ ] Update `default-spec.yaml` to v2 `kombination.yaml` format
-- [ ] Document base as "single-environment pattern"
+- [ ] Document Base Kit as "single-environment pattern" (local or cloud VPS)
 - [ ] Add Context × base matrix tests (local, cloud, pi)
 
-### 2.2 modern-homelab Implementation
+### 2.2 Modern Homelab Kit Implementation
 
-Redefine as **hybrid infrastructure pattern** (not "multi-node Docker").
+Redefine as **hybrid infrastructure pattern** (always local + cloud).
 
 - [ ] Define VPN overlay networking as core requirement (not add-on)
 - [ ] Implement Coolify as default PAAS (required for multi-environment)
@@ -147,9 +147,9 @@ Redefine as **hybrid infrastructure pattern** (not "multi-node Docker").
 - [ ] Implement `modern × cloud` context (multi-cloud mesh)
 - [ ] Create E2E test with 2-node deployment (1 local + 1 cloud)
 
-### 2.3 ha-homelab Implementation
+### 2.3 High Availability Kit Implementation
 
-Redefine as **high-availability cluster pattern** (not "3+ nodes").
+Redefine as **high-availability cluster pattern**.
 
 - [ ] Implement Docker Swarm orchestration config
 - [ ] Add Keepalived VIP for load balancing
@@ -179,9 +179,9 @@ Implement the 9 curated configurations (3 StackKits × 3 Contexts):
 
 | Deliverable | Acceptance Criteria |
 |-------------|---------------------|
-| base-homelab v4.0 | Clean schema, no variants, context-aware |
-| modern-homelab v4.0 | Hybrid pattern implemented, 2-node E2E test |
-| ha-homelab v4.0 | Cluster pattern implemented, Swarm config |
+| base-homelab v4.0 | Clean schema, no variants, context-aware (Base Kit) |
+| modern-homelab v4.0 | Hybrid pattern implemented, 2-node E2E test (Modern Homelab Kit) |
+| ha-homelab v4.0 | Cluster pattern implemented, Swarm config (High Availability Kit) |
 | 9-cell matrix | All StackKit × Context combinations validate |
 | Updated kombination.yaml | v2 spec format with stackkit/context/addons |
 

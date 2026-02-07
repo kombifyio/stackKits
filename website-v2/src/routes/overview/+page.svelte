@@ -20,7 +20,7 @@
 
 <svelte:head>
 	<title>StackKits Overview - kombify</title>
-	<meta name="description" content="Explore the three StackKits: Base Homelab, Modern Homelab, and HA Homelab. Find the right blueprint for your infrastructure." />
+	<meta name="description" content="Explore the three StackKits: Base Kit, Modern Homelab Kit, and High Availability Kit. Find the right architecture pattern for your infrastructure." />
 </svelte:head>
 
 <!-- Header -->
@@ -28,7 +28,7 @@
 	<div class="max-w-6xl mx-auto px-6">
 		<ScrollReveal>
 			<div class="text-center">
-				<h1 class="text-4xl font-bold">Choose Your Stack</h1>
+				<h1 class="text-4xl font-bold">Choose Your Architecture Pattern</h1>
 				<p class="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
 					Three curated blueprints built to professional standards. Every tool hand-picked, every config validated. Start simple, scale when ready.
 				</p>
@@ -114,9 +114,9 @@
 <section class="py-16">
 	<div class="max-w-4xl mx-auto px-6 text-center">
 		<ScrollReveal>
-			<h2 class="text-3xl font-bold mb-4">Start with Base Homelab</h2>
+			<h2 class="text-3xl font-bold mb-4">Start with the Base Kit</h2>
 			<p class="text-muted-foreground mb-8">
-				The best way to start is with the Base Homelab StackKit. It's available now and gives you everything you need.
+				The best way to start is with the Base Kit. It's available now and gives you everything you need — locally or in the cloud.
 			</p>
 			<a href="/get-started" class="btn btn-primary btn-lg">
 				Get Started
