@@ -18,7 +18,7 @@ export function Architecture() {
                 Architecture
               </h1>
               <p className="text-lg md:text-xl text-gray-600 mb-12 max-w-2xl mx-auto leading-relaxed">
-                A declarative infrastructure framework combining CUE, OpenTofu, and Terraform to build professional, future-proof homelabs with automated deployments and drift detection.
+                A declarative infrastructure framework combining CUE and OpenTofu to build professional, future-proof homelabs with automated deployments and drift detection.
               </p>
             </div>
           </div>
@@ -73,10 +73,10 @@ export function Architecture() {
                     <text x="585" y="135" textAnchor="middle" fill="#6b7280" fontSize="11">Compiles</text>
                   </g>
 
-                  {/* Terraform Box */}
+                  {/* OpenTofu Box */}
                   <g>
                     <rect x="630" y="80" width="200" height="140" rx="12" fill="#fff7ed" stroke="#f97316" strokeWidth="2" />
-                    <text x="730" y="130" textAnchor="middle" fill="#1f2937" fontSize="20" fontWeight="bold">Terraform</text>
+                    <text x="730" y="130" textAnchor="middle" fill="#1f2937" fontSize="20" fontWeight="bold">OpenTofu</text>
                     <text x="730" y="155" textAnchor="middle" fill="#6b7280" fontSize="14">Infrastructure</text>
                     <text x="730" y="175" textAnchor="middle" fill="#6b7280" fontSize="14">as Code</text>
                     <text x="730" y="205" textAnchor="middle" fill="#f97316" fontSize="12" fontWeight="600">Deploys Resources</text>
@@ -130,7 +130,7 @@ export function Architecture() {
                 </div>
                 <h3 className="text-xl font-bold text-gray-900 mb-3">OpenTofu Templates</h3>
                 <p className="text-gray-600 mb-4">
-                  Template engine that transforms validated CUE configurations into Terraform-ready infrastructure code.
+                  Template engine that transforms validated CUE configurations into OpenTofu-ready infrastructure code.
                 </p>
                 <ul className="space-y-2">
                   {['Code generation', 'Template inheritance', 'Modular design'].map((item, i) => (
@@ -146,7 +146,7 @@ export function Architecture() {
                 <div className="p-4 rounded-xl bg-orange-100 w-fit mb-4">
                   <Shield size={32} className="text-orange-600" />
                 </div>
-                <h3 className="text-xl font-bold text-gray-900 mb-3">Terraform IaC</h3>
+                <h3 className="text-xl font-bold text-gray-900 mb-3">OpenTofu IaC</h3>
                 <p className="text-gray-600 mb-4">
                   Industry-standard infrastructure provisioning tool that deploys and manages your cloud and on-premise resources.
                 </p>
@@ -299,7 +299,7 @@ export function Architecture() {
               <Card>
                 <h3 className="text-2xl font-bold text-gray-900 mb-4">Integration & Workflow</h3>
                 <p className="text-gray-600 mb-4">
-                  Each component handles what it does best: CUE validates, OpenTofu generates, Terraform deploys. This separation of concerns creates a maintainable and extensible system.
+                  Each component handles what it does best: CUE validates, OpenTofu provisions, and Terramate orchestrates. This separation of concerns creates a maintainable and extensible system.
                 </p>
                 <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
                   <p className="text-sm text-gray-700">

@@ -27,7 +27,7 @@
 			checks: [false, true, false, false, false, true]
 		},
 		{
-			name: 'DIY Terraform',
+			name: 'DIY OpenTofu',
 			highlight: false,
 			checks: [false, false, false, true, false, true]
 		}

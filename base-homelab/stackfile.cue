@@ -218,7 +218,7 @@ import (
 		version:     "2.0.0"
 		description: "Single-server homelab with Docker, Dokploy and monitoring"
 		author:      "KombiStack Team"
-		license:     "MIT"
+		license:     "Apache-2.0"
 		tags: ["homelab", "single-node", "docker", "dokploy", "professional"]
 
 		minKombiStackVersion: "1.0.0"

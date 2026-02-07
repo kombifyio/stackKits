@@ -105,7 +105,7 @@ package base
 	author?: string
 
 	// License identifier
-	license: string | *"MIT"
+	license: string | *"Apache-2.0"
 
 	// Homepage URL
 	homepage?: string

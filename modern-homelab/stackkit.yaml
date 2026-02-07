@@ -8,7 +8,7 @@ metadata:
   version: "1.0.0-alpha"
   description: "Multi-server hybrid homelab with Docker Swarm, Dokploy, and public/remote access"
   author: "KombiStack Team"
-  license: "MIT"
+  license: "Apache-2.0"
   repository: "https://github.com/kombihq/stackkits"
   status: scaffolding
   tags:

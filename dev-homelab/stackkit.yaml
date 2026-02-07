@@ -17,7 +17,7 @@ metadata:
   displayName: "Dev Homelab"
   description: "Minimal development StackKit for testing tooling integration"
   author: "StackKits Development Team"
-  license: "MIT"
+  license: "Apache-2.0"
   repository: "internal"
 
 # Minimal requirements for testing

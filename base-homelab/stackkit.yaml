@@ -7,7 +7,7 @@ metadata:
   version: "2.0.0"
   description: "Single-server homelab with Docker, Dokploy and monitoring"
   author: "KombiStack Team"
-  license: "MIT"
+  license: "Apache-2.0"
   repository: "https://github.com/kombihq/stackkits"
   tags:
     - homelab

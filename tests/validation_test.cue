@@ -11,8 +11,6 @@ package tests
 import (
 	"github.com/kombihq/stackkits/base"
 	"github.com/kombihq/stackkits/platforms/docker"
-	// TODO: Re-enable when kubernetes platform is implemented
-	// "github.com/kombihq/stackkits/platforms/kubernetes"
 	base_homelab "github.com/kombihq/stackkits/base-homelab"
 )
 
@@ -149,107 +147,6 @@ _test_docker_service: docker.#DockerService & {
 	}
 	depends_on: []
 }
-
-// =============================================================================
-// LAYER 2 (PLATFORM) TESTS - KUBERNETES
-// =============================================================================
-// TODO: Re-enable when kubernetes platform is implemented
-// The platforms/kubernetes directory does not exist yet.
-
-// // Test: K3s configuration
-// _test_k3s_config: kubernetes.#K3sConfig & {
-// 	version: "v1.30.2+k3s1"
-// 	mode:    "single-node"
-// 	nodes: [{
-// 		name: "master"
-// 		ip:   "192.168.1.100"
-// 		role: "server"
-// 		labels: {
-// 			"node-role.kubernetes.io/master": ""
-// 		}
-// 		taints: []
-// 	}]
-// 	network: {
-// 		backend:      "vxlan"
-// 		cluster_cidr: "10.42.0.0/16"
-// 		service_cidr: "10.43.0.0/16"
-// 		cluster_dns:  "10.43.0.10"
-// 	}
-// 	disable: []
-// 	tls: {
-// 		san: ["192.168.1.100"]
-// 	}
-// }
-
-// // Test: Ingress configuration
-// _test_ingress_config: kubernetes.#IngressConfig & {
-// 	type: "traefik"
-// 	traefik: {
-// 		dashboard:          true
-// 		dashboard_insecure: false
-// 		log_level:          "INFO"
-// 	}
-// 	tls: {
-// 		mode: "auto"
-// 	}
-// }
-
-// // Test: Storage configuration
-// _test_storage_config: kubernetes.#StorageConfig & {
-// 	default_class: "local-path"
-// 	local_path: {
-// 		path:           "/opt/local-path-provisioner"
-// 		reclaim_policy: "Delete"
-// 	}
-// }
-
-// // Test: Kubernetes namespace
-// _test_namespace: kubernetes.#KubernetesNamespace & {
-// 	name: "kombistack"
-// 	labels: {
-// 		"app.kubernetes.io/managed-by": "kombistack"
-// 	}
-// 	annotations: {}
-// }
-
-// // Test: Kubernetes service
-// _test_k8s_service: kubernetes.#KubernetesService & {
-// 	name:      "test-app"
-// 	namespace: "kombistack"
-// 	deployment: {
-// 		image:    "nginx"
-// 		tag:      "alpine"
-// 		replicas: 2
-// 		ports: [{
-// 			name:     "http"
-// 			port:     80
-// 			protocol: "TCP"
-// 		}]
-// 		env: {
-// 			ENV: "test"
-// 		}
-// 		env_from: []
-// 		volume_mounts: []
-// 		resources: {
-// 			requests: {
-// 				cpu:    "100m"
-// 				memory: "128Mi"
-// 			}
-// 			limits: {
-// 				cpu:    "500m"
-// 				memory: "512Mi"
-// 			}
-// 		}
-// 	}
-// 	service_type: "ClusterIP"
-// 	ingress: {
-// 		enabled: true
-// 		host:    "test.example.com"
-// 		path:    "/"
-// 		tls:     true
-// 	}
-// 	volumes: []
-// }
 
 // =============================================================================
 // LAYER 3 (STACKKIT) TESTS - BASE-HOMELAB

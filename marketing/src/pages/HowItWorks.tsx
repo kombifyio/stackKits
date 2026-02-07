@@ -29,7 +29,7 @@ const steps = [
   {
     number: '04',
     title: 'Manage & Scale',
-    description: 'Use the CLI or KombiStack Web UI to manage your infrastructure. Add services, monitor, and scale as needed.',
+    description: 'Use the CLI or kombify Stack Web UI to manage your infrastructure. Add services, monitor, and scale as needed.',
     icon: <ChevronRight size={28} className="text-gray-600" />,
     link: '/get-started'
   }

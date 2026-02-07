@@ -85,7 +85,6 @@ echo -e "\n${YELLOW}Layer 2 - PLATFORM Tests${NC}"
 echo "-------------------------------------------"
 
 run_test "Docker platform schema" "platforms/docker/platform.cue"
-run_test "Kubernetes platform schema" "platforms/kubernetes/platform.cue"
 
 # =============================================================================
 # LAYER 3 (STACKKIT) TESTS
@@ -146,7 +145,6 @@ check_template "base/observability/_health.tf.tmpl"
 # Layer 2 templates
 check_template "platforms/docker/_docker.tf.tmpl"
 check_template "platforms/docker/_traefik.tf.tmpl"
-check_template "platforms/kubernetes/_k3s.tf.tmpl"
 
 # Layer 3 templates
 check_template "stackkits/base-homelab/templates/services/_dokploy.tf.tmpl"

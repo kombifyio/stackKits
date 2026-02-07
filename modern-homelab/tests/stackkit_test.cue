@@ -20,7 +20,7 @@ _testModernHomelabKitExtendsBase: #ModernHomelabKit & {
 		displayName: "Modern Homelab"
 		version:     "1.0.0"
 		description: "Test instance"
-		license:     "MIT"
+		license:     "Apache-2.0"
 	}
 	nodes: []
 }

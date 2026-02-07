@@ -398,7 +398,8 @@ package base
 // =============================================================================
 
 // Platform types supported (includes bare-metal for non-container deployments)
-#PlatformType: "docker" | "docker-swarm" | "kubernetes" | "bare-metal"
+// Note: Kubernetes (K3s/K8s) intentionally excluded — Docker-first strategy (ADR-0002)
+#PlatformType: "docker" | "docker-swarm" | "bare-metal"
 
 // #Layer2Platform validates Layer 2 requirements
 #Layer2Platform: {

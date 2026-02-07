@@ -2,68 +2,69 @@
 // 
 // Status: SCAFFOLDING - Services are planned but not yet implemented
 //
-// Extends: modern_homelab
-// Focus: High Availability, Automatic Failover, Distributed Storage
+// Focus: High Availability via Docker Swarm, Automatic Failover, Distributed Storage
+// Platform: Docker Swarm (no Kubernetes — see ADR-0002)
 
 package ha_homelab
 
 import "github.com/kombihq/stackkits/base"
-// Note: modern-homelab imports removed as ha-homelab is standalone StackKit
 
 // =============================================================================
-// HA KUBERNETES
+// DOCKER SWARM HA
 // =============================================================================
 
-// #K3sHAService - High Availability k3s Cluster (Planned)
-#K3sHAService: base.#ServiceDefinition & {
-	name:        "k3s-ha"
-	displayName: "k3s HA"
-	category:    "kubernetes"
+// #DockerSwarmService - Docker Swarm Cluster (Planned)
+#DockerSwarmService: base.#ServiceDefinition & {
+	name:        "docker-swarm"
+	displayName: "Docker Swarm"
+	category:    "orchestration"
 	type:        "cluster"
 	required:    true
 	status:      "planned"
-	description: "High Availability k3s with embedded etcd"
+	description: "Docker Swarm cluster for high availability"
 
 	config: {
-		masterCount:    3 | 5 | *3
-		etcdMode:       "embedded"
-		datastore:      "etcd"
-		clusterCIDR:    string | *"10.42.0.0/16"
-		serviceCIDR:    string | *"10.43.0.0/16"
-		disableTraefik: true // We use custom ingress
+		managerCount:         3 | 5 | *3
+		workerCount:          int | *0
+		autolock:             bool | *true
+		raftSnapshotInterval: int | *10000
+		taskHistoryLimit:     int | *5
 	}
 
-	// TODO: Implement HA control plane
-	// - Multi-master setup
-	// - etcd cluster formation
-	// - Leader election
-	// - API server load balancing
+	// TODO: Implement Docker Swarm HA
+	// - Multi-manager setup (Raft consensus)
+	// - Worker node auto-join
+	// - Service mesh / overlay networking
+	// - Rolling updates & rollback
 }
 
 // =============================================================================
-// LOAD BALANCING
+// LOAD BALANCING & ROUTING
 // =============================================================================
 
-// #MetalLBService - Bare-metal Load Balancer (Planned)
-#MetalLBService: base.#ServiceDefinition & {
-	name:        "metallb"
-	displayName: "MetalLB"
+// #TraefikHAService - HA Reverse Proxy (Planned)
+#TraefikHAService: base.#ServiceDefinition & {
+	name:        "traefik-ha"
+	displayName: "Traefik HA"
 	category:    "networking"
-	type:        "load-balancer"
+	type:        "reverse-proxy"
 	required:    true
 	status:      "planned"
-	description: "Load balancer for bare-metal Kubernetes"
-	needs:       ["k3s-ha"]
+	description: "Traefik with Docker Swarm provider for HA routing"
+	needs:       ["docker-swarm"]
 
 	config: {
-		mode:        "layer2" | "bgp" | *"layer2"
-		addressPool: string
+		replicas:    int | *2
+		dashboard:   bool | *true
+		acme:        bool | *true
+		acmeEmail:   string
+		entrypoints: [...string] | *["web", "websecure"]
 	}
 
-	// TODO: Implement MetalLB
-	// - L2 mode for simple setups
-	// - BGP mode for advanced networking
-	// - IP address pool management
+	// TODO: Implement Traefik HA
+	// - Deploy as global or replicated Swarm service
+	// - Docker Swarm provider auto-discovers services
+	// - Let's Encrypt with distributed challenge solver
 }
 
 // #HAProxyService - External Load Balancer (Planned)
@@ -74,11 +75,11 @@ import "github.com/kombihq/stackkits/base"
 	type:        "load-balancer"
 	required:    false
 	status:      "planned"
-	description: "External load balancer for API server access"
-	needs:       ["k3s-ha"]
+	description: "External load balancer for Swarm manager access"
+	needs:       ["docker-swarm"]
 
 	// TODO: Implement HAProxy
-	// - Health checks for master nodes
+	// - Health checks for manager nodes
 	// - Automatic failover
 	// - TLS termination
 }
@@ -96,7 +97,7 @@ import "github.com/kombihq/stackkits/base"
 	required:    true
 	status:      "planned"
 	description: "High Availability Prometheus setup"
-	needs:       ["k3s-ha"]
+	needs:       ["docker-swarm"]
 
 	config: {
 		replicas:  2
@@ -104,8 +105,8 @@ import "github.com/kombihq/stackkits/base"
 	}
 
 	// TODO: Implement Prometheus HA
-	// - Multiple replicas
-	// - Thanos sidecar integration
+	// - Multiple replicas via Swarm service
+	// - Shared storage for metrics
 	// - Alert deduplication
 }
 
@@ -118,7 +119,7 @@ import "github.com/kombihq/stackkits/base"
 	required:    false
 	status:      "planned"
 	description: "Global view and long-term storage for Prometheus"
-	needs:       ["k3s-ha", "prometheus-ha"]
+	needs:       ["docker-swarm", "prometheus-ha"]
 
 	config: {
 		objectStorage: "s3" | "gcs" | "azure" | "minio" | *"minio"
@@ -129,116 +130,107 @@ import "github.com/kombihq/stackkits/base"
 	// - Query frontend
 	// - Store gateway
 	// - Compactor
-	// - Ruler
 }
 
 // =============================================================================
 // DISTRIBUTED STORAGE
 // =============================================================================
 
-// #LonghornHAService - HA Block Storage (Planned)
-#LonghornHAService: base.#ServiceDefinition & {
-	name:        "longhorn-ha"
-	displayName: "Longhorn HA"
-	category:    "storage"
-	type:        "block-storage"
-	required:    true
-	status:      "planned"
-	description: "Distributed block storage with HA"
-	needs:       ["k3s-ha"]
-
-	config: {
-		replicaCount:       3
-		dataLocality:       "best-effort" | "strict-local" | *"best-effort"
-		backupTarget:       string
-		backupTargetSecret: string
-	}
-
-	// TODO: Implement Longhorn HA
-	// - 3x replication by default
-	// - Automatic rebuild on node failure
-	// - S3/NFS backup integration
-}
-
-// #CephService - Enterprise Storage (Planned)
-#CephService: base.#ServiceDefinition & {
-	name:        "ceph"
-	displayName: "Ceph (Rook)"
+// #GlusterFSService - Distributed File Storage (Planned)
+#GlusterFSService: base.#ServiceDefinition & {
+	name:        "glusterfs"
+	displayName: "GlusterFS"
 	category:    "storage"
 	type:        "distributed-storage"
-	required:    false
+	required:    true
 	status:      "planned"
-	description: "Enterprise distributed storage via Rook operator"
-	needs:       ["k3s-ha"]
+	description: "Distributed file storage for Docker Swarm volumes"
+	needs:       ["docker-swarm"]
 
 	config: {
-		osdCount:           3
-		monCount:           3
-		enableCephFS:       true
-		enableRGW:          false // S3-compatible gateway
-		replicationFactor:  3
+		replicaCount: 3
+		volumeType:   "replicate" | "distributed" | "dispersed" | *"replicate"
+		brickPath:    string | *"/data/glusterfs"
 	}
 
-	// TODO: Implement Ceph via Rook
-	// - Block storage (RBD)
-	// - File storage (CephFS)
-	// - Object storage (RGW) optional
+	// TODO: Implement GlusterFS
+	// - Replicated volumes for persistent data
+	// - Docker volume plugin integration
+	// - Automatic brick healing
+}
+
+// #MinIOService - Object Storage (Planned)
+#MinIOService: base.#ServiceDefinition & {
+	name:        "minio"
+	displayName: "MinIO"
+	category:    "storage"
+	type:        "object-storage"
+	required:    false
+	status:      "planned"
+	description: "S3-compatible object storage for backups"
+	needs:       ["docker-swarm"]
+
+	config: {
+		distributed: bool | *true
+		nodes:       int | *4
+		drives:      int | *4
+	}
+
+	// TODO: Implement MinIO
+	// - Distributed mode across Swarm nodes
+	// - Backup target for monitoring data
 }
 
 // =============================================================================
 // BACKUP & DISASTER RECOVERY
 // =============================================================================
 
-// #VeleroService - Backup & DR (Planned)
-#VeleroService: base.#ServiceDefinition & {
-	name:        "velero"
-	displayName: "Velero"
+// #ResticService - Backup (Planned)
+#ResticService: base.#ServiceDefinition & {
+	name:        "restic"
+	displayName: "Restic"
 	category:    "backup"
-	type:        "disaster-recovery"
+	type:        "backup"
 	required:    true
 	status:      "planned"
-	description: "Kubernetes backup and disaster recovery"
-	needs:       ["k3s-ha"]
+	description: "Incremental backup for Swarm volumes and configs"
+	needs:       ["docker-swarm"]
 
 	config: {
-		provider:        "aws" | "gcp" | "azure" | "minio" | *"minio"
-		backupSchedule:  string | *"0 1 * * *"  // Daily at 1 AM
-		retentionPeriod: string | *"720h"       // 30 days
-		includeClusterResources: true
+		schedule:       string | *"0 2 * * *" // Daily at 2 AM
+		retentionDays:  int | *30
+		backupTarget:   "local" | "s3" | "sftp" | *"local"
+		encryptBackups: bool | *true
 	}
 
-	// TODO: Implement Velero
-	// - Scheduled backups
-	// - On-demand backups
-	// - Disaster recovery to new cluster
-	// - Namespace migration
+	// TODO: Implement Restic
+	// - Volume snapshots via Swarm
+	// - Encrypted off-site backups
+	// - Automated restore testing
 }
 
 // =============================================================================
-// SERVICE COLLECTIONS (Planned - HA Variants)
+// SERVICE COLLECTIONS (Planned — Docker Swarm HA Variants)
 // =============================================================================
 
-// Note: These are placeholder service collections. The actual services
-// from modern-homelab should be referenced via proper module imports
-// once the full StackKit structure is finalized.
-
-// #DefaultHAServices - Standard HA deployment
+// #DefaultHAServices - Standard HA deployment (Docker Swarm)
 #DefaultHAServices: {
-	k3s:        #K3sHAService
-	metallb:    #MetalLBService
+	swarm:      #DockerSwarmService
+	traefik:    #TraefikHAService
 	prometheus: #PrometheusHAService
 	thanos:     #ThanosService
-	longhorn:   #LonghornHAService
-	velero:     #VeleroService
+	glusterfs:  #GlusterFSService
+	restic:     #ResticService
 }
 
-// #EnterpriseServices - Full enterprise stack
+// #EnterpriseServices - Full enterprise stack (Docker Swarm)
 #EnterpriseServices: {
-	k3s:        #K3sHAService
-	metallb:    #MetalLBService
+	swarm:      #DockerSwarmService
+	traefik:    #TraefikHAService
 	haproxy:    #HAProxyService
 	prometheus: #PrometheusHAService
 	thanos:     #ThanosService
-	ceph:       #CephService
-	velero:     #VeleroService
+	glusterfs:  #GlusterFSService
+	minio:      #MinIOService
+	restic:     #ResticService
 }

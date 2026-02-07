@@ -12,7 +12,7 @@
 		{ name: 'Multi-Node', checks: [false, true, true] },
 		{ name: 'Cloud Hybrid', checks: [false, true, true] },
 		{ name: 'VPN Overlay', checks: [false, true, true] },
-		{ name: 'Kubernetes', checks: [false, false, true] },
+		{ name: 'Docker Swarm', checks: [false, false, true] },
 		{ name: 'Auto-Failover', checks: [false, false, true] },
 		{ name: 'GitOps', checks: [false, false, true] }
 	];

@@ -15,14 +15,14 @@
 			name: 'OpenTofu',
 			role: 'Infrastructure Provisioning',
 			description:
-				'Open-source Terraform fork that provisions your infrastructure. Manages state, dependencies, and ensures idempotent deployments.'
+				'Open-source infrastructure provisioning tool. Manages state, dependencies, and ensures idempotent deployments.'
 		},
 		{
 			icon: GitBranch,
 			name: 'Terramate',
 			role: 'Stack Orchestration',
 			description:
-				'Orchestrates multiple Terraform stacks. Handles dependency graphs, parallel execution, and change detection across your infrastructure.'
+				'Orchestrates multiple OpenTofu stacks. Handles dependency graphs, parallel execution, and change detection across your infrastructure.'
 		}
 	];
 
@@ -63,7 +63,7 @@
 		{
 			id: 'tofu',
 			title: 'Declarative Infrastructure with OpenTofu',
-			content: "OpenTofu manages your infrastructure state and ensures idempotency. It provisions resources in the correct order, handles dependencies, and makes infrastructure changes predictable and reversible. As an open-source Terraform fork, it's community-driven and enterprise-ready."
+			content: "OpenTofu manages your infrastructure state and ensures idempotency. It provisions resources in the correct order, handles dependencies, and makes infrastructure changes predictable and reversible. As an open-source project, it's community-driven and enterprise-ready."
 		},
 		{
 			id: 'terramate',

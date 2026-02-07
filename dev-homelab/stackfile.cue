@@ -40,7 +40,7 @@ import (
 		description: "Development homelab with 3-layer architecture, Traefik routing, and Zero-Trust security"
 		category:    "development"
 		author:      "StackKits"
-		license:     "MIT"
+		license:     "Apache-2.0"
 		tags: ["docker", "traefik", "zero-trust", "paas"]
 	}
 

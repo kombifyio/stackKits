@@ -8,7 +8,7 @@ metadata:
   version: "1.0.0-alpha"
   description: "Enterprise-grade homelab with Docker Swarm HA and automatic failover"
   author: "KombiStack Team"
-  license: "MIT"
+  license: "Apache-2.0"
   repository: "https://github.com/kombihq/stackkits"
   status: scaffolding
   tags:

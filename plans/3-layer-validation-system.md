@@ -21,7 +21,7 @@ flowchart TB
     end
 
     subgraph "Layer 2: Platform"
-        L2A[Platform Type<br/>docker|swarm|kubernetes]
+        L2A[Platform Type<br/>docker|swarm|bare-metal]
         L2B[Container Runtime]
         L2C[Networking Base]
     end
@@ -82,7 +82,7 @@ package base
 // =============================================================================
 
 // Platform types supported
-#PlatformType: "docker" | "docker-swarm" | "kubernetes"
+#PlatformType: "docker" | "docker-swarm" | "bare-metal"
 
 // #Layer2Platform validates Layer 2 requirements
 #Layer2Platform: {
@@ -367,9 +367,9 @@ func (v *LayerValidator) validateLayer2(stackkitDir string) *LayerValidationResu
         result.Errors = append(result.Errors, LayerError{
             Layer:   LayerPlatform,
             Code:    "L2_MISSING_PLATFORM",
-            Message: "Layer 2 platform not declared - must specify docker/swarm/kubernetes",
+            Message: "Layer 2 platform not declared - must specify docker/swarm/bare-metal",
             Field:   "platform",
-            Hint:    "Add platform field with value: docker | docker-swarm | kubernetes",
+            Hint:    "Add platform field with value: docker | docker-swarm | bare-metal",
         })
     } else {
         // Validate platform type value
@@ -381,13 +381,13 @@ func (v *LayerValidator) validateLayer2(stackkitDir string) *LayerValidationResu
                 Code:    "L2_INVALID_PLATFORM",
                 Message: "Layer 2 platform has invalid type",
                 Field:   "platform",
-                Hint:    "Platform must be one of: docker, docker-swarm, kubernetes",
+                Hint:    "Platform must be one of: docker, docker-swarm, bare-metal",
             })
         } else {
             validPlatforms := map[string]bool{
                 "docker":        true,
                 "docker-swarm":  true,
-                "kubernetes":    true,
+                "bare-metal":    true,
             }
             if !validPlatforms[platformStr] {
                 result.Valid = false
@@ -396,7 +396,7 @@ func (v *LayerValidator) validateLayer2(stackkitDir string) *LayerValidationResu
                     Code:    "L2_INVALID_PLATFORM_VALUE",
                     Message: fmt.Sprintf("Layer 2 platform '%s' is not valid", platformStr),
                     Field:   "platform",
-                    Hint:    "Platform must be one of: docker, docker-swarm, kubernetes",
+                    Hint:    "Platform must be one of: docker, docker-swarm, bare-metal",
                 })
             }
         }

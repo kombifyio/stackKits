@@ -55,18 +55,18 @@ export const stackkits: StackKit[] = [
 		name: 'HA Homelab',
 		tagline: 'Enterprise-grade reliability',
 		description:
-			'High-availability Kubernetes cluster with automatic failover. Production-ready infrastructure at home.',
+			'High-availability Docker Swarm cluster with automatic failover. Production-ready infrastructure at home.',
 		icon: 'shield',
 		status: 'planned',
 		nodes: '3+ Nodes',
 		cloud: true,
 		features: [
-			'K3s Kubernetes cluster',
+			'Docker Swarm cluster',
 			'Automatic failover',
-			'GitOps with Flux',
-			'Distributed storage (Longhorn)',
+			'Keepalived for high availability',
+			'Distributed monitoring',
 			'Enterprise observability'
 		],
-		services: ['K3s', 'Flux', 'Longhorn', 'Thanos', 'Velero']
+		services: ['Docker Swarm', 'Keepalived', 'Traefik', 'Prometheus', 'Grafana']
 	}
 ];

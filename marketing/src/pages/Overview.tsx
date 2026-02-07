@@ -71,9 +71,9 @@ const stackKits: StackKit[] = [
     name: 'HA Homelab',
     status: 'Planned',
     icon: <ShieldCheck size={32} />,
-    description: 'High-availability Kubernetes cluster with distributed storage for production workloads.',
+    description: 'High-availability Docker Swarm cluster with automatic failover for production workloads.',
     features: [
-      'Kubernetes with k3s',
+      'Multi-node Docker with Swarm mode',
       'High availability architecture',
       'Distributed storage (Longhorn/Ceph)',
       'Automatic failover',
