@@ -43,7 +43,7 @@
 			icon: Layers,
 			title: 'Composable Architecture',
 			description:
-				'Mix and match base kits, variants, and services. Build complex infrastructures from simple, tested components.'
+				'Mix and match StackKits, Add-Ons, and services. Build complex infrastructures from simple, tested components.'
 		}
 	];
 

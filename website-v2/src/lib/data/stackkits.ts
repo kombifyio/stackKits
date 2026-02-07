@@ -5,7 +5,7 @@ export interface StackKit {
 	description: string;
 	icon: string;
 	status: 'available' | 'planned';
-	nodes: string;
+	pattern: string;
 	cloud: boolean;
 	features: string[];
 	services: string[];
@@ -13,58 +13,58 @@ export interface StackKit {
 
 export const stackkits: StackKit[] = [
 	{
-		id: 'base-homelab',
-		name: 'Base Homelab',
-		tagline: 'Single-server, local-only',
+		id: 'base',
+		name: 'Base',
+		tagline: 'Single-environment pattern',
 		description:
-			'Single-server setup with Docker, reverse proxy, and monitoring. Everything you need for a professional homelab.',
+			'All services in one deployment target. Docker Compose, context-aware defaults, composable Add-Ons. Works on any hardware — from Pi to powerful server.',
 		icon: 'server',
 		status: 'available',
-		nodes: '1 Node',
+		pattern: 'Single-Environment',
 		cloud: false,
 		features: [
-			'Docker-based deployments',
+			'Docker Compose deployments',
+			'Context-aware defaults (local/cloud/pi)',
 			'Traefik reverse proxy',
-			'Automatic TLS certificates',
-			'Uptime monitoring with Uptime Kuma',
-			'Dokploy PaaS interface'
+			'Composable Add-Ons',
+			'Dokploy or Coolify PaaS'
 		],
-		services: ['Traefik', 'Dokploy', 'Uptime Kuma', 'Dozzle']
+		services: ['Traefik', 'Dokploy', 'TinyAuth', 'Dozzle']
 	},
 	{
-		id: 'modern-homelab',
-		name: 'Modern Homelab',
-		tagline: 'Local + Cloud hybrid',
+		id: 'modern',
+		name: 'Modern',
+		tagline: 'Hybrid infrastructure pattern',
 		description:
-			'Multi-server hybrid setup that connects local and cloud infrastructure. Scale beyond your home network.',
+			'Bridge local and cloud environments with VPN overlay networking. Distributed services across heterogeneous nodes with Coolify management.',
 		icon: 'cloud',
 		status: 'planned',
-		nodes: '2+ Nodes',
+		pattern: 'Hybrid',
 		cloud: true,
 		features: [
-			'VPN overlay network',
-			'Hybrid local/cloud nodes',
+			'VPN overlay (Headscale/Tailscale)',
+			'Local + cloud node bridging',
 			'Coolify deployment platform',
-			'Distributed storage',
-			'Public access support'
+			'Split DNS (public/private)',
+			'Multi-environment coordination'
 		],
 		services: ['Headscale/Tailscale', 'Coolify', 'Prometheus', 'Grafana']
 	},
 	{
-		id: 'ha-homelab',
-		name: 'HA Homelab',
-		tagline: 'Enterprise-grade reliability',
+		id: 'ha',
+		name: 'HA',
+		tagline: 'High-availability cluster pattern',
 		description:
-			'High-availability Docker Swarm cluster with automatic failover. Production-ready infrastructure at home.',
+			'No single point of failure. Docker Swarm cluster with automatic failover, quorum consensus, and data replication.',
 		icon: 'shield',
 		status: 'planned',
-		nodes: '3+ Nodes',
+		pattern: 'HA Cluster',
 		cloud: true,
 		features: [
-			'Docker Swarm cluster',
+			'Docker Swarm orchestration',
 			'Automatic failover',
-			'Keepalived for high availability',
-			'Distributed monitoring',
+			'Keepalived VIP load balancing',
+			'Quorum-based consensus',
 			'Enterprise observability'
 		],
 		services: ['Docker Swarm', 'Keepalived', 'Traefik', 'Prometheus', 'Grafana']

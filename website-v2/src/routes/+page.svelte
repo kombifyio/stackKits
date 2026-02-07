@@ -196,9 +196,9 @@
 <section class="py-20">
 	<div class="max-w-6xl mx-auto px-6">
 		<ScrollReveal>
-			<h2 class="text-3xl font-bold text-center mb-4">Choose Your Stack</h2>
+			<h2 class="text-3xl font-bold text-center mb-4">Choose Your Architecture Pattern</h2>
 			<p class="text-muted-foreground text-center max-w-2xl mx-auto mb-16">
-				Three blueprints designed for different homelab needs. Start simple, scale when ready.
+				Three architecture patterns for different infrastructure needs. Add capabilities with composable Add-Ons.
 			</p>
 		</ScrollReveal>
 

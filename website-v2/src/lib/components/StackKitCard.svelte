@@ -33,7 +33,7 @@
 	<div class="flex items-center gap-4 text-sm text-muted-foreground mb-6">
 		<div class="flex items-center gap-1">
 			<Server class="w-4 h-4" />
-			{kit.nodes}
+			{kit.pattern}
 		</div>
 		<div class="flex items-center gap-1 {kit.cloud ? 'text-primary' : ''}">
 			<Cloud class="w-4 h-4" />

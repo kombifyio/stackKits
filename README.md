@@ -28,16 +28,46 @@ Optional: Terramate (0.6+) for multi-node orchestration, CUE (0.9+) for developm
 
 ## 📦 Available StackKits
 
-| StackKit           | Description                 | Nodes | Deployment Modes | Status         |
-| ------------------ | --------------------------- | ----- | ---------------- | -------------- |
-| **base-homelab**   | Single server, local only   | 1     | simple, advanced | ✅ Available   |
-| **modern-homelab** | Multi-node Docker + Dokploy | 2+    | simple, advanced | 🚧 Schema Only |
-| **ha-homelab**     | Docker Swarm HA Cluster     | 3+    | simple, advanced | 🚧 Schema Only |
+StackKits are **architecture patterns**, not node-count definitions.
 
-### Deployment Modes
+| StackKit | Pattern | Core Idea | Status |
+| --- | --- | --- | --- |
+| **base** | Single-environment | All services in one deployment target. Docker Compose. | ✅ Available |
+| **modern** | Hybrid infrastructure | Bridges local + cloud. VPN overlay, distributed services. | 🚧 Schema Only |
+| **ha** | High-availability cluster | Redundancy, failover, quorum. Cluster-first architecture. | 🚧 Schema Only |
 
-- **Simple Mode:** OpenTofu Day-1 provisioning (init → plan → apply)
-- **Advanced Mode:** OpenTofu + Terramate Day-1 & Day-2 (drift detection, change sets, rolling updates)
+### Node-Context (Auto-Detected)
+
+Each node is classified into a **Context** based on hardware and provider metadata:
+
+| Context | Detection | Characteristics |
+| --- | --- | --- |
+| **local** | Physical hardware, no cloud metadata | Full control, local network |
+| **cloud** | Cloud provider metadata detected | Public IP, egress costs |
+| **pi** | ARM + low memory or RPi detection | Resource-constrained |
+
+### Add-Ons (Composable Extensions)
+
+Add-Ons replace the old monolithic variant system. They are stackable and compatible:
+
+| Add-On | Category | Description |
+| --- | --- | --- |
+| `monitoring` | Observability | Prometheus + Grafana + Alertmanager |
+| `backup` | Data | Restic + configurable targets |
+| `vpn-overlay` | Networking | Headscale/Tailscale mesh |
+| `gpu-workloads` | Compute | NVIDIA/AMD GPU passthrough |
+| `media` | Applications | Jellyfin + *arr stack |
+| `smart-home` | IoT | Home Assistant + MQTT |
+
+### Progressive Capability Model
+
+| Level | Name | Access Method |
+| --- | --- | --- |
+| **Level 0** | Standalone CLI | `stackkit` CLI directly |
+| **Level 1** | Control Plane | kombify Stack Web UI / API |
+| **Level 2** | Worker Agent | kombify Stack + gRPC Agent |
+| **Level 3** | Runtime Intelligence | Day-2 monitoring + auto-remediation |
+| **Level 4** | AI-Assisted (SaaS) | kombify Sphere |
 
 ## 🏗️ 3-Layer Architecture
 
@@ -276,44 +306,50 @@ make test-integration
 
 ### Core Concepts
 
-- [Architecture](docs/ARCHITECTURE.md) - System design, IaC-first principles, layer architecture
+- [Architecture v4](docs/ARCHITECTURE_V4.md) - Three-concept model, Progressive Capability, Add-Ons
+- [Architecture v3](docs/architecture.md) - Legacy 3-layer architecture (superseded)
 - [Target State](docs/TARGET_STATE.md) - Product vision
-- [Roadmap](docs/ROADMAP.md) - Milestones + backlog
+- [Roadmap](docs/ROADMAP.md) - v4 implementation phases
 
 ## 🔧 Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│  User Config (kombination.yaml)                         │
-└───────────────────────┬─────────────────────────────────┘
+┌───────────────────────────────────────────────────────────┐
+│  User Intent (kombination.yaml)                           │
+│  StackKit: base | modern | ha                             │
+│  Context: local | cloud | pi  (auto-detected)            │
+│  Add-Ons: monitoring, backup, vpn-overlay, ...            │
+└───────────────────────┬───────────────────────────────────┘
                         │
                         ▼
-┌─────────────────────────────────────────────────────────┐
-│  CUE Validation Layer                                    │
-│  • Schema validation  • Type checking  • Defaults       │
-└───────────────────────┬─────────────────────────────────┘
+┌───────────────────────────────────────────────────────────┐
+│  CUE Validation + Resolution                             │
+│  StackKit × Context → Smart Defaults                     │
+│  + Add-On merging → Resolved Configuration               │
+└───────────────────────┬───────────────────────────────────┘
                         │
                         ▼
-┌─────────────────────────────────────────────────────────┐
-│  OpenTofu Generation                                     │
-│  • HCL templates  • Provider configuration               │
-└───────────────────────┬─────────────────────────────────┘
+┌───────────────────────────────────────────────────────────┐
+│  IaC Generation (OpenTofu + Terramate)                   │
+│  • HCL templates  • Docker Compose  • Bootstrap scripts  │
+└───────────────────────┬───────────────────────────────────┘
                         │
                         ▼
-┌─────────────────────────────────────────────────────────┐
-│  Execution (tofu init → plan → apply)                   │
-│  • Docker containers  • Networks  • Volumes             │
-└─────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────┐
+│  Execution (Level 0: CLI | Level 2+: Agent)              │
+│  • Docker containers  • Networks  • Volumes              │
+└───────────────────────────────────────────────────────────┘
 ```
 
 ## 🤝 Contributing
 
 We welcome contributions! Priority areas:
 
-1. **Documentation** - Improve guides and examples
-2. **StackKits** - Create new StackKits for common use cases
-3. **Variants** - Add support for additional operating systems
-4. **CLI** - Help build the `stackkit` command-line tool
+1. **Add-Ons** - Create composable extensions for common use cases
+2. **Context modules** - Improve hardware-aware defaults
+3. **StackKits** - Implement modern-homelab and ha-homelab patterns
+4. **Documentation** - Improve guides and examples
+5. **CLI** - Add-On management commands
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
@@ -323,4 +359,4 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ---
 
-**StackKits** works standalone or as part of the [KombiStack](https://kombistack.dev) ecosystem.
+**StackKits** works standalone (Level 0) or as part of the [kombify](https://kombify.io) ecosystem (Levels 1–4).

@@ -1,956 +1,318 @@
-# StackKits Roadmap & Kombify Integration Plan
+# StackKits Roadmap
 
-> **Last Updated:** 2026-01-30
-> **Status:** Active Development
-> **Current Version:** v1.0.0-beta
+> **Last Updated:** 2026-02-07  
+> **Status:** Active Development — Architecture v4 Transition  
+> **Current Version:** v1.0.0-beta  
+> **Architecture:** [ARCHITECTURE_V4.md](./ARCHITECTURE_V4.md)
 
 ---
 
 ## Executive Summary
 
-This document outlines the development roadmap for StackKits and its integration with the Kombify ecosystem. The plan is organized into 6 sprints over approximately 12 weeks, taking StackKits from current state to production-ready with full ecosystem integration.
+StackKits v4 introduces a fundamental redesign around **three concepts** (StackKit as architecture pattern, Node-Context, and composable Add-Ons) plus a **Progressive Capability Model** (Levels 0–4). This roadmap focuses on implementing these concepts while completing the already functional `base-homelab` StackKit.
 
 ### Current State Assessment
 
-| Component | Status | Blockers |
-|-----------|--------|----------|
-| base-homelab | 85% Complete | CUE validation passes, needs E2E testing |
-| dev-homelab | 60% Complete | Docker platform import issue, syntax fixes needed |
-| kombify-admin | 30% Complete | Prisma schema ready, needs API layer |
-| Kong API Gateway | Not Started | Depends on kombify-admin API |
-| kombifyStack CLI | Not Started | Depends on Kong API |
-| kombifySim | Not Started | Depends on StackKits production-ready |
+| Component | Status | Notes |
+|-----------|--------|-------|
+| CUE base schemas | 90% | ~2800 lines, production-quality. Package bugs in `base/platform/` and `base/schema/` |
+| base-homelab | 60% | CUE validates, services defined, needs E2E testing + Add-On migration |
+| dev-homelab | 40% | Package conflicts in `exports.cue`, needs restructuring |
+| modern-homelab | 0% | Schema only, all services `status: "planned"` |
+| ha-homelab | 0% | Schema only, 8 explicit TODOs |
+| stackkit CLI | 80% | 9 commands functional (Go), needs Add-On support |
+| Add-On system | 0% | **NEW** — replaces monolithic variants |
+| Context system | 0% | **NEW** — replaces manual compute tier selection |
+| kombify Stack integration | 30% | Unifier pipeline exists, needs v4 alignment |
 
 ---
 
-## Sprint Overview
+## Phase Overview
 
 ```
-Sprint 1 (Weeks 1-2):   StackKits Production Ready
-Sprint 2 (Weeks 3-4):   kombify-admin API & Database Migration
-Sprint 3 (Weeks 5-6):   Kong API Gateway Integration
-Sprint 4 (Weeks 7-8):   kombifyStack CLI & Unification Engine
-Sprint 5 (Weeks 9-10):  kombifySim Integration
-Sprint 6 (Weeks 11-12): Production Hardening & Documentation
+Phase 1 (Weeks 1-4):    Foundation — Fix bugs, create Add-On/Context scaffolding
+Phase 2 (Weeks 5-8):    StackKit Completion — base E2E, modern/ha redefinition
+Phase 3 (Weeks 9-12):   Integration — kombify Stack alignment, Unifier v4
+Phase 4 (Weeks 13-16):  Operations — Day-2, marketplace, documentation
 ```
 
 ---
 
-## Sprint 1: StackKits Production Ready
+## Phase 1: Foundation (Weeks 1–4)
 
-**Goal**: base-homelab fully tested and production-ready, dev-homelab fixed
+**Goal:** Fix existing bugs, establish Add-On and Context infrastructure, complete base-homelab.
 
-### Week 1: base-homelab Completion
+### 1.1 CUE Bug Fixes (P0)
 
-#### 1.1 End-to-End Testing
-- [ ] Create test environment (local VM or Docker)
-- [ ] Test Terraform deployment flow
+- [ ] Fix package declarations in `base/platform/*.cue` (declares `package base` in subdirectory)
+- [ ] Fix package declarations in `base/schema/*.cue` (same issue)
+- [ ] Resolve schema duplication between `base/layers.cue` and `base/platform/*.cue`
+- [ ] Fix `dev-homelab/exports.cue` package conflict with `stackfile.cue`
+- [ ] Align Go↔CUE naming: compute tiers (`minimal/standard/performance` → consistent naming)
+- [ ] Align Go↔CUE naming: platform types (Go accepts `kubernetes`, CUE doesn't)
+- [ ] Fix Layer 3 PAAS validation logic (currently inverted)
+- [ ] Resolve `base-homelab/stackfile.cue` dual schema (`#BaseHomelabStack` vs `#BaseHomelabKit`)
+- [ ] Align CUE module path: `github.com/kombihq/stackkits` (match kombify Stack expectation)
+
+### 1.2 Add-On System Scaffolding
+
+Create the composable Add-On infrastructure that replaces monolithic variants.
+
+```
+addons/
+├── _schema/
+│   └── addon.cue              # #AddOn schema definition
+├── monitoring/
+│   ├── addon.cue              # Metadata, compatibility, constraints
+│   └── services.cue           # Prometheus + Grafana + Alertmanager
+├── backup/
+│   ├── addon.cue
+│   └── services.cue           # Restic + targets
+├── vpn-overlay/
+│   ├── addon.cue
+│   └── services.cue           # Headscale/Tailscale
+└── README.md
+```
+
+- [ ] Define `#AddOn` CUE schema with metadata, compatibility, resources, services
+- [ ] Create `addons/` directory structure
+- [ ] Migrate `base-homelab/variants/coolify.cue` → `addons/coolify-paas/addon.cue`
+- [ ] Migrate `base-homelab/variants/beszel.cue` → `addons/monitoring/` (subset)
+- [ ] Migrate `base-homelab/variants/minimal-compute.cue` → `contexts/pi.cue` defaults
+- [ ] Migrate `base-homelab/variants/secure-variant.cue` → base security defaults (fold in)
+- [ ] Implement Add-On dependency resolution in CUE
+- [ ] Add `stackkit addon add/list/remove` CLI commands
+
+### 1.3 Context System Scaffolding
+
+Create Node-Context modules for environment-aware defaults.
+
+```
+contexts/
+├── local.cue               # Full Docker, local TLS, Dokploy
+├── cloud.cue               # Let's Encrypt, Coolify, egress-aware
+└── pi.cue                  # ARM images, reduced services, tmpfs
+```
+
+- [ ] Define context detection criteria in CUE constraints
+- [ ] Create `contexts/local.cue` with local hardware defaults
+- [ ] Create `contexts/cloud.cue` with cloud provider defaults
+- [ ] Create `contexts/pi.cue` with Raspberry Pi / ARM defaults
+- [ ] Implement context-driven PAAS selection (Dokploy for local, Coolify for cloud)
+- [ ] Implement context-driven TLS strategy (self-signed vs Let's Encrypt)
+- [ ] Implement context-driven resource limits
+
+### 1.4 base-homelab E2E Testing
+
+- [ ] Create test environment (local VM or Docker via kombify Sim)
+- [ ] Test full OpenTofu deployment flow
 - [ ] Validate Layer 1 identity (LLDAP + Step-CA)
 - [ ] Validate Layer 2 platform (Traefik + Dokploy)
 - [ ] Validate Layer 3 applications via Dokploy
-- [ ] Test all variants: default, coolify, beszel, minimal, secure
+- [ ] Run with each Context (local, cloud, pi)
 
-#### 1.2 CUE Validation Pipeline
-- [ ] Run `cue vet ./base/... ./base-homelab/... ./platforms/...` in CI
-- [ ] Add pre-commit hooks for CUE validation
-- [ ] Create validation test suite
+### Phase 1 Deliverables
 
-#### 1.3 Documentation
-- [ ] Update README with quick-start guide
-- [ ] Create variant selection guide
-- [ ] Document Layer 1 identity setup (LLDAP admin, Step-CA enrollment)
-
-### Week 2: dev-homelab Fixes
-
-#### 2.1 Fix Docker Platform Import Issue
-```
-Root Cause Analysis Required:
-- Import "github.com/kombihq/stackkits/platforms/docker" reports "not used"
-- But lines 269 and 283 use docker.#DockerConfig and docker.#TraefikConfig
-- Possible: CUE module resolution issue or struct field rejection
-```
-
-**Investigation Steps**:
-1. Check if `docker:` and `traefik:` fields are rejected by `#BaseStackKit`
-2. Verify CUE module.cue configuration
-3. Test import in isolation
-4. Consider restructuring to embed docker platform properly
-
-#### 2.2 Fix Remaining Syntax Issues
-- [ ] Fix `#Services` reference resolution
-- [ ] Ensure all packages use consistent naming (`devhomelab` vs `dev_homelab`)
-- [ ] Update test files with correct import syntax
-
-#### 2.3 Integration Testing
-- [ ] Test dev-homelab deployment
-- [ ] Validate TinyAuth integration
-- [ ] Test Dokploy PAAS workflows
-
-### Sprint 1 Deliverables
 | Deliverable | Acceptance Criteria |
 |-------------|---------------------|
-| base-homelab v3.0.0 | All CUE validations pass, E2E test successful |
-| dev-homelab v2.1.0 | All CUE validations pass, Docker import fixed |
-| CI Pipeline | GitHub Actions runs CUE validation on every PR |
-| Documentation | Quick-start guide, variant guide published |
+| All CUE bugs fixed | `cue vet ./base/... ./base-homelab/...` passes |
+| Add-On schema | `#AddOn` schema defined, 3+ add-ons migrated from variants |
+| Context modules | `local.cue`, `cloud.cue`, `pi.cue` with smart defaults |
+| base-homelab E2E | Full deployment succeeds in local context |
+| CLI Add-On commands | `stackkit addon add/list/remove` functional |
 
 ---
 
-## Sprint 2: kombify-admin API & Database Migration
+## Phase 2: StackKit Completion (Weeks 5–8)
 
-**Goal**: Production PostgreSQL with REST API through kombify-admin
+**Goal:** Complete all three StackKits as architecture patterns, not node-count definitions.
 
-### Week 3: Database Migration
+### 2.1 base-homelab Refinement
 
-#### 3.1 Production Database Setup
-```yaml
-# Target: Managed PostgreSQL or self-hosted with HA
-Options:
-  - Supabase (managed, free tier available)
-  - Neon (serverless PostgreSQL)
-  - Self-hosted PostgreSQL with Patroni
-  - Docker Compose for development
-```
+- [ ] Remove old `variants/` directory (replaced by Add-Ons and Contexts)
+- [ ] Consolidate to single schema (`#BaseHomelabKit` only)
+- [ ] Update `default-spec.yaml` to v2 `kombination.yaml` format
+- [ ] Document base as "single-environment pattern"
+- [ ] Add Context × base matrix tests (local, cloud, pi)
 
-- [ ] Choose production database provider
-- [ ] Create production database instance
-- [ ] Configure connection pooling (PgBouncer or Prisma Data Proxy)
-- [ ] Set up database backups
+### 2.2 modern-homelab Implementation
 
-#### 3.2 Prisma Migration
-```bash
-# Migration workflow
-cd kombify-admin
-npm install
-npx prisma migrate dev --name init
-npx prisma db seed
-```
+Redefine as **hybrid infrastructure pattern** (not "multi-node Docker").
 
-- [ ] Create migration scripts
-- [ ] Test migration on staging database
-- [ ] Create rollback procedures
-- [ ] Document database schema
+- [ ] Define VPN overlay networking as core requirement (not add-on)
+- [ ] Implement Coolify as default PAAS (required for multi-environment)
+- [ ] Add split DNS configuration (local vs public)
+- [ ] Define service placement rules (which services go where)
+- [ ] Implement `modern × local` context (local + Tailscale exit node)
+- [ ] Implement `modern × cloud` context (multi-cloud mesh)
+- [ ] Create E2E test with 2-node deployment (1 local + 1 cloud)
 
-#### 3.3 Environment Configuration
-```env
-# Production environment variables
-DATABASE_URL=postgresql://user:pass@host:5432/kombify_admin?sslmode=require
-DIRECT_URL=postgresql://user:pass@host:5432/kombify_admin?sslmode=require
-```
+### 2.3 ha-homelab Implementation
 
-- [ ] Set up environment variable management (Doppler, Vault, or .env)
-- [ ] Configure connection strings for different environments
-- [ ] Implement secrets rotation
+Redefine as **high-availability cluster pattern** (not "3+ nodes").
 
-### Week 4: REST API Development
+- [ ] Implement Docker Swarm orchestration config
+- [ ] Add Keepalived VIP for load balancing
+- [ ] Define quorum-based consensus rules in CUE
+- [ ] Implement LLDAP cluster configuration
+- [ ] Implement Step-CA HA mode
+- [ ] Add Authentik as L2 identity (cluster-aware)
+- [ ] Implement `ha × local` context (Swarm cluster, local LB)
+- [ ] Implement `ha × cloud` context (managed LB, auto-scaling)
+- [ ] Mark `ha × pi` as not recommended (resource validation)
 
-#### 4.1 API Framework Selection
-```
-Recommended: Hono.js + Prisma
-- Lightweight, fast, TypeScript-native
-- Works on Edge, Node.js, Bun
-- OpenAPI support via @hono/zod-openapi
-```
+### 2.4 Context-Driven Defaults Matrix
 
-- [ ] Initialize Hono.js API project
-- [ ] Configure Prisma client
-- [ ] Set up OpenAPI documentation
+Implement the 9 curated configurations (3 StackKits × 3 Contexts):
 
-#### 4.2 Core API Endpoints
+| | local | cloud | pi |
+|---|---|---|---|
+| **base** | Dokploy, self-signed TLS | Coolify, Let's Encrypt | Lean Docker, reduced services |
+| **modern** | Tailscale exit node, hybrid DNS | Multi-cloud mesh | Edge relay role |
+| **ha** | Swarm + Keepalived | Cloud HA + managed LB | N/A (not recommended) |
 
-```typescript
-// kombify-admin/src/routes/index.ts
+- [ ] Implement all 9 combinations as CUE constraint sets
+- [ ] Validate each combination with `cue vet`
+- [ ] Create test fixtures for each combination
 
-// StackKits CRUD
-GET    /api/v1/stackkits
-GET    /api/v1/stackkits/:id
-POST   /api/v1/stackkits
-PUT    /api/v1/stackkits/:id
-DELETE /api/v1/stackkits/:id
+### Phase 2 Deliverables
 
-// Tools CRUD
-GET    /api/v1/tools
-GET    /api/v1/tools/:id
-POST   /api/v1/tools
-PUT    /api/v1/tools/:id
-
-// Validation Rules
-GET    /api/v1/validation-rules
-GET    /api/v1/validation-rules/layer/:layer
-POST   /api/v1/validation-rules
-
-// Settings
-GET    /api/v1/settings
-GET    /api/v1/settings/layer/:layer
-GET    /api/v1/settings/type/:type
-
-// Patterns
-GET    /api/v1/patterns
-GET    /api/v1/patterns/:name
-
-// Decisions (ADRs)
-GET    /api/v1/decisions
-POST   /api/v1/decisions
-
-// CUE Generation
-POST   /api/v1/generate/cue
-GET    /api/v1/generate/cue/status/:jobId
-```
-
-- [ ] Implement StackKit endpoints
-- [ ] Implement Tool endpoints
-- [ ] Implement ValidationRule endpoints
-- [ ] Implement Settings endpoints
-- [ ] Implement Pattern endpoints
-- [ ] Implement Decision endpoints
-- [ ] Implement CUE generation endpoint
-
-#### 4.3 Authentication & Authorization
-```typescript
-// JWT-based auth with role-based access
-Roles:
-  - admin: Full CRUD access
-  - editor: Create/Update StackKits, Tools
-  - viewer: Read-only access
-  - generator: CUE generation only (for CI/CD)
-```
-
-- [ ] Implement JWT authentication
-- [ ] Implement role-based authorization
-- [ ] Create API key management for CI/CD
-
-### Sprint 2 Deliverables
 | Deliverable | Acceptance Criteria |
 |-------------|---------------------|
-| Production Database | PostgreSQL running with seed data |
-| kombify-admin API v1.0 | All endpoints functional, OpenAPI docs |
-| Authentication | JWT auth with role-based access |
-| API Documentation | OpenAPI 3.0 spec, Swagger UI |
+| base-homelab v4.0 | Clean schema, no variants, context-aware |
+| modern-homelab v4.0 | Hybrid pattern implemented, 2-node E2E test |
+| ha-homelab v4.0 | Cluster pattern implemented, Swarm config |
+| 9-cell matrix | All StackKit × Context combinations validate |
+| Updated kombination.yaml | v2 spec format with stackkit/context/addons |
 
 ---
 
-## Sprint 3: Kong API Gateway Integration
+## Phase 3: kombify Stack Integration (Weeks 9–12)
 
-**Goal**: Kong manages API routing, rate limiting, and authentication
+**Goal:** Align the kombify Stack Unifier pipeline with StackKits v4 concepts.
 
-### Week 5: Kong Setup
+### 3.1 Unifier Pipeline v4 Alignment
 
-#### 5.1 Kong Deployment
-```yaml
-# Kong deployment options
-Development:
-  - Docker Compose with Kong DB-less mode
-  - Kong Ingress Controller in local K3s
+Update `pkg/unifier/` in kombify Stack to understand the new 3-concept model.
 
-Production:
-  - Kong Konnect (managed)
-  - Self-hosted Kong with PostgreSQL
-  - Kong Ingress Controller in Kubernetes
-```
+- [ ] Update `resolver.go`: StackKit selection by architecture pattern (not node count)
+- [ ] Update `addons.go`: Load Add-Ons from `addons/` directory (not inline conditions)
+- [ ] Update `analyze.go`: Generate Node-Context from agent hardware reports
+- [ ] Update `unify.go`: Merge StackKit + Context + Add-Ons into unified CUE evaluation
+- [ ] Update `stackkit_loader.go`: Load `contexts/*.cue` alongside StackKit schemas
+- [ ] Align CUE module path: both repos use `github.com/kombihq/stackkits`
 
-- [ ] Deploy Kong Gateway
-- [ ] Configure admin API access
-- [ ] Set up Kong Manager UI
+### 3.2 StackKit Resolver Update
 
-#### 5.2 Service & Route Configuration
-```yaml
-# Kong declarative config (kong.yml)
-_format_version: "3.0"
+Current resolver uses aliases like `hybrid-cloud`, `cloud-native`, `minimal-arm`. Update to:
 
-services:
-  - name: kombify-admin
-    url: http://kombify-admin:3000
-    routes:
-      - name: admin-api
-        paths:
-          - /api/v1/admin
-        strip_path: true
-    plugins:
-      - name: jwt
-      - name: rate-limiting
-        config:
-          minute: 100
-          policy: local
+| Old Alias | New Resolution |
+|-----------|---------------|
+| `hybrid-cloud` | `modern` StackKit + `cloud` Context |
+| `cloud-native` | `modern` StackKit + `cloud` Context |
+| `minimal-arm` | `base` StackKit + `pi` Context |
+| `developer-local` | `base` StackKit + `local` Context |
+| `high-availability` | `ha` StackKit + auto Context |
 
-  - name: kombify-stack
-    url: http://kombify-stack:3001
-    routes:
-      - name: stack-api
-        paths:
-          - /api/v1/stack
-        strip_path: true
+- [ ] Refactor resolver to return StackKit + Context pair
+- [ ] Remove node-count-based selection logic
+- [ ] Add pattern-based selection (single-env → base, hybrid → modern, HA → ha)
 
-  - name: public-api
-    url: http://kombify-admin:3000
-    routes:
-      - name: public-stackkits
-        paths:
-          - /api/v1/public/stackkits
-        methods:
-          - GET
-    plugins:
-      - name: rate-limiting
-        config:
-          minute: 30
-          policy: local
-```
+### 3.3 Web Wizard Update
 
-- [ ] Define services for each backend
-- [ ] Configure routes
-- [ ] Set up path-based routing
+Update kombify Stack frontend wizard for 3-concept model.
 
-#### 5.3 Plugins & Security
-```yaml
-# Kong plugins
-Authentication:
-  - JWT (for API clients)
-  - Key-Auth (for CLI tools)
-  - OAuth2 (for web apps)
+- [ ] Step 1: Choose architecture pattern (base/modern/ha) with visual comparison
+- [ ] Step 2: Node registration (Context auto-detected per node)
+- [ ] Step 3: Add-On selection (filtered by StackKit + Context compatibility)
+- [ ] Step 4: Customization (service overrides, domain, etc.)
+- [ ] Step 5: Review + deploy
 
-Security:
-  - Rate Limiting (per consumer, per route)
-  - IP Restriction (for admin endpoints)
-  - CORS (for web clients)
-  - Request Size Limiting
+### 3.4 Agent Integration for Context Detection
 
-Observability:
-  - Prometheus (metrics)
-  - HTTP Log (request logging)
-  - Zipkin (distributed tracing)
-```
+- [ ] Agent reports hardware profile on `Register` RPC (RAM, CPU, arch, GPU)
+- [ ] Agent reports cloud provider metadata (if available)
+- [ ] kombify Stack classifies Context from agent report
+- [ ] Context flows into Unifier pipeline
 
-- [ ] Configure JWT plugin
-- [ ] Configure Key-Auth for CLI
-- [ ] Set up rate limiting
-- [ ] Enable CORS for web clients
-- [ ] Configure logging and metrics
+### Phase 3 Deliverables
 
-### Week 6: CLI Authentication Integration
-
-#### 6.1 API Key Management
-```bash
-# CLI authentication flow
-kombify login
-> Enter your API key: sk_live_xxxxx
-> Authenticated as: user@example.com
-> Organization: my-homelab
-
-# API key stored in ~/.kombify/credentials
-```
-
-- [ ] Create API key generation endpoint
-- [ ] Implement CLI credential storage
-- [ ] Configure Kong Key-Auth consumer
-
-#### 6.2 Public API for Self-Hosters
-```yaml
-# Public endpoints (no auth required, rate limited)
-GET /api/v1/public/stackkits          # List available StackKits
-GET /api/v1/public/stackkits/:name    # Get StackKit details
-GET /api/v1/public/tools              # List tools catalog
-GET /api/v1/public/patterns           # List patterns
-
-# Download endpoints
-GET /api/v1/public/download/:stackkit # Download StackKit package
-```
-
-- [ ] Create public API routes
-- [ ] Configure rate limiting for public endpoints
-- [ ] Implement StackKit package download
-
-### Sprint 3 Deliverables
 | Deliverable | Acceptance Criteria |
 |-------------|---------------------|
-| Kong Gateway | Running with all services configured |
-| JWT Authentication | Working for API clients |
-| Key-Auth for CLI | CLI can authenticate via API key |
-| Public API | Rate-limited public endpoints for self-hosters |
-| API Documentation | Updated with Kong-proxied URLs |
+| Unifier v4 | Pipeline processes StackKit + Context + Add-Ons |
+| Resolver v4 | Pattern-based StackKit selection |
+| Web wizard v4 | 3-concept flow in frontend |
+| Context auto-detection | Agent → Context classification working |
 
 ---
 
-## Sprint 4: kombifyStack CLI & Unification Engine
+## Phase 4: Operations & Ecosystem (Weeks 13–16)
 
-**Goal**: CLI tool for deploying StackKits with unified configuration
+**Goal:** Day-2 operations, Add-On marketplace, documentation, community.
 
-### Week 7: CLI Development
+### 4.1 Day-2 Operations (Level 3)
 
-#### 7.1 CLI Framework
-```typescript
-// Recommended: Commander.js + Inquirer.js + Chalk
-// Or: Oclif for enterprise-grade CLI
+- [ ] Drift detection for Add-On configurations
+- [ ] Certificate auto-renewal orchestration
+- [ ] Service health monitoring via agent heartbeats
+- [ ] Rolling update support for ha StackKit
+- [ ] Configuration change rollback
 
-// CLI structure
-kombify
-├── login           # Authenticate with API
-├── logout          # Clear credentials
-├── stackkit
-│   ├── list        # List available StackKits
-│   ├── show        # Show StackKit details
-│   ├── init        # Initialize new deployment
-│   ├── validate    # Validate configuration
-│   └── deploy      # Deploy StackKit
-├── config
-│   ├── get         # Get config value
-│   ├── set         # Set config value
-│   └── list        # List all config
-└── sim
-    ├── create      # Create simulation VM
-    ├── list        # List VMs
-    └── destroy     # Destroy VM
-```
+### 4.2 Add-On Ecosystem
 
-- [ ] Initialize CLI project with Commander.js
-- [ ] Implement authentication commands
-- [ ] Implement stackkit commands
-- [ ] Implement config commands
-- [ ] Add interactive prompts with Inquirer.js
+- [ ] Add-On registry/marketplace (kombify Sphere integration)
+- [ ] Community Add-On contribution workflow
+- [ ] Add-On versioning and compatibility matrix
+- [ ] `stackkit addon search` for marketplace discovery
 
-#### 7.2 Core CLI Commands
-```bash
-# Initialize a new deployment
-kombify stackkit init base-homelab
-> Select variant: [default, coolify, beszel, minimal, secure]
-> Enter domain (or leave empty for local):
-> SSH user: ubuntu
-> SSH host: 192.168.1.100
-> Created: ./kombify.yaml
+### 4.3 Documentation
 
-# Validate configuration
-kombify stackkit validate
-> Validating kombify.yaml...
-> ✓ Layer 1: Identity configuration valid
-> ✓ Layer 2: Platform configuration valid
-> ✓ Layer 3: Application configuration valid
-> Validation passed!
+- [ ] Update Mintlify docs with v4 concepts
+- [ ] Create StackKit selection guide (pattern-based)
+- [ ] Create Add-On authoring guide
+- [ ] Create Context customization guide
+- [ ] Update API reference for v4 spec format
+- [ ] Migration guide from v3 variants to v4 Add-Ons
 
-# Deploy
-kombify stackkit deploy
-> Deploying base-homelab (variant: default)...
-> [1/5] Provisioning infrastructure...
-> [2/5] Configuring Layer 1 (Identity)...
-> [3/5] Configuring Layer 2 (Platform)...
-> [4/5] Deploying Layer 3 (Applications)...
-> [5/5] Running health checks...
-> ✓ Deployment complete!
-```
+### 4.4 Level 4 Preparation (SaaS)
 
-- [ ] Implement `kombify stackkit init`
-- [ ] Implement `kombify stackkit validate`
-- [ ] Implement `kombify stackkit deploy`
-- [ ] Add progress indicators and logging
+- [ ] Define AI-assisted operations API surface
+- [ ] Natural language → kombination.yaml prototype
+- [ ] Cost optimization engine for cloud contexts
+- [ ] Community intelligence aggregation (anonymized)
 
-### Week 8: Unification Engine
+### Phase 4 Deliverables
 
-#### 8.1 Unification Process
-```
-Unification = User Spec + StackKit Schema → Unified Config
-
-User Spec (kombify.yaml):
-  - Target nodes (IPs, credentials)
-  - Variant selection
-  - Custom overrides
-
-StackKit Schema (CUE):
-  - Layer definitions
-  - Service configurations
-  - Validation rules
-
-Unified Config:
-  - Terraform variables
-  - Docker Compose files
-  - Deployment manifests
-```
-
-- [ ] Define kombify.yaml schema
-- [ ] Implement CUE unification
-- [ ] Generate Terraform variables
-- [ ] Generate Docker Compose files
-
-#### 8.2 Deployment Orchestration
-```
-Deployment Flow:
-1. Fetch StackKit from API (or local cache)
-2. Merge user spec with StackKit defaults
-3. Validate unified config against CUE schemas
-4. Generate deployment artifacts
-5. Execute Terraform (Layer 1-2)
-6. Configure PAAS (Dokploy/Coolify)
-7. Deploy applications via PAAS API
-8. Run health checks
-9. Output access URLs
-```
-
-- [ ] Implement artifact generation
-- [ ] Integrate Terraform execution
-- [ ] Integrate PAAS API calls (Dokploy)
-- [ ] Implement health checks
-- [ ] Generate output report
-
-### Sprint 4 Deliverables
 | Deliverable | Acceptance Criteria |
 |-------------|---------------------|
-| kombifyStack CLI v1.0 | All commands functional |
-| Unification Engine | CUE unification working |
-| Terraform Integration | Layer 1-2 deployment via Terraform |
-| PAAS Integration | Layer 3 deployment via Dokploy API |
-| End-to-End Deployment | Full deployment from CLI to running stack |
-
----
-
-## Sprint 5: kombifySim Integration
-
-**Goal**: Deploy StackKits to simulation VMs for testing
-
-### Week 9: kombifySim Architecture
-
-#### 9.1 VM Provider Integration
-```yaml
-# Supported VM providers
-Local:
-  - VirtualBox (via Vagrant)
-  - Docker (for lightweight simulation)
-  - Lima (macOS)
-  - WSL2 (Windows)
-
-Cloud:
-  - Hetzner Cloud
-  - DigitalOcean
-  - AWS EC2
-  - GCP Compute
-```
-
-- [ ] Define VM provider interface
-- [ ] Implement VirtualBox/Vagrant provider
-- [ ] Implement Docker provider (for CI)
-- [ ] Implement Hetzner provider
-
-#### 9.2 Simulation Workflow
-```bash
-# Create simulation environment
-kombify sim create --provider virtualbox --os ubuntu-24
-> Creating VM: kombify-sim-abc123
-> OS: Ubuntu 24.04 LTS
-> Resources: 4 CPU, 8GB RAM, 50GB disk
-> IP: 192.168.56.101
-> SSH: ssh ubuntu@192.168.56.101
-
-# Deploy StackKit to simulation
-kombify sim deploy base-homelab --vm kombify-sim-abc123
-> Deploying to simulation VM...
-> [Using existing kombify.yaml with VM overrides]
-> ...deployment output...
-
-# Access simulation
-kombify sim ssh kombify-sim-abc123
-> Connecting to kombify-sim-abc123...
-
-# Destroy simulation
-kombify sim destroy kombify-sim-abc123
-> Destroying VM: kombify-sim-abc123
-> ✓ VM destroyed
-```
-
-- [ ] Implement `kombify sim create`
-- [ ] Implement `kombify sim deploy`
-- [ ] Implement `kombify sim ssh`
-- [ ] Implement `kombify sim destroy`
-- [ ] Implement `kombify sim list`
-
-### Week 10: Snapshot & Testing
-
-#### 10.1 Snapshot Management
-```bash
-# Take snapshot after successful deployment
-kombify sim snapshot create kombify-sim-abc123 --name "post-deploy"
-> Creating snapshot: post-deploy
-> ✓ Snapshot created
-
-# Restore to snapshot
-kombify sim snapshot restore kombify-sim-abc123 --name "post-deploy"
-> Restoring snapshot: post-deploy
-> ✓ Snapshot restored
-
-# List snapshots
-kombify sim snapshot list kombify-sim-abc123
-> NAME         CREATED              SIZE
-> post-deploy  2026-01-30 10:00:00  2.5GB
-> clean        2026-01-30 09:00:00  1.2GB
-```
-
-- [ ] Implement snapshot creation
-- [ ] Implement snapshot restoration
-- [ ] Implement snapshot listing
-- [ ] Add snapshot to deployment workflow
-
-#### 10.2 Automated Testing
-```yaml
-# .github/workflows/stackkit-e2e.yml
-name: StackKit E2E Tests
-
-on:
-  push:
-    paths:
-      - 'base-homelab/**'
-      - 'dev-homelab/**'
-
-jobs:
-  e2e-test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup kombify CLI
-        run: npm install -g @kombify/cli
-
-      - name: Create simulation VM
-        run: kombify sim create --provider docker --os ubuntu-24
-
-      - name: Deploy StackKit
-        run: kombify sim deploy base-homelab --variant default
-
-      - name: Run health checks
-        run: kombify stackkit health-check
-
-      - name: Cleanup
-        if: always()
-        run: kombify sim destroy --all
-```
-
-- [ ] Create E2E test workflow
-- [ ] Implement health check command
-- [ ] Add test reporting
-- [ ] Integrate with PR checks
-
-### Sprint 5 Deliverables
-| Deliverable | Acceptance Criteria |
-|-------------|---------------------|
-| kombifySim CLI | All simulation commands working |
-| VirtualBox Provider | Local VM creation/destruction |
-| Docker Provider | Container-based simulation for CI |
-| Snapshot Management | Create/restore/list snapshots |
-| E2E Test Pipeline | Automated testing in GitHub Actions |
-
----
-
-## Sprint 6: Production Hardening & Documentation
-
-**Goal**: Production-ready release with comprehensive documentation
-
-### Week 11: Security & Hardening
-
-#### 11.1 Security Audit
-- [ ] Review all API endpoints for auth/authz
-- [ ] Audit database access patterns
-- [ ] Review secrets management
-- [ ] Penetration testing on Kong gateway
-- [ ] Validate TLS everywhere
-
-#### 11.2 Production Configuration
-```yaml
-# Production checklist
-Database:
-  - [ ] Connection pooling enabled
-  - [ ] Backups configured (daily)
-  - [ ] Read replicas (if needed)
-  - [ ] Monitoring alerts
-
-Kong Gateway:
-  - [ ] Rate limiting tuned
-  - [ ] DDoS protection
-  - [ ] SSL certificates (Let's Encrypt)
-  - [ ] Health checks configured
-
-API:
-  - [ ] Request validation
-  - [ ] Error handling
-  - [ ] Logging structured (JSON)
-  - [ ] Metrics exported (Prometheus)
-
-CLI:
-  - [ ] Credential encryption
-  - [ ] Update notifications
-  - [ ] Offline fallback
-```
-
-- [ ] Configure production database
-- [ ] Harden Kong gateway
-- [ ] Set up monitoring (Prometheus + Grafana)
-- [ ] Configure alerting
-
-### Week 12: Documentation & Release
-
-#### 12.1 Documentation
-```
-docs/
-├── getting-started/
-│   ├── quick-start.md
-│   ├── installation.md
-│   └── first-deployment.md
-├── stackkits/
-│   ├── base-homelab.md
-│   ├── dev-homelab.md
-│   └── creating-stackkits.md
-├── api/
-│   ├── authentication.md
-│   ├── endpoints.md
-│   └── openapi.yaml
-├── cli/
-│   ├── commands.md
-│   ├── configuration.md
-│   └── troubleshooting.md
-└── architecture/
-    ├── overview.md
-    ├── layers.md
-    └── unification.md
-```
-
-- [ ] Write getting-started guides
-- [ ] Document all StackKits
-- [ ] Generate API documentation
-- [ ] Write CLI documentation
-- [ ] Create architecture diagrams
-
-#### 12.2 Release Process
-```bash
-# Version tagging
-v1.0.0 - Initial production release
-
-Components:
-- stackkits v3.0.0 (base-homelab, dev-homelab)
-- kombify-admin v1.0.0 (API)
-- kombify-cli v1.0.0 (CLI)
-- kombify-sim v1.0.0 (Simulation)
-```
-
-- [ ] Create release branches
-- [ ] Tag versions
-- [ ] Publish npm packages
-- [ ] Create GitHub releases
-- [ ] Announce release
-
-### Sprint 6 Deliverables
-| Deliverable | Acceptance Criteria |
-|-------------|---------------------|
-| Security Audit | All critical issues resolved |
-| Production Config | All components production-ready |
-| Documentation | Complete docs for all components |
-| v1.0.0 Release | All packages published |
-
----
-
-## Integration Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                         Self-Hosters / Users                         │
-└─────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                           kombify CLI                                │
-│                     (kombify stackkit deploy)                        │
-└─────────────────────────────────────────────────────────────────────┘
-                                    │
-                    ┌───────────────┴───────────────┐
-                    ▼                               ▼
-┌──────────────────────────────────┐    ┌──────────────────────────────┐
-│        Kong API Gateway           │    │         kombifySim           │
-│     (api.kombify.io:443)         │    │    (Local/Cloud VMs)         │
-│                                  │    │                              │
-│  ┌─────────────────────────────┐ │    │  ┌─────────────────────────┐ │
-│  │ /api/v1/admin/*             │ │    │  │ VirtualBox Provider     │ │
-│  │ /api/v1/stack/*             │ │    │  │ Docker Provider         │ │
-│  │ /api/v1/public/*            │ │    │  │ Hetzner Provider        │ │
-│  └─────────────────────────────┘ │    │  └─────────────────────────┘ │
-└──────────────────────────────────┘    └──────────────────────────────┘
-                    │
-        ┌───────────┴───────────┐
-        ▼                       ▼
-┌──────────────────┐    ┌──────────────────┐
-│  kombify-admin   │    │  kombify-stack   │
-│  (Hono.js API)   │    │  (Orchestrator)  │
-│                  │    │                  │
-│  - StackKits     │    │  - Unification   │
-│  - Tools         │    │  - Terraform     │
-│  - Validation    │    │  - PAAS API      │
-│  - Settings      │    │  - Health Check  │
-└──────────────────┘    └──────────────────┘
-        │                       │
-        ▼                       ▼
-┌──────────────────┐    ┌──────────────────┐
-│   PostgreSQL     │    │   Target Hosts   │
-│  (kombify_admin) │    │  (Homelabs)      │
-│                  │    │                  │
-│  - StackKits     │    │  L1: LLDAP,CA    │
-│  - Tools         │    │  L2: Traefik,    │
-│  - Rules         │    │      Dokploy     │
-│  - Settings      │    │  L3: Apps        │
-└──────────────────┘    └──────────────────┘
-```
-
----
-
-## Risk Register
-
-| Risk | Impact | Probability | Mitigation |
-|------|--------|-------------|------------|
-| CUE validation complexity | High | Medium | Invest in comprehensive test suite |
-| Kong configuration errors | High | Low | Use declarative config, test in staging |
-| Database migration failures | High | Low | Backup before migration, rollback plan |
-| CLI cross-platform issues | Medium | Medium | Test on Windows, macOS, Linux |
-| PAAS API changes (Dokploy) | Medium | Low | Abstract PAAS layer, version pin |
-| VM provider API changes | Low | Low | Provider abstraction layer |
+| Day-2 operations | Drift detection, cert renewal, health monitoring |
+| Add-On marketplace | Registry with search, install, version management |
+| Complete documentation | All Mintlify pages updated, guides published |
+| Level 4 prototype | NLP config demo in kombify Sphere |
 
 ---
 
 ## Success Metrics
 
-### Sprint 1
-- [ ] `cue vet` passes for all StackKits
-- [ ] E2E deployment succeeds for base-homelab
-- [ ] All 5 variants tested
-
-### Sprint 2
-- [ ] API response time < 100ms (p95)
-- [ ] Database migration completes without data loss
-- [ ] OpenAPI spec validates
-
-### Sprint 3
-- [ ] Kong handles 1000 req/min without errors
-- [ ] CLI authentication works on all platforms
-- [ ] Public API serves StackKit downloads
-
-### Sprint 4
-- [ ] Full deployment completes in < 15 minutes
-- [ ] Unification produces valid Terraform
-- [ ] Health checks pass for all layers
-
-### Sprint 5
-- [ ] VM creation time < 5 minutes
-- [ ] Snapshot restore < 2 minutes
-- [ ] E2E tests run in CI
-
-### Sprint 6
-- [ ] Zero critical security issues
-- [ ] Documentation coverage > 90%
-- [ ] v1.0.0 released to npm
+| Metric | Target |
+|--------|--------|
+| `cue vet` passes for all StackKits | 100% |
+| E2E deployment success rate (base) | > 95% |
+| StackKit × Context combinations validated | 8/9 (ha×pi excluded) |
+| Add-Ons migrated from variants | All |
+| kombify Stack Unifier processes v4 format | Yes |
+| Documentation coverage | > 90% |
+| Time to deploy (base, local, no add-ons) | < 10 minutes |
 
 ---
 
-## Appendix A: Technical Specifications
+## Architecture Reference
 
-### A.1 kombify.yaml Schema
-```yaml
-# kombify.yaml - User specification file
-apiVersion: kombify.io/v1
-kind: Deployment
+For detailed architecture documentation, see [ARCHITECTURE_V4.md](./ARCHITECTURE_V4.md).
 
-metadata:
-  name: my-homelab
-
-spec:
-  stackkit: base-homelab
-  version: "3.0.0"
-  variant: default
-
-  nodes:
-    - name: main
-      role: main
-      ssh:
-        host: 192.168.1.100
-        user: ubuntu
-        privateKeyPath: ~/.ssh/id_ed25519
-      resources:
-        cpu: 4
-        memory: 8
-        disk: 100
-
-  overrides:
-    network:
-      defaults:
-        domain: homelab.local
-    identity:
-      lldap:
-        domain:
-          base: "dc=homelab,dc=local"
-```
-
-### A.2 API Authentication Flow
-```
-1. User creates account on kombify.io
-2. User generates API key in dashboard
-3. CLI stores API key in ~/.kombify/credentials
-4. CLI sends API key in X-API-Key header
-5. Kong validates key against consumer database
-6. Request forwarded to backend with consumer context
-```
-
-### A.3 CUE Generation Pipeline
-```
-1. Admin updates database via UI/API
-2. Database trigger or webhook fires
-3. GitHub Action triggered
-4. Action runs generate-cue.ts
-5. Generated CUE files committed
-6. PR created for review (optional)
-7. Merge updates base/generated/
-```
-
----
-
-## Appendix B: Component Dependencies
-
-```mermaid
-graph TD
-    A[StackKits CUE Schemas] --> B[kombify-admin API]
-    B --> C[Kong API Gateway]
-    C --> D[kombify CLI]
-    D --> E[kombifySim]
-    D --> F[Target Hosts]
-
-    B --> G[PostgreSQL]
-    D --> H[Terraform]
-    D --> I[Dokploy API]
-
-    E --> J[VirtualBox]
-    E --> K[Docker]
-    E --> L[Hetzner]
-```
-
----
-
-## Appendix C: Previous Roadmap (Archived)
-
-The previous roadmap focused on single-stack development. Key completed items:
-
-### ✅ Completed (from v1.0 plan)
-- [x] CUE schema architecture (3-layer model)
-- [x] CLI scaffold (`init`, `validate`, `plan`, `apply`, `destroy`, `status`)
-- [x] base-homelab templates (simple mode)
-- [x] CI/CD pipeline (GitHub Actions)
-- [x] Documentation structure (TARGET_STATE, STATUS_QUO, ADRs)
-- [x] PaaS strategy: Dokploy (no domain) / Coolify (with domain)
-- [x] CUE → Terraform Bridge
-- [x] Variant System (default, coolify, beszel, minimal, secure)
-- [x] Documentation Alignment
-
-### Deferred Items
-- Terramate integration → Sprint 4 (Unification Engine)
-- Network standards enforcement → Sprint 1 (E2E Testing)
-- Release automation → Sprint 6 (Documentation & Release)
-
----
-
-## Contributing
-
-We welcome contributions! Priority areas:
-
-1. **Sprint 1**: E2E testing for base-homelab
-2. **Sprint 2**: API endpoint implementations
-3. **Sprint 3**: Kong plugin configurations
-4. **Sprint 4**: CLI command implementations
-5. **Sprint 5**: VM provider implementations
-6. **Sprint 6**: Documentation
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+Key concepts:
+- **StackKit** = Architecture pattern (base/modern/ha)
+- **Node-Context** = Runtime environment (local/cloud/pi), auto-detected
+- **Add-Ons** = Composable extensions (replace variants)
+- **Progressive Capability Model** = Levels 0–4 (CLI → SaaS)
+- **3-Layer Architecture** = L1 Foundation, L2 Platform, L3 Applications (preserved)
