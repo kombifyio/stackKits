@@ -11,9 +11,12 @@
  *   all              - Generate all CUE files (default)
  *   validation-rules - Generate validation rules only
  *   settings         - Generate settings metadata only
+ *   addons           - Generate add-on definitions only
+ *   contexts         - Generate context defaults only
+ *   tool-catalog     - Generate tool catalog only
  */
 
-import { PrismaClient, LayerType, SettingType, LifecycleState } from '@prisma/client';
+import { PrismaClient, LayerType, SettingType, LifecycleState, ArchitecturePattern, NodeContext } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -382,6 +385,9 @@ async function main(): Promise<void> {
     case 'all':
       await generateValidationRules();
       await generateSettingsMetadata();
+      await generateAddonDefinitions();
+      await generateContextDefaults();
+      await generateToolCatalog();
       break;
     case 'validation-rules':
       await generateValidationRules();
@@ -389,9 +395,18 @@ async function main(): Promise<void> {
     case 'settings':
       await generateSettingsMetadata();
       break;
+    case 'addons':
+      await generateAddonDefinitions();
+      break;
+    case 'contexts':
+      await generateContextDefaults();
+      break;
+    case 'tool-catalog':
+      await generateToolCatalog();
+      break;
     default:
       console.error(`Unknown target: ${target}`);
-      console.error('Valid targets: all, validation-rules, settings');
+      console.error('Valid targets: all, validation-rules, settings, addons, contexts, tool-catalog');
       process.exit(1);
   }
 
@@ -401,6 +416,355 @@ async function main(): Promise<void> {
   console.log('Next steps:');
   console.log('  1. Validate generated CUE: cue vet ./base/...');
   console.log('  2. Commit changes if valid');
+}
+
+/**
+ * Generate add-on definitions CUE file
+ */
+async function generateAddonDefinitions(): Promise<void> {
+  console.log('Generating add-on definitions...');
+
+  const addons = await prisma.addOn.findMany({
+    where: {
+      lifecycleState: {
+        in: [LifecycleState.APPROVED, LifecycleState.EVALUATED, LifecycleState.DRAFT],
+      },
+    },
+    orderBy: [{ category: 'asc' }, { name: 'asc' }],
+  });
+
+  const header = `// =============================================================================
+// GENERATED FILE - DO NOT EDIT DIRECTLY
+// =============================================================================
+// This file is auto-generated from the kombify-admin database.
+// To modify add-ons, update the database and re-run the generator.
+//
+// Generated: ${new Date().toISOString()}
+// Source: kombify-admin/prisma/seed.ts → AddOn table
+// =============================================================================
+
+package base
+`;
+
+  let content = header;
+
+  // Type definitions
+  content += `
+// =============================================================================
+// ADD-ON TYPE DEFINITIONS
+// =============================================================================
+
+#ArchitecturePattern: "BASE" | "MODERN" | "HA"
+#NodeContext:          "LOCAL" | "CLOUD" | "PI"
+
+#AddOn: {
+  name:               string
+  displayName:        string
+  description?:       string
+  category:           string
+  version:            string
+  compatibleKits:     [...#ArchitecturePattern]
+  compatibleContexts: [...#NodeContext]
+  dependsOn:          [...string]
+  conflictsWith:      [...string]
+  minMemoryMB:        int & >=0
+  minCpuCores:        number & >=0
+  requiresGpu:        bool
+  includedTools:      [...string]
+  autoActivate:       bool
+  autoActivateCondition?: string
+}
+`;
+
+  // Add-on registry
+  content += `
+// =============================================================================
+// ADD-ON REGISTRY
+// =============================================================================
+
+#AddOnRegistry: {
+`;
+
+  // Group by category
+  const categories = [...new Set(addons.map((a) => a.category))].sort();
+
+  for (const category of categories) {
+    const categoryAddons = addons.filter((a) => a.category === category);
+    content += `  // ${category.charAt(0).toUpperCase() + category.slice(1)}
+`;
+    for (const addon of categoryAddons) {
+      content += `  "${addon.name}": {
+    name:               "${addon.name}"
+    displayName:        "${escapeCueString(addon.displayName)}"
+    description:        "${escapeCueString(addon.description || '')}"
+    category:           "${addon.category}"
+    version:            "${addon.version}"
+    compatibleKits:     [${addon.compatibleKits.map((k) => `"${k}"`).join(', ')}]
+    compatibleContexts: [${addon.compatibleContexts.map((c) => `"${c}"`).join(', ')}]
+    dependsOn:          [${addon.dependsOn.map((d) => `"${d}"`).join(', ')}]
+    conflictsWith:      [${addon.conflictsWith.map((c) => `"${c}"`).join(', ')}]
+    minMemoryMB:        ${addon.minMemoryMB}
+    minCpuCores:        ${addon.minCpuCores}
+    requiresGpu:        ${addon.requiresGpu}
+    includedTools:      [${addon.includedTools.map((t) => `"${t}"`).join(', ')}]
+    autoActivate:       ${addon.autoActivate}
+    ${addon.autoActivateCondition ? `autoActivateCondition: "${escapeCueString(addon.autoActivateCondition)}"` : ''}
+  }
+`;
+    }
+    content += '\n';
+  }
+
+  content += '}\n';
+
+  // Validation constraints
+  content += `
+// =============================================================================
+// ADD-ON COMPATIBILITY CONSTRAINTS
+// =============================================================================
+
+// These constraints can be imported in StackKit definitions to validate
+// that activated add-ons are compatible with the selected pattern/context.
+
+#ValidateAddOnCompatibility: {
+  pattern:   #ArchitecturePattern
+  context:   #NodeContext
+  addons:    [...string]
+
+  // Every activated add-on must be compatible
+  _valid: true & and([
+    for a in addons {
+      let addon = #AddOnRegistry[a]
+      // Pattern must be in compatibleKits
+      or([ for k in addon.compatibleKits { k == pattern } ])
+      // Context must be in compatibleContexts
+      or([ for c in addon.compatibleContexts { c == context } ])
+    }
+  ])
+}
+`;
+
+  const outputPath = path.join(OUTPUT_DIR, 'addons.cue');
+  fs.writeFileSync(outputPath, content);
+  console.log(`  Written: ${outputPath} (${addons.length} add-ons)`);
+}
+
+/**
+ * Generate context defaults CUE file
+ */
+async function generateContextDefaults(): Promise<void> {
+  console.log('Generating context defaults...');
+
+  const contexts = await prisma.contextDefaults.findMany({
+    orderBy: { context: 'asc' },
+  });
+
+  const header = `// =============================================================================
+// GENERATED FILE - DO NOT EDIT DIRECTLY
+// =============================================================================
+// This file is auto-generated from the kombify-admin database.
+// To modify context defaults, update the database and re-run the generator.
+//
+// Generated: ${new Date().toISOString()}
+// Source: kombify-admin/prisma/seed.ts → ContextDefaults table
+// =============================================================================
+
+package base
+`;
+
+  let content = header;
+
+  // Type definitions
+  content += `
+// =============================================================================
+// CONTEXT DEFAULTS DEFINITION
+// =============================================================================
+
+#ContextType: "LOCAL" | "CLOUD" | "PI"
+
+#ContextDefault: {
+  context:             #ContextType
+  displayName:         string
+  description?:        string
+  defaultPaas?:        string
+  defaultTlsMode?:     string
+  defaultComputeTier?: string
+  defaultMemoryLimitMB?: int
+  defaultCpuShares?:   int
+  defaultStorageDriver?: string
+  defaultDnsStrategy?: string
+  defaultBackupTarget?: string
+  detectionCriteria?:  _
+  hardwareProfile?:    _
+}
+`;
+
+  // Context defaults registry
+  content += `
+// =============================================================================
+// CONTEXT DEFAULTS REGISTRY
+// =============================================================================
+
+#ContextDefaults: {
+`;
+
+  for (const ctx of contexts) {
+    content += `  "${ctx.context}": {
+    context:             "${ctx.context}"
+    displayName:         "${escapeCueString(ctx.displayName)}"
+    ${ctx.description ? `description:         "${escapeCueString(ctx.description)}"` : ''}
+    ${ctx.defaultPaas ? `defaultPaas:         "${escapeCueString(ctx.defaultPaas)}"` : ''}
+    ${ctx.defaultTlsMode ? `defaultTlsMode:      "${escapeCueString(ctx.defaultTlsMode)}"` : ''}
+    ${ctx.defaultComputeTier ? `defaultComputeTier:  "${escapeCueString(ctx.defaultComputeTier)}"` : ''}
+    ${ctx.defaultMemoryLimitMB ? `defaultMemoryLimitMB: ${ctx.defaultMemoryLimitMB}` : ''}
+    ${ctx.defaultCpuShares ? `defaultCpuShares:    ${ctx.defaultCpuShares}` : ''}
+    ${ctx.defaultStorageDriver ? `defaultStorageDriver: "${escapeCueString(ctx.defaultStorageDriver)}"` : ''}
+    ${ctx.defaultDnsStrategy ? `defaultDnsStrategy:  "${escapeCueString(ctx.defaultDnsStrategy)}"` : ''}
+    ${ctx.defaultBackupTarget ? `defaultBackupTarget: "${escapeCueString(ctx.defaultBackupTarget)}"` : ''}
+  }
+`;
+  }
+
+  content += '}\n';
+
+  // Auto-detection helper
+  content += `
+// =============================================================================
+// CONTEXT DETECTION HELPERS
+// =============================================================================
+
+// Use this to apply context-specific defaults to a StackKit configuration.
+// Example usage in a StackKit definition:
+//
+//   import "base/generated"
+//
+//   _detectedContext: #ContextType
+//   _defaults: #ContextDefaults[_detectedContext]
+//   paas: _defaults.defaultPaas
+//
+`;
+
+  const outputPath = path.join(OUTPUT_DIR, 'contexts.cue');
+  fs.writeFileSync(outputPath, content);
+  console.log(`  Written: ${outputPath} (${contexts.length} contexts)`);
+}
+
+/**
+ * Generate tool catalog CUE file
+ */
+async function generateToolCatalog(): Promise<void> {
+  console.log('Generating tool catalog...');
+
+  const tools = await prisma.tool.findMany({
+    where: {
+      lifecycleState: {
+        in: [LifecycleState.APPROVED, LifecycleState.EVALUATED],
+      },
+    },
+    orderBy: [{ layer: 'asc' }, { category: 'asc' }, { name: 'asc' }],
+  });
+
+  const categories = await prisma.toolCategory.findMany({
+    orderBy: [{ layer: 'asc' }, { slug: 'asc' }],
+  });
+
+  const header = `// =============================================================================
+// GENERATED FILE - DO NOT EDIT DIRECTLY
+// =============================================================================
+// This file is auto-generated from the kombify-admin database.
+// To modify the tool catalog, update the database and re-run the generator.
+//
+// Generated: ${new Date().toISOString()}
+// Source: kombify-admin/prisma/seed.ts → Tool + ToolCategory tables
+// =============================================================================
+
+package base
+`;
+
+  let content = header;
+
+  // Tool definition
+  content += `
+// =============================================================================
+// TOOL CATALOG DEFINITIONS
+// =============================================================================
+
+#Layer: "1" | "2" | "3"
+
+#CatalogTool: {
+  name:         string
+  displayName:  string
+  description?: string
+  layer:        #Layer
+  category:     string
+  image:        string
+  defaultTag:   string
+  supportsArm:  bool | *false
+  supportsX86:  bool | *true
+  minMemoryMB:  int | *0
+}
+
+#ToolCategoryDef: {
+  slug:         string
+  displayName:  string
+  layer:        #Layer
+  standardTool: string
+  alternatives: [...string]
+}
+`;
+
+  // Category registry
+  content += `
+// =============================================================================
+// TOOL CATEGORIES
+// =============================================================================
+
+#ToolCategories: {
+`;
+
+  for (const cat of categories) {
+    content += `  "${cat.slug}": {
+    slug:         "${cat.slug}"
+    displayName:  "${escapeCueString(cat.displayName)}"
+    layer:        "${layerToCue(cat.layer)}"
+    standardTool: "${cat.standardTool || ''}"
+    alternatives: [${cat.alternativeTools.map((t) => `"${t}"`).join(', ')}]
+  }
+`;
+  }
+
+  content += '}\n';
+
+  // Tool catalog
+  content += `
+// =============================================================================
+// APPROVED TOOLS
+// =============================================================================
+
+#ToolCatalog: {
+`;
+
+  for (const tool of tools) {
+    content += `  "${tool.name}": {
+    name:        "${tool.name}"
+    displayName: "${escapeCueString(tool.displayName)}"
+    ${tool.description ? `description: "${escapeCueString(tool.description.substring(0, 200))}"` : ''}
+    layer:       "${layerToCue(tool.layer)}"
+    category:    "${tool.category}"
+    image:       "${escapeCueString(tool.image)}"
+    defaultTag:  "${escapeCueString(tool.defaultTag)}"
+    supportsArm: ${tool.supportsArm || false}
+    supportsX86: ${tool.supportsX86 ?? true}
+    minMemoryMB: ${tool.minMemoryMB || 0}
+  }
+`;
+  }
+
+  content += '}\n';
+
+  const outputPath = path.join(OUTPUT_DIR, 'tool_catalog.cue');
+  fs.writeFileSync(outputPath, content);
+  console.log(`  Written: ${outputPath} (${tools.length} tools, ${categories.length} categories)`);
 }
 
 main()

@@ -321,19 +321,19 @@ import (
 	// These services are user applications deployed via the Layer 2 PAAS.
 	// Layer 2 services (Traefik, TinyAuth, Dokploy) are configured above
 	// in the platform, platformIdentity, and paas sections.
-	services: [
+	services: {
 		// Layer 2: Infrastructure services (Traefik, TinyAuth, Dokploy)
 		// These are deployed by Terraform as platform infrastructure
-		#Services.traefik,          // Layer 2: Ingress controller
-		#Services.tinyauth,          // Layer 2: Platform identity proxy
-		#Services.dokployPostgres,   // Layer 2: PAAS database
-		#Services.dokploy,           // Layer 2: PAAS controller
+		traefik:        #Services.traefik          // Layer 2: Ingress controller
+		tinyauth:       #Services.tinyauth         // Layer 2: Platform identity proxy
+		dokployPostgres: #Services.dokployPostgres  // Layer 2: PAAS database
+		dokploy:        #Services.dokploy           // Layer 2: PAAS controller
 
 		// Layer 3: User applications (deployed BY Dokploy)
 		// These are managed by the Layer 2 PAAS, not by Terraform directly
-		#Services.kuma,              // Layer 3: Uptime monitoring
-		#Services.whoami,            // Layer 3: Test service
-	]
+		kuma:           #Services.kuma              // Layer 3: Uptime monitoring
+		whoami:         #Services.whoami            // Layer 3: Test service
+	}
 
 	// -------------------------------------------------------------------------
 	// OBSERVABILITY

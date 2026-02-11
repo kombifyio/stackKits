@@ -665,4 +665,4 @@ services:
 - [Architecture v3.0](./architecture.md) — Previous architecture (superseded)
 - [ROADMAP.md](./ROADMAP.md) — Implementation roadmap
 - [ADR-0003: PAAS Strategy](./ADR/ADR-0003-paas-strategy.md) — PAAS selection rationale
-- kombify Stack: [Kombistack-Core.md](https://github.com/kombify/kombistack/docs/concepts/Kombistack-Core.md) — Unifier and control plane architecture
+- kombify Stack: [kombify Stack-Core.md](https://github.com/kombify/kombify Stack/docs/concepts/kombify Stack-Core.md) — Unifier and control plane architecture

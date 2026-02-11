@@ -1,5 +1,5 @@
 ## What I found (current repo state)
-- This workspace contains **StackKits** (the `stackkit` Go CLI + StackKits like `base-homelab`). It does **not** include the **KombiStack/kombifyStack** repository or its Docker Compose startup files, so I can’t start “kombifyStack” from within this repo as-is.
+- This workspace contains **StackKits** (the `stackkit` Go CLI + StackKits like `base-homelab`). It does **not** include the **kombify Stack/kombifyStack** repository or its Docker Compose startup files, so I can’t start “kombifyStack” from within this repo as-is.
 - A “prep-tool” already exists here: `stackkit prepare` (alias `stackkit prep`) supports **remote host preparation over SSH** and can install **Docker + OpenTofu** on Ubuntu/Debian.
 - `base-homelab` templates currently point the Docker provider at `unix:///var/run/docker.sock`, which means deployments target the Docker Engine where `tofu` runs.
 
@@ -11,7 +11,7 @@ To “apply the base-homelab StackKit to a VM-service (Ubuntu) started via Docke
 
 ## Plan (after you confirm)
 ### 1) Locate and start kombifyStack (if present locally)
-- Search the parent workspace for a `kombifyStack`/`KombiStack` directory.
+- Search the parent workspace for a `kombifyStack`/`kombify Stack` directory.
 - If found, start it using its documented compose/script entrypoint.
 - If not found, proceed with StackKits-only and document exactly what path/name is expected so we can wire it in cleanly.
 

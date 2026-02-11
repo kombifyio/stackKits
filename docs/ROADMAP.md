@@ -50,7 +50,7 @@ Before implementation, a full audit identified critical inconsistencies across S
 |---|---------|----------------|----------|
 | K1 | **K8s references in docs** — Mintlify pages describe K8s/k3s despite removal | docs | High |
 | K2 | **License inconsistency** — different licenses cited in different places | docs, StackKits, Stack | High (✅ fixed) |
-| K3 | **Naming inconsistency** — "kombifyStack", "KombiStack", "kombify Stack" etc. | all | High |
+| K3 | **Naming inconsistency** — "kombifyStack", "kombify Stack", "kombify Stack" etc. | all | High |
 | K4 | **Duplicate concept pages** — 3× StackKits explanations, 2× spec-driven pages | docs | Medium |
 | K5 | **ha-homelab description** — docs say K8s, code is Docker Swarm | docs | High |
 | K6 | **modern-homelab.mdx** — 591 lines entirely about K8s/k3s/FluxCD/Longhorn | docs | High |

@@ -71,8 +71,10 @@ package base
 		backup:   #BackupConfig
 	}
 
-	// Service definitions (to be extended by specific StackKits)
-	services: [...#ServiceDefinition] | _
+	// Service definitions — named map keyed by service name
+	// Enables `services.traefik.enabled` access pattern.
+	// Aligns with #Layer3Applications and Go StackSpec.Services (map[string]any)
+	services: [string]: #ServiceDefinition
 
 	// Node definitions (to be provided by user spec)
 	nodes: [...#NodeDefinition]

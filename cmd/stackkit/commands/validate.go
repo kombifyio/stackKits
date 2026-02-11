@@ -1,12 +1,15 @@
 package commands
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/kombihq/stackkits/internal/config"
 	"github.com/kombihq/stackkits/internal/cue"
+	"github.com/kombihq/stackkits/internal/tofu"
 	"github.com/spf13/cobra"
 )
 
@@ -114,9 +117,76 @@ func runValidate(cmd *cobra.Command, args []string) error {
 		fmt.Println()
 		printInfo("Validating OpenTofu configuration...")
 
-		// Run tofu validate
-		// This would use the tofu executor
-		printSuccess("OpenTofu configuration is valid")
+		hasTF, err := tofu.HasTerraformFiles(deployDir)
+		if err != nil {
+			printWarning("Could not check for .tf files: %v", err)
+		} else if !hasTF {
+			printWarning("No .tf files found in %s", deployDir)
+		} else {
+			executor := tofu.NewExecutor(
+				tofu.WithWorkDir(deployDir),
+			)
+
+			if !executor.IsInstalled() {
+				printWarning("OpenTofu is not installed — skipping tofu validate")
+			} else {
+				// Initialize if needed (validate requires init)
+				tfStatePath := filepath.Join(deployDir, ".terraform")
+				if _, err := os.Stat(tfStatePath); os.IsNotExist(err) {
+					printInfo("Initializing OpenTofu...")
+					ctx := context.Background()
+					initResult, initErr := executor.Init(ctx)
+					if initErr != nil {
+						printError("OpenTofu init error: %v", initErr)
+						hasErrors = true
+					} else if !initResult.Success {
+						printError("OpenTofu init failed: %s", initResult.Stderr)
+						hasErrors = true
+					}
+				}
+
+				if !hasErrors {
+					ctx := context.Background()
+					result, err := executor.Validate(ctx)
+					if err != nil {
+						printError("OpenTofu validate error: %v", err)
+						hasErrors = true
+					} else if !result.Success {
+						printError("OpenTofu validation failed:")
+						// Parse JSON output from tofu validate -json
+						var valResult struct {
+							Valid       bool `json:"valid"`
+							ErrorCount  int  `json:"error_count"`
+							Diagnostics []struct {
+								Severity string `json:"severity"`
+								Summary  string `json:"summary"`
+								Detail   string `json:"detail"`
+							} `json:"diagnostics"`
+						}
+						if jsonErr := json.Unmarshal([]byte(result.Stdout), &valResult); jsonErr == nil {
+							for _, d := range valResult.Diagnostics {
+								if d.Severity == "error" {
+									fmt.Printf("  • %s: %s\n", red(d.Summary), d.Detail)
+								} else {
+									printWarning("%s: %s", d.Summary, d.Detail)
+								}
+							}
+						} else {
+							// Fallback: print raw output
+							if result.Stderr != "" {
+								fmt.Println(result.Stderr)
+							}
+							if result.Stdout != "" {
+								fmt.Println(result.Stdout)
+							}
+						}
+						hasErrors = true
+					} else {
+						printSuccess("OpenTofu configuration is valid")
+					}
+				}
+			}
+		}
 	}
 
 	fmt.Println()

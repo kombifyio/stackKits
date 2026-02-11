@@ -4,7 +4,7 @@
 
 ## 1. Vision Statement
 
-StackKits is the standardization system for homelab and self-hosted infrastructure, built from declarative, pre-validated infrastructure blueprints. It enables technically minded users to reliably deploy modern homelab environments – from simple single-server setups to highly available multi-node architectures – without needing to master every detail of Terraform/OpenTofu, Docker, or Swarm. StackKits forms the technical foundation of the KombiStack / Kombify product family and integrates into a broader multi-repo ecosystem.
+StackKits is the standardization system for homelab and self-hosted infrastructure, built from declarative, pre-validated infrastructure blueprints. It enables technically minded users to reliably deploy modern homelab environments – from simple single-server setups to highly available multi-node architectures – without needing to master every detail of Terraform/OpenTofu, Docker, or Swarm. StackKits forms the technical foundation of the kombify Stack / Kombify product family and integrates into a broader multi-repo ecosystem.
 
 ## 2. Core Value Proposition
 
@@ -195,7 +195,7 @@ StackKits is the standardization system for homelab and self-hosted infrastructu
 
 ## 5. Integration Map (Multi-Repo Ecosystem)
 
-1. **KombiStack / Unifier / StackKits Core**
+1. **kombify Stack / Unifier / StackKits Core**
    - StackKits consume unified specifications produced by the Unifier or wizard tooling.
    - The Unifier merges specifications, defaults, and user decisions into validated stack specifications that drive StackKits.
 2. **Kombify / Compify UI**

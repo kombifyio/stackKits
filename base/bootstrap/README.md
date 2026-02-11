@@ -1,6 +1,6 @@
 # Bootstrap Templates
 
-> Teil der **IaC-First Architektur** von KombiStack
+> Teil der **IaC-First Architektur** von kombify Stack
 
 ## Zweck
 
@@ -16,7 +16,7 @@ Dieses Verzeichnis enthält OpenTofu-Templates für die initiale Node-Vorbereitu
 
 ## IaC-First Prinzip
 
-Der KombiStack-Agent führt **keine Shell-Commands direkt** aus. Stattdessen:
+Der kombify Stack-Agent führt **keine Shell-Commands direkt** aus. Stattdessen:
 
 1. Core generiert OpenTofu-Konfigurationen basierend auf diesen Templates
 2. Agent führt `tofu init`, `tofu plan`, `tofu apply` aus

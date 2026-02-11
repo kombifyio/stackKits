@@ -1,6 +1,6 @@
 # Lifecycle Templates
 
-> Teil der **IaC-First Architektur** von KombiStack
+> Teil der **IaC-First Architektur** von kombify Stack
 
 ## Zweck
 
@@ -17,7 +17,7 @@ Dieses Verzeichnis enthält OpenTofu-Templates für das Service-Deployment und L
 
 ## IaC-First Prinzip
 
-Der KombiStack-Agent führt **keine Shell-Commands direkt** aus. Stattdessen:
+Der kombify Stack-Agent führt **keine Shell-Commands direkt** aus. Stattdessen:
 
 1. Services werden deklarativ als OpenTofu-Ressourcen definiert
 2. Agent führt `tofu apply` für Deployments aus
@@ -79,7 +79,7 @@ resource "docker_container" "traefik" {
   
   labels {
     label = "managed-by"
-    value = "kombistack"
+    value = "kombify Stack"
   }
 }
 ```

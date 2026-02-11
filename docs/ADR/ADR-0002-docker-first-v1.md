@@ -2,8 +2,8 @@
 
 > **Status:** Accepted  
 > **Date:** January 15, 2026  
-> **Decision Makers:** KombiStack Team  
-> **Scope:** StackKits + KombiStack Core
+> **Decision Makers:** kombify Stack Team  
+> **Scope:** StackKits + kombify Stack Core
 
 ---
 
@@ -166,4 +166,4 @@ See: StackKits ROADMAP.md Sprint S3-2026 (Architecture Alignment)
 
 - [ARCHITECTURE_3LAYER.md](./ARCHITECTURE_3LAYER.md) - Updated with v1.0 scope
 - [StackKits ROADMAP.md](./ROADMAP.md) - Sprint S3-2026 tasks
-- [KombiStack ROADMAP.md](../../KombiStack/docs/ROADMAP.md) - Sprint 4 alignment tasks
+- [kombify Stack ROADMAP.md](../../kombify Stack/docs/ROADMAP.md) - Sprint 4 alignment tasks

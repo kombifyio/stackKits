@@ -136,7 +136,7 @@ Lightweight alternative using Beszel instead of PLG stack.
 
 ```yaml
 # kombination.yaml
-apiVersion: kombistack.io/v1alpha1
+apiVersion: kombify Stack.io/v1alpha1
 kind: Stack
 metadata:
   name: my-homelab

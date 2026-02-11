@@ -18,5 +18,34 @@ services:
       timeout: 5s
       retries: 5
 
+  # n8n workflow automation engine — handles scheduled tool discovery,
+  # version checks, security scans, and CUE generation pipelines
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: kombify-n8n
+    environment:
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=kombify_admin
+      - DB_POSTGRESDB_USER=kombify
+      - DB_POSTGRESDB_PASSWORD=kombify_dev
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=admin
+      - N8N_BASIC_AUTH_PASSWORD=kombify_dev
+      - WEBHOOK_URL=http://localhost:5678
+      # Pass through API keys for tool discovery workflows
+      - FIRECRAWL_API_KEY=${FIRECRAWL_API_KEY:-}
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+    ports:
+      - "5678:5678"
+    volumes:
+      - kombify_n8n_data:/home/node/.n8n
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   kombify_db_data:
+  kombify_n8n_data:

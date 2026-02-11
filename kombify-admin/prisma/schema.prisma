@@ -1,8 +1,15 @@
 // =============================================================================
 // KOMBIFY ADMINISTRATION - PRISMA SCHEMA
 // =============================================================================
-// This schema is the SOURCE OF TRUTH for StackKit management.
-// CUE validation rules are generated FROM this database.
+// The central management platform for StackKits.
+// This schema is the SOURCE OF TRUTH for:
+//   - Tool discovery, evaluation, and lifecycle management
+//   - StackKit composition, Add-Ons, and Context system
+//   - CUE validation rules (generated from this database)
+//   - Architecture patterns and decisions
+//   - Automated pipelines (n8n, Firecrawl integration)
+//
+// Inspired by Websearch-UI: Discover → Evaluate → Manage → Automate
 // =============================================================================
 
 generator client {
@@ -20,6 +27,7 @@ datasource db {
 
 /// Lifecycle state for tools, stackkits, patterns, and validation rules
 enum LifecycleState {
+  DISCOVERED // Auto-discovered, not yet reviewed
   DRAFT      // Initial state, not yet reviewed
   EVALUATED  // Under evaluation, being tested
   APPROVED   // Approved for production use
@@ -49,55 +57,128 @@ enum DecisionStatus {
   SUPERSEDED   // Replaced by newer decision
 }
 
+/// StackKit architecture pattern (v4)
+enum ArchitecturePattern {
+  BASE    // Single environment — all services co-located
+  MODERN  // Hybrid infrastructure — local + cloud bridged via VPN
+  HA      // HA cluster — redundancy, failover, quorum
+}
+
+/// Node-Context for runtime environment detection (v4)
+enum NodeContext {
+  LOCAL // Physical hardware, no cloud metadata
+  CLOUD // Cloud provider detected (AWS, Azure, Hetzner, etc.)
+  PI    // ARM + low memory, Raspberry Pi
+}
+
+/// Discovery source type
+enum DiscoverySource {
+  MANUAL        // Manually added by team
+  FIRECRAWL     // Discovered via Firecrawl web scraping
+  GITHUB_SEARCH // Found via GitHub search/trending
+  DOCKER_HUB    // Found via Docker Hub
+  N8N_AUTOMATION// Discovered by automated n8n workflow
+  COMMUNITY     // Suggested by community
+  AI_SUGGESTION // Suggested by AI analysis
+}
+
+/// Evaluation verdict
+enum EvaluationVerdict {
+  APPROVED           // Tool meets all criteria
+  CONDITIONALLY_APPROVED // Tool approved with caveats
+  DEFERRED           // Needs more evaluation
+  REJECTED           // Tool does not meet criteria
+}
+
+/// Job status for automation pipelines
+enum JobStatus {
+  PENDING    // Queued, not started
+  RUNNING    // Currently executing
+  COMPLETED  // Finished successfully
+  FAILED     // Finished with errors
+  CANCELLED  // Manually cancelled
+}
+
+/// Job type for automation pipelines
+enum JobType {
+  TOOL_DISCOVERY    // Discover new tools via web search
+  TOOL_SCAN         // Scan existing tool for updates
+  VERSION_CHECK     // Check for new versions
+  SECURITY_SCAN     // Check for CVEs/vulnerabilities
+  COMPATIBILITY_CHECK // Check tool compatibility with StackKits
+  CUE_GENERATION    // Generate CUE files from DB
+  DOC_GENERATION    // Generate documentation
+}
+
+/// Add-On compatibility
+enum AddOnScope {
+  ALL_KITS   // Compatible with all StackKits
+  BASE_ONLY  // Only for Base Kit
+  MODERN_ONLY // Only for Modern Homelab Kit
+  HA_ONLY    // Only for HA Kit
+}
+
 // =============================================================================
 // STACKKITS CATALOG
 // =============================================================================
 
-/// StackKit definitions - the main product catalog
+/// StackKit definitions - the main product catalog (v4: architecture patterns)
 model StackKit {
-  id               String         @id @default(uuid())
+  id               String              @id @default(uuid())
   /// Unique machine-readable name (e.g., "base-homelab")
-  name             String         @unique
+  name             String              @unique
   /// Human-readable display name
   displayName      String
   /// Long description (markdown supported)
   description      String?
-  /// Semantic version (e.g., "3.0.0")
+  /// Semantic version (e.g., "4.0.0")
   version          String
+  /// Architecture pattern (v4 concept)
+  architecturePattern ArchitecturePattern @default(BASE)
   /// Foundation module reference (e.g., "base", "minimal", "extended")
-  foundationModule String         @default("base")
+  foundationModule String              @default("base")
   /// Platform type (e.g., "docker", "docker-swarm")
-  platformType     String         @default("docker")
+  platformType     String              @default("docker")
+  /// Compatible Node-Contexts
+  compatibleContexts NodeContext[]      @default([LOCAL, CLOUD])
   /// Current lifecycle state
-  lifecycleState   LifecycleState @default(DRAFT)
+  lifecycleState   LifecycleState      @default(DRAFT)
   /// Author name or team
   author           String?
   /// License identifier
-  license          String?        @default("MIT")
+  license          String?             @default("MIT")
   /// Homepage URL
   homepageUrl      String?
   /// Repository URL (e.g., GitHub)
   repositoryUrl    String?
   /// Tags for categorization
-  tags             String[]       @default([])
+  tags             String[]            @default([])
   /// Minimum required CLI version
   minCliVersion    String?
+  /// Minimum node count required
+  minNodes         Int                 @default(1)
+  /// Maximum recommended node count
+  maxNodes         Int?
+  /// Short tagline for marketing/docs
+  tagline          String?
 
   // Timestamps
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
   publishedAt      DateTime?
   deprecatedAt     DateTime?
 
   // Relations
   tools            StackKitTool[]
+  addons           AddOn[]
 
   @@index([lifecycleState])
   @@index([platformType])
+  @@index([architecturePattern])
 }
 
 // =============================================================================
-// TOOLS INVENTORY
+// TOOLS INVENTORY (Enhanced with Discovery & Evaluation)
 // =============================================================================
 
 /// All available tools that can be used in StackKits
@@ -126,16 +207,68 @@ model Tool {
   /// GitHub/source repository URL
   sourceUrl      String?
 
+  // --- Discovery Metadata (Websearch-UI pattern) ---
+  /// How was this tool discovered?
+  discoverySource  DiscoverySource @default(MANUAL)
+  /// When was it first discovered?
+  discoveredAt     DateTime?
+  /// GitHub stars (for popularity scoring)
+  githubStars      Int?
+  /// Docker Hub pulls
+  dockerPulls      Int?
+  /// Last release date (for freshness scoring)
+  lastReleaseDate  DateTime?
+  /// Latest known version
+  latestVersion    String?
+  /// Is the project actively maintained?
+  isActiveMaintained Boolean     @default(true)
+  /// License type (e.g., "MIT", "Apache-2.0", "AGPL-3.0")
+  licenseType      String?
+  /// Known alternatives (tool names)
+  alternatives     String[]     @default([])
+  /// Resource requirements: minimum RAM in MB
+  minMemoryMB      Int?
+  /// Resource requirements: supports ARM?
+  supportsArm      Boolean      @default(false)
+  /// Resource requirements: supports x86?
+  supportsX86      Boolean      @default(true)
+  /// Compatible Node-Contexts
+  compatibleContexts NodeContext[] @default([LOCAL, CLOUD])
+
+  // --- AI Enrichment ---
+  /// AI-generated summary of tool capabilities
+  aiSummary        String?
+  /// AI-assessed quality/maturity score (0-100)
+  aiQualityScore   Int?
+  /// AI-generated pros
+  aiPros           String[]     @default([])
+  /// AI-generated cons
+  aiCons           String[]     @default([])
+  /// Last AI enrichment timestamp
+  aiEnrichedAt     DateTime?
+
+  // --- Scraped Metadata ---
+  /// Raw scraped data from tool's website/GitHub (JSON)
+  scrapedData      Json?
+  /// Content hash for change detection
+  contentHash      String?
+  /// Last successful scrape timestamp
+  lastScrapedAt    DateTime?
+
   // Timestamps
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
   // Relations
   stackkits      StackKitTool[]
+  versions       ToolVersion[]
+  evaluations    ToolEvaluation[]
 
   @@index([layer])
   @@index([category])
   @@index([lifecycleState])
+  @@index([discoverySource])
+  @@index([aiQualityScore])
 }
 
 // =============================================================================
@@ -361,4 +494,375 @@ model AuditLog {
 
   @@index([tableName, recordId])
   @@index([changedAt])
+}
+
+// =============================================================================
+// TOOL DISCOVERY & EVALUATION (Websearch-UI Pattern)
+// =============================================================================
+
+/// Tool version tracking — detect updates, breaking changes, security patches
+model ToolVersion {
+  id              String         @id @default(uuid())
+  toolId          String
+  /// Semantic version string
+  version         String
+  /// Release date
+  releasedAt      DateTime?
+  /// Release notes / changelog entry
+  releaseNotes    String?
+  /// Docker image tag for this version
+  dockerTag       String?
+  /// Is this a security update?
+  isSecurityPatch Boolean        @default(false)
+  /// Is this a breaking change?
+  isBreaking      Boolean        @default(false)
+  /// Source URL for release (e.g., GitHub release page)
+  releaseUrl      String?
+  /// Scraped metadata (JSON)
+  scrapedData     Json?
+  /// When was this version discovered?
+  discoveredAt    DateTime       @default(now())
+
+  // Relations
+  tool            Tool           @relation(fields: [toolId], references: [id], onDelete: Cascade)
+
+  @@unique([toolId, version])
+  @@index([toolId])
+  @@index([releasedAt])
+}
+
+/// Structured tool evaluation — analogous to Websearch-UI's crawl quality assessment
+model ToolEvaluation {
+  id                String           @id @default(uuid())
+  toolId            String
+  /// Who performed the evaluation
+  evaluatedBy       String
+  /// When was it evaluated
+  evaluatedAt       DateTime         @default(now())
+  /// Overall verdict
+  verdict           EvaluationVerdict
+  /// Version that was evaluated
+  evaluatedVersion  String?
+
+  // --- Evaluation Criteria Scores (0-10) ---
+  /// Documentation quality
+  scoreDocumentation  Int?
+  /// Community size & activity
+  scoreCommunity      Int?
+  /// Docker image quality (size, multi-arch, updates)
+  scoreDocker         Int?
+  /// Security posture (CVEs, update frequency, hardening)
+  scoreSecurity       Int?
+  /// Ease of integration with StackKits
+  scoreIntegration    Int?
+  /// Resource efficiency (RAM, CPU footprint)
+  scoreResources      Int?
+  /// API/extensibility quality
+  scoreApi            Int?
+  /// Overall weighted score (calculated)
+  overallScore        Int?
+
+  // --- Qualitative Notes ---
+  /// Strengths identified
+  strengths           String[]       @default([])
+  /// Weaknesses identified
+  weaknesses          String[]       @default([])
+  /// Integration notes (how it fits into StackKits)
+  integrationNotes    String?
+  /// Compatibility notes (conflicts, requirements)
+  compatibilityNotes  String?
+  /// General notes
+  notes               String?
+
+  // --- Testing Results ---
+  /// Was it tested in a live deployment?
+  testedLive          Boolean        @default(false)
+  /// Test environment details
+  testEnvironment     String?
+  /// Test results summary
+  testResults         String?
+
+  // Relations
+  tool                Tool           @relation(fields: [toolId], references: [id], onDelete: Cascade)
+
+  @@index([toolId])
+  @@index([verdict])
+  @@index([evaluatedAt])
+}
+
+/// Discovery jobs — track automated tool discovery runs (like Websearch-UI crawl jobs)
+model DiscoveryJob {
+  id              String     @id @default(uuid())
+  /// Job type
+  jobType         JobType
+  /// Current status
+  status          JobStatus  @default(PENDING)
+  /// Search query or URL that triggered this job
+  query           String?
+  /// Discovery source
+  source          DiscoverySource @default(FIRECRAWL)
+  /// n8n execution ID (if triggered via n8n)
+  n8nExecutionId  String?
+  /// n8n workflow ID
+  n8nWorkflowId   String?
+
+  // --- Results ---
+  /// Number of tools discovered
+  toolsDiscovered Int        @default(0)
+  /// Number of tools updated
+  toolsUpdated    Int        @default(0)
+  /// Result data (JSON — discovered tools, errors, etc.)
+  resultData      Json?
+  /// Error message if failed
+  errorMessage    String?
+
+  // --- Timing ---
+  startedAt       DateTime?
+  completedAt     DateTime?
+  /// Duration in milliseconds
+  durationMs      Int?
+
+  // Timestamps
+  createdAt       DateTime   @default(now())
+
+  @@index([status])
+  @@index([jobType])
+  @@index([createdAt])
+}
+
+// =============================================================================
+// ADD-ON SYSTEM (Architecture v4)
+// =============================================================================
+
+/// Add-On definitions — composable extensions that replace monolithic variants
+model AddOn {
+  id                String              @id @default(uuid())
+  /// Unique machine-readable name (e.g., "monitoring", "backup", "vpn-overlay")
+  name              String              @unique
+  /// Human-readable display name
+  displayName       String
+  /// Description
+  description       String?
+  /// Category (e.g., "observability", "networking", "data", "compute", "iot")
+  category          String
+  /// Semantic version
+  version           String              @default("1.0.0")
+  /// Current lifecycle state
+  lifecycleState    LifecycleState      @default(DRAFT)
+
+  // --- Compatibility (v4 concept) ---
+  /// Which StackKits is this Add-On compatible with?
+  compatibleKits    ArchitecturePattern[] @default([BASE, MODERN, HA])
+  /// Which Node-Contexts are supported?
+  compatibleContexts NodeContext[]       @default([LOCAL, CLOUD])
+  /// Other Add-Ons this depends on
+  dependsOn         String[]            @default([])
+  /// Add-Ons that conflict with this one
+  conflictsWith     String[]            @default([])
+
+  // --- Resource Requirements ---
+  /// Minimum additional RAM required (MB)
+  minMemoryMB       Int                 @default(0)
+  /// Minimum additional CPU cores
+  minCpuCores       Float               @default(0)
+  /// Requires GPU?
+  requiresGpu       Boolean             @default(false)
+
+  // --- Services & Configuration ---
+  /// Services included in this Add-On (tool names)
+  includedTools     String[]            @default([])
+  /// CUE constraints that merge into the StackKit
+  cueConstraints    String?
+  /// Example configuration snippet (YAML)
+  exampleConfig     String?
+
+  // --- Auto-Detection ---
+  /// Should this Add-On be auto-activated under certain conditions?
+  autoActivate      Boolean             @default(false)
+  /// Auto-activation condition description
+  autoActivateCondition String?
+
+  // --- Documentation ---
+  /// Author
+  author            String?
+  /// Documentation URL
+  docsUrl           String?
+  /// Tags
+  tags              String[]            @default([])
+
+  // --- Relation to StackKit ---
+  stackkitId        String?
+  stackkit          StackKit?           @relation(fields: [stackkitId], references: [id])
+
+  // Timestamps
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  @@index([category])
+  @@index([lifecycleState])
+}
+
+// =============================================================================
+// CONTEXT SYSTEM (Architecture v4)
+// =============================================================================
+
+/// Context definitions — runtime environment defaults per Node-Context
+model ContextDefaults {
+  id                String      @id @default(uuid())
+  /// Context type
+  context           NodeContext  @unique
+  /// Human-readable name
+  displayName       String
+  /// Description of this context
+  description       String?
+
+  // --- Default Values ---
+  /// Default PAAS type for this context
+  defaultPaas       String?
+  /// Default TLS strategy
+  defaultTlsMode    String?
+  /// Default compute tier
+  defaultComputeTier String?
+  /// Memory limit for services (MB)
+  defaultMemoryLimitMB Int?
+  /// CPU shares for services
+  defaultCpuShares  Int?
+  /// Default storage driver
+  defaultStorageDriver String?
+  /// Default DNS strategy
+  defaultDnsStrategy String?
+  /// Default backup target
+  defaultBackupTarget String?
+
+  // --- Detection Criteria ---
+  /// How is this context auto-detected? (JSON array of criteria)
+  detectionCriteria Json?
+  /// Hardware characteristics (JSON)
+  hardwareProfile   Json?
+
+  // --- CUE Output ---
+  /// CUE default values block for this context
+  cueDefaults       String?
+
+  // Timestamps
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+}
+
+// =============================================================================
+// TOOL CATEGORY MANAGEMENT (Websearch-UI Pattern)
+// =============================================================================
+
+/// Tool categories with evaluation criteria and standards
+model ToolCategory {
+  id                String         @id @default(uuid())
+  /// Category slug (e.g., "reverse-proxy", "paas", "monitoring")
+  slug              String         @unique
+  /// Human-readable name
+  displayName       String
+  /// Category description
+  description       String?
+  /// Which layer this category belongs to
+  layer             LayerType
+  /// Standard tool for this category (tool name)
+  standardTool      String?
+  /// Alternative tools for this category (tool names)
+  alternativeTools  String[]       @default([])
+
+  // --- Evaluation Criteria for this Category ---
+  /// What makes a tool good in this category? (structured JSON)
+  evaluationCriteria Json?
+  /// Minimum requirements for tools in this category
+  minimumRequirements String?
+  /// Category-specific notes
+  notes             String?
+
+  // --- Discovery ---
+  /// Keywords for tool discovery in this category
+  discoveryKeywords String[]       @default([])
+  /// Firecrawl search queries for discovering tools
+  firecrawlQueries  String[]       @default([])
+
+  // Timestamps
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  @@index([layer])
+}
+
+// =============================================================================
+// AUTOMATION & N8N INTEGRATION
+// =============================================================================
+
+/// n8n workflow registry — track which workflows automate what
+model N8nWorkflow {
+  id              String     @id @default(uuid())
+  /// n8n workflow ID
+  workflowId      String     @unique
+  /// Workflow name
+  name            String
+  /// Description of what this workflow does
+  description     String?
+  /// Webhook URL for triggering
+  webhookUrl      String?
+  /// What type of job does this workflow perform?
+  jobType         JobType
+  /// Is this workflow active?
+  isActive        Boolean    @default(true)
+  /// Cron schedule (if scheduled)
+  cronSchedule    String?
+  /// Last execution time
+  lastExecutedAt  DateTime?
+  /// Last execution status
+  lastStatus      JobStatus?
+
+  // Timestamps
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@index([jobType])
+}
+
+/// Firecrawl scrape results — raw data from tool website scraping
+model ScrapeResult {
+  id              String     @id @default(uuid())
+  /// URL that was scraped
+  url             String
+  /// Tool name this scrape is for (if known)
+  toolName        String?
+  /// Discovery job that triggered this
+  discoveryJobId  String?
+
+  // --- Content ---
+  /// Raw markdown content
+  markdownContent String?
+  /// Extracted structured data (JSON)
+  extractedData   Json?
+  /// Page title
+  pageTitle       String?
+  /// Page description (meta)
+  pageDescription String?
+  /// JSON-LD structured data
+  jsonLdData      Json?
+
+  // --- Technical ---
+  /// Content hash for change detection
+  contentHash     String?
+  /// HTTP status code
+  httpStatusCode  Int?
+  /// Firecrawl metadata
+  firecrawlMeta   Json?
+
+  // --- Processing ---
+  /// Has this been processed into tool data?
+  isProcessed     Boolean    @default(false)
+  /// Processing notes
+  processingNotes String?
+
+  // Timestamps
+  scrapedAt       DateTime   @default(now())
+
+  @@index([url])
+  @@index([toolName])
+  @@index([isProcessed])
 }

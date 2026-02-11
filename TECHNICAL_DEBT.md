@@ -71,13 +71,9 @@ Items are categorized by severity and mapped to roadmap milestones.
 **Fix:** Complete rewrite of all `.cue` files. Delete K8s schemas and tests.  
 **Milestone:** M3
 
-### TD-09: Services Format Inconsistency (W8)
+### ~~TD-09: Services Format Inconsistency (W8)~~ → RESOLVED
 
-**Location:** `base.#BaseStackKit` vs `base-homelab/stackfile.cue`  
-**Problem:** Base defines `services: [...#ServiceDefinition]` (ordered list). base-homelab defines `services: { traefik: ..., dokploy: ... }` (named map/struct).  
-**Impact:** Cannot validate base-homelab services against base schema.  
-**Fix:** Adopt named map (struct) everywhere — enables `services.traefik.enabled` access. Update `base.#BaseStackKit`.  
-**Milestone:** M1
+> Moved to [Resolved](#resolved) on 2026-02-13.
 
 ### TD-10: Missing CUE→Terraform Code Generator
 
@@ -111,13 +107,9 @@ Items are categorized by severity and mapped to roadmap milestones.
 
 > Moved to [Resolved](#resolved) on 2026-02-12.
 
-### TD-14: OpenTofu Validation Not Executed
+### ~~TD-14: OpenTofu Validation Not Executed~~ → RESOLVED
 
-**Location:** `internal/tofu/validate.go`  
-**Problem:** `validate` command prints "valid" without actually running `tofu validate`.  
-**Impact:** False sense of validation.  
-**Fix:** Shell out to `tofu validate` on generated files.  
-**Milestone:** M1
+> Moved to [Resolved](#resolved) on 2026-02-13.
 
 ### TD-15: Missing Go Unit Tests
 
@@ -219,6 +211,8 @@ Items are categorized by severity and mapped to roadmap milestones.
 | — | K8s refs in docs (stack-spec-reference, TARGET_STATE) | 2026-02-12 | Removed K8s schema sections, examples, and references from active docs |
 | TD-22 | plans/ and missions/ directories | 2026-02-11 | Archived to `docs/_archive/plans/` and `docs/_archive/missions/` |
 | TD-26 | Dokploy/Coolify selection logic | 2026-02-11 | Source doc archived; ROADMAP M2 clarifies: local→Dokploy, cloud→Coolify |
+| TD-09 | Services format inconsistency (list vs map) | 2026-02-13 | Standardized to map `[string]: #ServiceDefinition` in base/stackkit.cue, base-homelab/services.cue, dev-homelab/stackfile.cue — matches ha/modern-homelab and Go `StackSpec.Services` |
+| TD-14 | OpenTofu validation not executed | 2026-02-13 | `cmd/stackkit/commands/validate.go` now uses `tofu.Executor.Validate()` with JSON error parsing, init-if-needed, and install check |
 
 ---
 

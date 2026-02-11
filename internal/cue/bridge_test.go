@@ -81,3 +81,75 @@ func TestTerraformBridge_ValidateBeforeGeneration(t *testing.T) {
 		})
 	}
 }
+
+func TestTerraformBridge_GenerateWithValidation(t *testing.T) {
+	stackkitDir := filepath.Join("..", "..", "base-homelab")
+	if _, err := os.Stat(stackkitDir); os.IsNotExist(err) {
+		t.Skipf("StackKit directory not found: %s", stackkitDir)
+	}
+
+	tmpDir := t.TempDir()
+
+	t.Run("generates tfvars after validation", func(t *testing.T) {
+		bridge := NewTerraformBridge(stackkitDir)
+		outputDir := filepath.Join(tmpDir, "validated-output")
+
+		err := bridge.GenerateWithValidation(outputDir)
+		if err != nil {
+			t.Errorf("GenerateWithValidation() error = %v", err)
+			return
+		}
+
+		// Verify output file exists
+		outputPath := filepath.Join(outputDir, "terraform.tfvars.json")
+		if _, err := os.Stat(outputPath); os.IsNotExist(err) {
+			t.Errorf("Expected output file not created: %s", outputPath)
+		}
+	})
+
+	t.Run("fails for non-existent stackkit dir", func(t *testing.T) {
+		bridge := NewTerraformBridge("/nonexistent/stackkit/dir")
+		err := bridge.GenerateWithValidation(filepath.Join(tmpDir, "bad-output"))
+		if err == nil {
+			t.Error("Expected error for non-existent directory")
+		}
+	})
+}
+
+func TestTerraformBridge_GenerateTFVars_OutputCreation(t *testing.T) {
+	stackkitDir := filepath.Join("..", "..", "base-homelab")
+	if _, err := os.Stat(stackkitDir); os.IsNotExist(err) {
+		t.Skipf("StackKit directory not found: %s", stackkitDir)
+	}
+
+	t.Run("creates nested output directories", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		nestedOutput := filepath.Join(tmpDir, "a", "b", "c")
+
+		bridge := NewTerraformBridge(stackkitDir)
+		err := bridge.GenerateTFVars(nestedOutput)
+		if err != nil {
+			t.Errorf("GenerateTFVars() should create nested dirs, got error: %v", err)
+		}
+	})
+
+	t.Run("output contains valid JSON", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		bridge := NewTerraformBridge(stackkitDir)
+		err := bridge.GenerateTFVars(tmpDir)
+		if err != nil {
+			t.Fatalf("GenerateTFVars() error: %v", err)
+		}
+
+		data, err := os.ReadFile(filepath.Join(tmpDir, "terraform.tfvars.json"))
+		if err != nil {
+			t.Fatalf("Failed to read output: %v", err)
+		}
+
+		// Verify it's valid JSON (not empty)
+		if len(data) < 2 {
+			t.Error("Output file is too small to be valid JSON")
+		}
+	})
+}

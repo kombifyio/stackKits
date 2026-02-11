@@ -1094,48 +1094,48 @@ import "github.com/kombihq/stackkits/base"
 // =============================================================================
 
 // #DefaultServices - Standard deployment (Dokploy-based)
-#DefaultServices: [
-	#TraefikService,
-	#DokployService,
-	#UptimeKumaService,
-	#DozzleService,
-	#WhoamiService,
-]
+#DefaultServices: {
+	traefik:    #TraefikService
+	dokploy:    #DokployService
+	uptimeKuma: #UptimeKumaService
+	dozzle:     #DozzleService
+	whoami:     #WhoamiService
+}
 
 // #DefaultServicesWithBeszel - Alternative monitoring
-#DefaultServicesWithBeszel: [
-	#TraefikService,
-	#DokployService,
-	#BeszelService,
-	#DozzleService,
-	#WhoamiService,
-]
+#DefaultServicesWithBeszel: {
+	traefik: #TraefikService
+	dokploy: #DokployService
+	beszel:  #BeszelService
+	dozzle:  #DozzleService
+	whoami:  #WhoamiService
+}
 
 // #DefaultServicesWithAuth - With platform identity (TinyAuth)
-#DefaultServicesWithAuth: [
-	#TraefikService,
-	#TinyAuthService,
-	#DokployService,
-	#UptimeKumaService,
-	#DozzleService,
-	#WhoamiService,
-]
+#DefaultServicesWithAuth: {
+	traefik:    #TraefikService
+	tinyauth:   #TinyAuthService
+	dokploy:    #DokployService
+	uptimeKuma: #UptimeKumaService
+	dozzle:     #DozzleService
+	whoami:     #WhoamiService
+}
 
 // #MinimalServices - Minimal variant (Dockge + Portainer)
-#MinimalServices: [
-	#TraefikService,
-	#DockgeService,
-	#PortainerService,
-	#NetdataService,
-	#DozzleService,
-]
+#MinimalServices: {
+	traefik:   #TraefikService
+	dockge:    #DockgeService
+	portainer: #PortainerService
+	netdata:   #NetdataService
+	dozzle:    #DozzleService
+}
 
 // #SecureServices - With TinyAuth authentication
-#SecureServices: [
-	#TraefikService,
-	#TinyAuthService,
-	#DokployService,
-	#UptimeKumaService,
-	#DozzleService,
-	#WhoamiService,
-]
+#SecureServices: {
+	traefik:    #TraefikService
+	tinyauth:   #TinyAuthService
+	dokploy:    #DokployService
+	uptimeKuma: #UptimeKumaService
+	dozzle:     #DozzleService
+	whoami:     #WhoamiService
+}

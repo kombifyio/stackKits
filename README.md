@@ -1,6 +1,6 @@
-# kombify StackKits (StackKits) - Declarative Infrastructure Blueprints
+# kombify StackKits (StackKits) - Guided Infrastructure Blueprints
 
-> **IaC-First Infrastructure Templates with CUE Validation and OpenTofu Execution**
+> **Pre-validated infrastructure blueprints with guided UI setup, CUE validation, and OpenTofu execution under the hood**
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![CUE](https://img.shields.io/badge/CUE-v0.9-blue)](https://cuelang.org/)
@@ -13,7 +13,7 @@
 ### Key Features
 
 - **Validated Configuration** - CUE schemas catch errors before deployment
-- **IaC-First Architecture** - OpenTofu as execution engine, not custom scripts
+- **Professional Engine Under the Hood** - OpenTofu as execution engine, CUE for validation -- users interact through UI or CLI
 - **Multi-OS Support** - Ubuntu, Debian, and more via variants
 - **Standalone or Integrated** - Use via CLI or with kombify Stack Web UI
 
@@ -259,7 +259,7 @@ import "github.com/kombihq/stackkits/base"
 # Run CUE validation tests
 cd tests/cue && cue vet ./...
 
-# Run integration tests (requires KombiSim)
+# Run integration tests (requires kombify Sim)
 make test-integration
 ```
 

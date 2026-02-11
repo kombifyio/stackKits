@@ -53,7 +53,7 @@
 │                    kombify Platform                          │
 ├─────────────────────────────────────────────────────────────┤
 │   ┌──────────────────┐     ┌──────────────────┐             │
-│   │  KombiSphere     │     │  kombify Stack   │             │
+│   │  kombify Cloud     │     │  kombify Stack   │             │
 │   │  (Portal)        │     │  (Core API)      │             │
 │   └────────┬─────────┘     └────────┬─────────┘             │
 │            │   Uses templates from  │                        │

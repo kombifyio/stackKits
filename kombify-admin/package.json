@@ -1,7 +1,7 @@
 {
   "name": "kombify-admin",
-  "version": "1.0.0",
-  "description": "Kombify Administration - StackKits management backend",
+  "version": "2.0.0",
+  "description": "kombify Administration - Central StackKits management platform with tool discovery, evaluation, and CUE generation",
   "main": "index.js",
   "scripts": {
     "db:generate": "prisma generate",
@@ -13,16 +13,31 @@
     "generate:cue": "ts-node scripts/generate-cue.ts",
     "generate:cue:all": "ts-node scripts/generate-cue.ts all",
     "generate:cue:validation": "ts-node scripts/generate-cue.ts validation-rules",
-    "generate:cue:settings": "ts-node scripts/generate-cue.ts settings"
+    "generate:cue:settings": "ts-node scripts/generate-cue.ts settings",
+    "generate:cue:addons": "ts-node scripts/generate-cue.ts addons",
+    "generate:cue:contexts": "ts-node scripts/generate-cue.ts contexts",
+    "generate:cue:tools": "ts-node scripts/generate-cue.ts tool-catalog",
+    "discover": "ts-node scripts/tool-discover.ts",
+    "discover:category": "ts-node scripts/tool-discover.ts",
+    "discover:dry-run": "ts-node scripts/tool-discover.ts --dry-run",
+    "enrich": "ts-node scripts/tool-enrich.ts",
+    "enrich:discovered": "ts-node scripts/tool-enrich.ts --discovered",
+    "enrich:all": "ts-node scripts/tool-enrich.ts --all",
+    "version-check": "ts-node scripts/tool-version-check.ts --all",
+    "review": "ts-node scripts/tool-review.ts",
+    "review:summary": "ts-node scripts/tool-review.ts --summary",
+    "pipeline": "npm run discover && npm run enrich:discovered && npm run review:summary"
   },
   "keywords": [
     "stackkits",
     "kombify",
     "administration",
     "cue",
-    "validation"
+    "validation",
+    "tool-discovery",
+    "firecrawl"
   ],
-  "author": "KombiStack Team",
+  "author": "kombify Team",
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^20.10.0",

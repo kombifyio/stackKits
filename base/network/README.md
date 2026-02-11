@@ -1,6 +1,6 @@
 # Network Templates
 
-> Teil der **IaC-First Architektur** von KombiStack
+> Teil der **IaC-First Architektur** von kombify Stack
 
 ## Zweck
 
@@ -8,7 +8,7 @@ Dieses Verzeichnis enthält OpenTofu-Templates für die Netzwerk-Konfiguration d
 
 ## Network Modes
 
-KombiStack unterstützt drei Netzwerk-Modi, die über `network.mode` in der `kombination.yaml` gewählt werden:
+kombify Stack unterstützt drei Netzwerk-Modi, die über `network.mode` in der `kombination.yaml` gewählt werden:
 
 ### 1. Local Mode (`_local.tf.tmpl`)
 
@@ -80,7 +80,7 @@ KombiStack unterstützt drei Netzwerk-Modi, die über `network.mode` in der `kom
 
 ## IaC-First Prinzip
 
-Der KombiStack-Agent führt **keine Shell-Commands direkt** aus. Stattdessen:
+Der kombify Stack-Agent führt **keine Shell-Commands direkt** aus. Stattdessen:
 
 1. Netzwerk-Konfiguration wird deklarativ in OpenTofu definiert
 2. Agent führt `tofu apply` aus
@@ -102,7 +102,7 @@ network/
 
 | Variable | Typ | Default | Beschreibung |
 |----------|-----|---------|--------------|
-| `docker_network_name` | string | "kombistack" | Basis-Name für Docker-Netzwerke |
+| `docker_network_name` | string | "kombify Stack" | Basis-Name für Docker-Netzwerke |
 | `network_subnet` | string | varies | CIDR Subnet |
 | `network_gateway` | string | varies | Gateway IP |
 

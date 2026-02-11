@@ -1,4 +1,15 @@
-import { PrismaClient, LayerType, LifecycleState, SettingType, DecisionStatus } from '@prisma/client';
+import {
+  PrismaClient,
+  LayerType,
+  LifecycleState,
+  SettingType,
+  DecisionStatus,
+  ArchitecturePattern,
+  NodeContext,
+  DiscoverySource,
+  EvaluationVerdict,
+  JobType,
+} from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -275,17 +286,21 @@ async function main() {
       update: {},
       create: {
         name: 'base-homelab',
-        displayName: 'Base Homelab',
-        description: 'Single-server homelab with Docker, Dokploy/Coolify PAAS, and monitoring. Perfect for personal home servers and development environments.',
-        version: '3.0.0',
+        displayName: 'Base Kit',
+        description: 'Single-environment homelab with Docker, Dokploy/Coolify PAAS, and monitoring. Everything runs in one logical deployment target — local server or cloud VPS.',
+        version: '4.0.0',
+        architecturePattern: ArchitecturePattern.BASE,
         foundationModule: 'base',
         platformType: 'docker',
+        compatibleContexts: [NodeContext.LOCAL, NodeContext.CLOUD, NodeContext.PI],
         lifecycleState: LifecycleState.APPROVED,
-        author: 'KombiStack Team',
+        author: 'kombify Team',
         license: 'MIT',
-        repositoryUrl: 'https://github.com/kombihq/stackkits',
+        repositoryUrl: 'https://github.com/kombify/stackkits',
         tags: ['homelab', 'single-node', 'docker', 'dokploy', 'professional'],
         minCliVersion: '1.0.0',
+        minNodes: 1,
+        tagline: 'Your first homelab, done right',
       },
     }),
     prisma.stackKit.upsert({
@@ -293,17 +308,21 @@ async function main() {
       update: {},
       create: {
         name: 'dev-homelab',
-        displayName: 'Dev Homelab',
+        displayName: 'Dev Kit',
         description: 'Development-focused homelab with enhanced tooling for software development workflows.',
-        version: '3.0.0',
+        version: '4.0.0',
+        architecturePattern: ArchitecturePattern.BASE,
         foundationModule: 'base',
         platformType: 'docker',
+        compatibleContexts: [NodeContext.LOCAL, NodeContext.CLOUD],
         lifecycleState: LifecycleState.APPROVED,
-        author: 'KombiStack Team',
+        author: 'kombify Team',
         license: 'MIT',
-        repositoryUrl: 'https://github.com/kombihq/stackkits',
+        repositoryUrl: 'https://github.com/kombify/stackkits',
         tags: ['homelab', 'development', 'docker', 'devtools'],
         minCliVersion: '1.0.0',
+        minNodes: 1,
+        tagline: 'Built for developers who self-host',
       },
     }),
     prisma.stackKit.upsert({
@@ -311,17 +330,21 @@ async function main() {
       update: {},
       create: {
         name: 'modern-homelab',
-        displayName: 'Modern Homelab',
-        description: 'Modern homelab stack with contemporary tooling and cloud-native patterns.',
-        version: '1.0.0',
+        displayName: 'Modern Homelab Kit',
+        description: 'Hybrid infrastructure pattern — bridges local and cloud environments via VPN overlay. Distributed services with public endpoints and private data.',
+        version: '4.0.0',
+        architecturePattern: ArchitecturePattern.MODERN,
         foundationModule: 'base',
         platformType: 'docker',
+        compatibleContexts: [NodeContext.LOCAL, NodeContext.CLOUD, NodeContext.PI],
         lifecycleState: LifecycleState.DRAFT,
-        author: 'KombiStack Team',
+        author: 'kombify Team',
         license: 'MIT',
-        repositoryUrl: 'https://github.com/kombihq/stackkits',
-        tags: ['homelab', 'modern', 'docker', 'cloud-native'],
+        repositoryUrl: 'https://github.com/kombify/stackkits',
+        tags: ['homelab', 'hybrid', 'docker', 'vpn', 'multi-node'],
         minCliVersion: '1.0.0',
+        minNodes: 2,
+        tagline: 'Bridge your home and the cloud',
       },
     }),
     prisma.stackKit.upsert({
@@ -329,17 +352,21 @@ async function main() {
       update: {},
       create: {
         name: 'ha-homelab',
-        displayName: 'HA Homelab',
-        description: 'High-availability homelab with Docker Swarm for multi-node deployments.',
-        version: '1.0.0',
+        displayName: 'High Availability Kit',
+        description: 'HA cluster pattern with Docker Swarm — redundancy, failover, quorum-based consensus. No single point of failure.',
+        version: '4.0.0',
+        architecturePattern: ArchitecturePattern.HA,
         foundationModule: 'base',
         platformType: 'docker-swarm',
+        compatibleContexts: [NodeContext.LOCAL, NodeContext.CLOUD],
         lifecycleState: LifecycleState.DRAFT,
-        author: 'KombiStack Team',
+        author: 'kombify Team',
         license: 'MIT',
-        repositoryUrl: 'https://github.com/kombihq/stackkits',
-        tags: ['homelab', 'ha', 'docker-swarm', 'multi-node'],
+        repositoryUrl: 'https://github.com/kombify/stackkits',
+        tags: ['homelab', 'ha', 'docker-swarm', 'multi-node', 'production'],
         minCliVersion: '1.0.0',
+        minNodes: 3,
+        tagline: 'Production-grade self-hosting',
       },
     }),
   ]);
@@ -919,6 +946,449 @@ async function main() {
   ]);
 
   console.log(`Created ${decisions.length} decisions`);
+
+  // ==========================================================================
+  // CONTEXT DEFAULTS (Architecture v4)
+  // ==========================================================================
+
+  const contexts = await Promise.all([
+    prisma.contextDefaults.upsert({
+      where: { context: NodeContext.LOCAL },
+      update: {},
+      create: {
+        context: NodeContext.LOCAL,
+        displayName: 'Local Hardware',
+        description: 'Physical server with no cloud metadata — full control, local network, no egress costs',
+        defaultPaas: 'dokploy',
+        defaultTlsMode: 'self-signed',
+        defaultComputeTier: 'standard',
+        defaultMemoryLimitMB: 4096,
+        defaultCpuShares: 1024,
+        defaultStorageDriver: 'overlay2',
+        defaultDnsStrategy: 'local-dns',
+        defaultBackupTarget: 'local-nas',
+        detectionCriteria: [
+          'No cloud provider metadata endpoint responds',
+          'Physical hardware detected (dmidecode)',
+          'x86_64 or ARM architecture',
+        ],
+        hardwareProfile: {
+          typicalRam: '8-64 GB',
+          typicalCpu: '4-16 cores',
+          typicalStorage: 'SSD/HDD, 256GB+',
+          networkType: 'LAN, 1Gbps+',
+        },
+        cueDefaults: `if _context == "local" {
+  paas: type: "dokploy"
+  tls: mode: "self-signed"
+  resources: { memoryLimitMB: 4096, cpuShares: 1024 }
+  storage: driver: "overlay2"
+}`,
+      },
+    }),
+    prisma.contextDefaults.upsert({
+      where: { context: NodeContext.CLOUD },
+      update: {},
+      create: {
+        context: NodeContext.CLOUD,
+        displayName: 'Cloud VPS',
+        description: 'Cloud provider metadata detected — public IP, egress costs, provider-managed networking',
+        defaultPaas: 'coolify',
+        defaultTlsMode: 'letsencrypt',
+        defaultComputeTier: 'standard',
+        defaultMemoryLimitMB: 2048,
+        defaultCpuShares: 1024,
+        defaultStorageDriver: 'overlay2',
+        defaultDnsStrategy: 'cloud-dns',
+        defaultBackupTarget: 's3',
+        detectionCriteria: [
+          'Cloud provider metadata endpoint responds (169.254.169.254)',
+          'AWS, Azure, Hetzner, DigitalOcean, or Linode detected',
+          'Public IP assigned',
+        ],
+        hardwareProfile: {
+          typicalRam: '2-16 GB',
+          typicalCpu: '2-8 vCPUs',
+          typicalStorage: 'SSD, 40-200GB',
+          networkType: 'Public IP, egress metered',
+        },
+        cueDefaults: `if _context == "cloud" {
+  paas: type: "coolify"
+  tls: mode: "letsencrypt"
+  resources: { memoryLimitMB: 2048, cpuShares: 1024 }
+  storage: driver: "overlay2"
+}`,
+      },
+    }),
+    prisma.contextDefaults.upsert({
+      where: { context: NodeContext.PI },
+      update: {},
+      create: {
+        context: NodeContext.PI,
+        displayName: 'Raspberry Pi',
+        description: 'ARM architecture with low memory — resource-constrained, SD card storage, power-efficient',
+        defaultPaas: 'dockge',
+        defaultTlsMode: 'self-signed',
+        defaultComputeTier: 'low',
+        defaultMemoryLimitMB: 256,
+        defaultCpuShares: 512,
+        defaultStorageDriver: 'overlay2',
+        defaultDnsStrategy: 'mdns',
+        defaultBackupTarget: 'local-nas',
+        detectionCriteria: [
+          'ARM architecture detected',
+          'Memory < 4GB',
+          'Raspberry Pi model string in /proc/device-tree/model',
+        ],
+        hardwareProfile: {
+          typicalRam: '1-8 GB',
+          typicalCpu: '4 ARM cores',
+          typicalStorage: 'SD card or USB SSD, 32-256GB',
+          networkType: 'LAN, 100Mbps-1Gbps',
+        },
+        cueDefaults: `if _context == "pi" {
+  paas: type: "dockge"
+  tls: mode: "self-signed"
+  resources: { memoryLimitMB: 256, cpuShares: 512 }
+  storage: driver: "overlay2"
+}`,
+      },
+    }),
+  ]);
+
+  console.log(`Created ${contexts.length} context defaults`);
+
+  // ==========================================================================
+  // ADD-ONS (Architecture v4)
+  // ==========================================================================
+
+  const addons = await Promise.all([
+    prisma.addOn.upsert({
+      where: { name: 'monitoring' },
+      update: {},
+      create: {
+        name: 'monitoring',
+        displayName: 'Monitoring Stack',
+        description: 'Full observability with Prometheus, Grafana, and Alertmanager for metrics, dashboards, and alerting',
+        category: 'observability',
+        version: '1.0.0',
+        lifecycleState: LifecycleState.DRAFT,
+        compatibleKits: [ArchitecturePattern.BASE, ArchitecturePattern.MODERN, ArchitecturePattern.HA],
+        compatibleContexts: [NodeContext.LOCAL, NodeContext.CLOUD],
+        minMemoryMB: 512,
+        includedTools: ['prometheus', 'grafana', 'alertmanager'],
+        autoActivate: false,
+        tags: ['monitoring', 'metrics', 'alerting', 'dashboards'],
+        author: 'kombify Team',
+      },
+    }),
+    prisma.addOn.upsert({
+      where: { name: 'backup' },
+      update: {},
+      create: {
+        name: 'backup',
+        displayName: 'Backup & Restore',
+        description: 'Automated backups with Restic to S3, B2, or local NAS targets',
+        category: 'data',
+        version: '1.0.0',
+        lifecycleState: LifecycleState.DRAFT,
+        compatibleKits: [ArchitecturePattern.BASE, ArchitecturePattern.MODERN, ArchitecturePattern.HA],
+        compatibleContexts: [NodeContext.LOCAL, NodeContext.CLOUD, NodeContext.PI],
+        minMemoryMB: 128,
+        includedTools: ['restic'],
+        autoActivate: false,
+        tags: ['backup', 'restore', 'disaster-recovery', 's3'],
+        author: 'kombify Team',
+      },
+    }),
+    prisma.addOn.upsert({
+      where: { name: 'vpn-overlay' },
+      update: {},
+      create: {
+        name: 'vpn-overlay',
+        displayName: 'VPN Mesh Overlay',
+        description: 'Headscale/Tailscale mesh VPN for connecting nodes across networks',
+        category: 'networking',
+        version: '1.0.0',
+        lifecycleState: LifecycleState.DRAFT,
+        compatibleKits: [ArchitecturePattern.MODERN, ArchitecturePattern.HA],
+        compatibleContexts: [NodeContext.LOCAL, NodeContext.CLOUD],
+        minMemoryMB: 64,
+        includedTools: ['headscale'],
+        autoActivate: true,
+        autoActivateCondition: 'StackKit pattern is MODERN (always requires VPN overlay)',
+        tags: ['vpn', 'mesh', 'headscale', 'tailscale', 'wireguard'],
+        author: 'kombify Team',
+      },
+    }),
+    prisma.addOn.upsert({
+      where: { name: 'gpu-workloads' },
+      update: {},
+      create: {
+        name: 'gpu-workloads',
+        displayName: 'GPU Workloads',
+        description: 'NVIDIA/AMD GPU passthrough for AI, ML, and compute workloads',
+        category: 'compute',
+        version: '1.0.0',
+        lifecycleState: LifecycleState.DRAFT,
+        compatibleKits: [ArchitecturePattern.BASE, ArchitecturePattern.MODERN],
+        compatibleContexts: [NodeContext.LOCAL, NodeContext.CLOUD],
+        minMemoryMB: 2048,
+        requiresGpu: true,
+        includedTools: ['nvidia-container-toolkit'],
+        autoActivate: true,
+        autoActivateCondition: 'Node reports GPU capability via agent hardware report',
+        tags: ['gpu', 'nvidia', 'ai', 'ml', 'compute'],
+        author: 'kombify Team',
+      },
+    }),
+    prisma.addOn.upsert({
+      where: { name: 'media' },
+      update: {},
+      create: {
+        name: 'media',
+        displayName: 'Media Server',
+        description: 'Jellyfin media server with *arr stack for automated media management',
+        category: 'applications',
+        version: '1.0.0',
+        lifecycleState: LifecycleState.DRAFT,
+        compatibleKits: [ArchitecturePattern.BASE, ArchitecturePattern.MODERN],
+        compatibleContexts: [NodeContext.LOCAL, NodeContext.CLOUD, NodeContext.PI],
+        minMemoryMB: 512,
+        includedTools: ['jellyfin', 'sonarr', 'radarr', 'prowlarr'],
+        autoActivate: false,
+        tags: ['media', 'jellyfin', 'arr', 'streaming'],
+        author: 'kombify Team',
+      },
+    }),
+    prisma.addOn.upsert({
+      where: { name: 'smart-home' },
+      update: {},
+      create: {
+        name: 'smart-home',
+        displayName: 'Smart Home',
+        description: 'Home Assistant with MQTT broker and Zigbee2MQTT for IoT device management',
+        category: 'iot',
+        version: '1.0.0',
+        lifecycleState: LifecycleState.DRAFT,
+        compatibleKits: [ArchitecturePattern.BASE],
+        compatibleContexts: [NodeContext.LOCAL, NodeContext.PI],
+        minMemoryMB: 256,
+        includedTools: ['home-assistant', 'mosquitto', 'zigbee2mqtt'],
+        autoActivate: false,
+        conflictsWith: [],
+        tags: ['iot', 'smart-home', 'home-assistant', 'mqtt', 'zigbee'],
+        author: 'kombify Team',
+      },
+    }),
+    prisma.addOn.upsert({
+      where: { name: 'ci-cd' },
+      update: {},
+      create: {
+        name: 'ci-cd',
+        displayName: 'CI/CD Pipeline',
+        description: 'Gitea git hosting with Drone CI for self-hosted continuous integration',
+        category: 'development',
+        version: '1.0.0',
+        lifecycleState: LifecycleState.DRAFT,
+        compatibleKits: [ArchitecturePattern.BASE, ArchitecturePattern.MODERN, ArchitecturePattern.HA],
+        compatibleContexts: [NodeContext.LOCAL, NodeContext.CLOUD],
+        minMemoryMB: 512,
+        includedTools: ['gitea', 'drone-ci'],
+        autoActivate: false,
+        tags: ['ci-cd', 'gitea', 'drone', 'git', 'automation'],
+        author: 'kombify Team',
+      },
+    }),
+  ]);
+
+  console.log(`Created ${addons.length} add-ons`);
+
+  // ==========================================================================
+  // TOOL CATEGORIES
+  // ==========================================================================
+
+  const toolCategories = await Promise.all([
+    prisma.toolCategory.upsert({
+      where: { slug: 'identity' },
+      update: {},
+      create: {
+        slug: 'identity',
+        displayName: 'Identity & Directory',
+        description: 'LDAP directories, PKI/CA, SSO connectors',
+        layer: LayerType.FOUNDATION,
+        standardTool: 'lldap',
+        alternativeTools: ['openldap', 'freeipa'],
+        discoveryKeywords: ['ldap', 'directory', 'identity provider', 'self-hosted'],
+        firecrawlQueries: ['self-hosted LDAP server Docker', 'lightweight identity provider container'],
+        evaluationCriteria: {
+          mustHave: ['Docker image', 'LDAP protocol', 'Web UI'],
+          niceToHave: ['ARM support', 'Low memory footprint', '< 100MB image'],
+          dealBreakers: ['No Docker support', 'Requires Java', 'Abandoned project'],
+        },
+      },
+    }),
+    prisma.toolCategory.upsert({
+      where: { slug: 'reverse-proxy' },
+      update: {},
+      create: {
+        slug: 'reverse-proxy',
+        displayName: 'Reverse Proxy & Ingress',
+        description: 'Load balancers, TLS termination, ingress controllers',
+        layer: LayerType.PLATFORM,
+        standardTool: 'traefik',
+        alternativeTools: ['caddy', 'nginx-proxy-manager', 'haproxy'],
+        discoveryKeywords: ['reverse proxy', 'load balancer', 'ingress', 'Docker'],
+        firecrawlQueries: ['self-hosted reverse proxy Docker automatic TLS', 'traefik alternative container'],
+        evaluationCriteria: {
+          mustHave: ['Docker label/API discovery', 'Automatic TLS', 'Multi-service routing'],
+          niceToHave: ['Dashboard', 'Middleware support', 'gRPC support'],
+          dealBreakers: ['Manual config only', 'No Docker support'],
+        },
+      },
+    }),
+    prisma.toolCategory.upsert({
+      where: { slug: 'paas' },
+      update: {},
+      create: {
+        slug: 'paas',
+        displayName: 'Platform-as-a-Service',
+        description: 'Self-hosted PaaS for deploying applications via git or Docker',
+        layer: LayerType.PLATFORM,
+        standardTool: 'dokploy',
+        alternativeTools: ['coolify', 'caprover', 'portainer'],
+        discoveryKeywords: ['self-hosted paas', 'heroku alternative', 'docker deployment platform'],
+        firecrawlQueries: ['self-hosted PaaS Docker deployment', 'dokploy coolify alternative'],
+        evaluationCriteria: {
+          mustHave: ['Docker Compose support', 'Web UI', 'Domain management'],
+          niceToHave: ['Git push deploy', 'Database management', 'Multi-node'],
+          dealBreakers: ['No Docker support', 'Cloud-only'],
+        },
+      },
+    }),
+    prisma.toolCategory.upsert({
+      where: { slug: 'monitoring' },
+      update: {},
+      create: {
+        slug: 'monitoring',
+        displayName: 'Monitoring & Observability',
+        description: 'Uptime monitoring, metrics, dashboards, alerting',
+        layer: LayerType.APPLICATION,
+        standardTool: 'uptime-kuma',
+        alternativeTools: ['beszel', 'netdata', 'prometheus', 'grafana'],
+        discoveryKeywords: ['self-hosted monitoring', 'uptime', 'server metrics', 'dashboard'],
+        firecrawlQueries: ['lightweight self-hosted monitoring Docker', 'uptime monitoring alternative'],
+        evaluationCriteria: {
+          mustHave: ['Docker image', 'Web dashboard', 'Alerting'],
+          niceToHave: ['ARM support', 'Low memory', 'API', 'Integrations'],
+          dealBreakers: ['Requires external service', 'No Docker'],
+        },
+      },
+    }),
+    prisma.toolCategory.upsert({
+      where: { slug: 'platform-identity' },
+      update: {},
+      create: {
+        slug: 'platform-identity',
+        displayName: 'Platform Identity & Auth Proxy',
+        description: 'Auth proxies, SSO middleware, OIDC providers for platform-level access control',
+        layer: LayerType.PLATFORM,
+        standardTool: 'tinyauth',
+        alternativeTools: ['pocketid', 'authelia', 'authentik'],
+        discoveryKeywords: ['auth proxy', 'SSO middleware', 'OIDC provider', 'self-hosted'],
+        firecrawlQueries: ['lightweight auth proxy Docker traefik', 'self-hosted SSO OIDC provider'],
+        evaluationCriteria: {
+          mustHave: ['Traefik integration', 'Docker support', 'LDAP/OIDC'],
+          niceToHave: ['Low memory', 'Simple setup', '2FA'],
+          dealBreakers: ['No reverse proxy integration', 'Cloud-only'],
+        },
+      },
+    }),
+    prisma.toolCategory.upsert({
+      where: { slug: 'management' },
+      update: {},
+      create: {
+        slug: 'management',
+        displayName: 'Container Management',
+        description: 'Docker management UIs, log viewers, container orchestration tools',
+        layer: LayerType.PLATFORM,
+        standardTool: 'dozzle',
+        alternativeTools: ['portainer', 'dockge', 'lazydocker'],
+        discoveryKeywords: ['docker management ui', 'container logs', 'docker dashboard'],
+        firecrawlQueries: ['self-hosted Docker management UI', 'container log viewer Docker'],
+      },
+    }),
+  ]);
+
+  console.log(`Created ${toolCategories.length} tool categories`);
+
+  // ==========================================================================
+  // N8N WORKFLOW REGISTRY
+  // ==========================================================================
+
+  const n8nWorkflows = await Promise.all([
+    prisma.n8nWorkflow.upsert({
+      where: { workflowId: 'tool-discovery-scan' },
+      update: {},
+      create: {
+        workflowId: 'tool-discovery-scan',
+        name: 'Tool Discovery Scan',
+        description: 'Searches for new self-hosted tools via Firecrawl, enriches with AI, and proposes additions to the tool inventory',
+        jobType: JobType.TOOL_DISCOVERY,
+        isActive: false, // Not yet configured
+        cronSchedule: '0 6 * * 1', // Weekly Monday 6am
+      },
+    }),
+    prisma.n8nWorkflow.upsert({
+      where: { workflowId: 'version-check' },
+      update: {},
+      create: {
+        workflowId: 'version-check',
+        name: 'Tool Version Checker',
+        description: 'Checks all approved tools for new versions via GitHub releases and Docker Hub tags',
+        jobType: JobType.VERSION_CHECK,
+        isActive: false,
+        cronSchedule: '0 8 * * *', // Daily 8am
+      },
+    }),
+    prisma.n8nWorkflow.upsert({
+      where: { workflowId: 'security-scan' },
+      update: {},
+      create: {
+        workflowId: 'security-scan',
+        name: 'Security Vulnerability Scanner',
+        description: 'Scans tool Docker images for known CVEs and checks for security advisories',
+        jobType: JobType.SECURITY_SCAN,
+        isActive: false,
+        cronSchedule: '0 4 * * 0', // Weekly Sunday 4am
+      },
+    }),
+    prisma.n8nWorkflow.upsert({
+      where: { workflowId: 'cue-generation' },
+      update: {},
+      create: {
+        workflowId: 'cue-generation',
+        name: 'CUE Schema Generator',
+        description: 'Generates CUE validation files from database, runs cue vet, and commits if valid',
+        jobType: JobType.CUE_GENERATION,
+        isActive: false,
+      },
+    }),
+    prisma.n8nWorkflow.upsert({
+      where: { workflowId: 'compatibility-check' },
+      update: {},
+      create: {
+        workflowId: 'compatibility-check',
+        name: 'Tool Compatibility Checker',
+        description: 'Validates tool combinations across StackKits — checks port conflicts, resource budgets, dependency chains',
+        jobType: JobType.COMPATIBILITY_CHECK,
+        isActive: false,
+        cronSchedule: '0 2 * * 3', // Weekly Wednesday 2am
+      },
+    }),
+  ]);
+
+  console.log(`Created ${n8nWorkflows.length} n8n workflow entries`);
 
   console.log('Seeding complete!');
 }

@@ -3,7 +3,7 @@
 > **Level:** Intermediate  
 > **Time:** 30-60 minutes
 
-This guide walks you through creating a custom StackKit from scratch. By the end, you'll have a fully functional infrastructure blueprint that can be deployed via CLI or KombiStack.
+This guide walks you through creating a custom StackKit from scratch. By the end, you'll have a fully functional infrastructure blueprint that can be deployed via CLI or kombify Stack.
 
 ## Prerequisites
 

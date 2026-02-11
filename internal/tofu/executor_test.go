@@ -3,6 +3,8 @@ package tofu
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -129,8 +131,21 @@ func TestResult(t *testing.T) {
 
 func TestEnsureStateDir(t *testing.T) {
 	t.Run("creates state directory", func(t *testing.T) {
-		// Would need temp directory for actual test
-		// This is a placeholder for the test structure
+		tmpDir := t.TempDir()
+		err := EnsureStateDir(tmpDir)
+		assert.NoError(t, err)
+
+		stateDir := filepath.Join(tmpDir, ".stackkit")
+		info, err := os.Stat(stateDir)
+		assert.NoError(t, err)
+		assert.True(t, info.IsDir())
+	})
+
+	t.Run("idempotent on existing directory", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		// Create twice — should not error
+		assert.NoError(t, EnsureStateDir(tmpDir))
+		assert.NoError(t, EnsureStateDir(tmpDir))
 	})
 }
 
@@ -212,6 +227,30 @@ func TestHasTerraformFiles(t *testing.T) {
 		assert.NoError(t, err)
 		assert.False(t, has)
 	})
+
+	t.Run("directory with .tf files", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		os.WriteFile(filepath.Join(tmpDir, "main.tf"), []byte("# test"), 0644)
+
+		has, err := HasTerraformFiles(tmpDir)
+		assert.NoError(t, err)
+		assert.True(t, has)
+	})
+
+	t.Run("directory with non-tf files only", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		os.WriteFile(filepath.Join(tmpDir, "readme.md"), []byte("# test"), 0644)
+		os.WriteFile(filepath.Join(tmpDir, "config.json"), []byte("{}"), 0644)
+
+		has, err := HasTerraformFiles(tmpDir)
+		assert.NoError(t, err)
+		assert.False(t, has)
+	})
+
+	t.Run("non-existent directory", func(t *testing.T) {
+		_, err := HasTerraformFiles("/nonexistent/path/xyz")
+		assert.Error(t, err)
+	})
 }
 
 func TestExecutorWithTimeout(t *testing.T) {
@@ -248,5 +287,88 @@ func TestExecutorOptions(t *testing.T) {
 		assert.Equal(t, "tf", e.binary)
 		assert.Equal(t, 5*time.Minute, e.timeout)
 		assert.True(t, e.autoApprove)
+	})
+}
+
+func TestValidateWorkDir_FileNotDir(t *testing.T) {
+	t.Run("file instead of directory", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "not-a-dir.txt")
+		os.WriteFile(tmpFile, []byte("test"), 0644)
+
+		err := ValidateWorkDir(tmpFile)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "not a directory")
+	})
+}
+
+func TestImportRequiresArgs(t *testing.T) {
+	executor := NewExecutor(WithBinary("nonexistent-binary-xyz"))
+
+	t.Run("empty address", func(t *testing.T) {
+		_, err := executor.Import(context.Background(), "", "some-id")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "address and id are required")
+	})
+
+	t.Run("empty id", func(t *testing.T) {
+		_, err := executor.Import(context.Background(), "aws_instance.foo", "")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "address and id are required")
+	})
+
+	t.Run("both empty", func(t *testing.T) {
+		_, err := executor.Import(context.Background(), "", "")
+		assert.Error(t, err)
+	})
+}
+
+func TestTaintRequiresAddress(t *testing.T) {
+	executor := NewExecutor(WithBinary("nonexistent-binary-xyz"))
+
+	t.Run("empty address for taint", func(t *testing.T) {
+		_, err := executor.Taint(context.Background(), "")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "resource address is required")
+	})
+
+	t.Run("empty address for untaint", func(t *testing.T) {
+		_, err := executor.Untaint(context.Background(), "")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "resource address is required")
+	})
+}
+
+func TestParsePlanOutputEdgeCases(t *testing.T) {
+	t.Run("plan with period ending", func(t *testing.T) {
+		output := `Plan: 1 to add, 0 to change, 2 to destroy.`
+		changes := ParsePlanOutput(output)
+		assert.Equal(t, 1, changes.Add)
+		assert.Equal(t, 0, changes.Change)
+		assert.Equal(t, 2, changes.Destroy)
+	})
+
+	t.Run("multiline output with plan", func(t *testing.T) {
+		output := "Some header\n\nAnother line\nPlan: 5 to add, 3 to change, 1 to destroy.\n\nDone."
+		changes := ParsePlanOutput(output)
+		assert.Equal(t, 5, changes.Add)
+		assert.Equal(t, 3, changes.Change)
+		assert.Equal(t, 1, changes.Destroy)
+	})
+}
+
+func TestEnsureStateDirNestedPath(t *testing.T) {
+	t.Run("creates nested state directory", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		nested := filepath.Join(tmpDir, "a", "b", "c")
+		os.MkdirAll(nested, 0755)
+
+		err := EnsureStateDir(nested)
+		assert.NoError(t, err)
+
+		stateDir := filepath.Join(nested, ".stackkit")
+		info, err := os.Stat(stateDir)
+		assert.NoError(t, err)
+		assert.True(t, info.IsDir())
 	})
 }
