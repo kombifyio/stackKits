@@ -22,6 +22,8 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -35,6 +37,8 @@ func main() {
 	port := flag.Int("port", 8082, "HTTP server port")
 	baseDir := flag.String("base-dir", "", "Base directory for StackKit definitions (default: executable directory)")
 	apiKey := flag.String("api-key", "", "API key for authentication (or set STACKKITS_API_KEY env var)")
+	corsOrigins := flag.String("cors-origins", "", "Comma-separated allowed CORS origins (or set STACKKITS_CORS_ORIGINS; empty = *)")
+	rateLimit := flag.Int("rate-limit", 60, "Max requests per IP per minute; 0 = no limit (or set STACKKITS_RATE_LIMIT)")
 	logLevel := flag.String("log-level", "info", "Log level: debug, info, warn, error")
 	flag.Parse()
 
@@ -81,6 +85,32 @@ func main() {
 		slog.Warn("no API key configured — all endpoints are unauthenticated")
 	}
 
+	// Resolve CORS origins
+	var origins []string
+	corsStr := *corsOrigins
+	if corsStr == "" {
+		corsStr = os.Getenv("STACKKITS_CORS_ORIGINS")
+	}
+	if corsStr != "" {
+		for _, o := range strings.Split(corsStr, ",") {
+			if trimmed := strings.TrimSpace(o); trimmed != "" {
+				origins = append(origins, trimmed)
+			}
+		}
+		slog.Info("CORS restricted", "origins", origins)
+	}
+
+	// Resolve rate limit
+	rl := *rateLimit
+	if envRL := os.Getenv("STACKKITS_RATE_LIMIT"); envRL != "" {
+		if v, err := strconv.Atoi(envRL); err == nil {
+			rl = v
+		}
+	}
+	if rl > 0 {
+		slog.Info("rate limiting enabled", "max_per_minute", rl)
+	}
+
 	slog.Info("starting kombify StackKits API server",
 		"version", Version,
 		"port", *port,
@@ -88,10 +118,12 @@ func main() {
 	)
 
 	srv := api.NewServer(api.ServerConfig{
-		Port:    *port,
-		BaseDir: dir,
-		Version: Version,
-		APIKey:  key,
+		Port:        *port,
+		BaseDir:     dir,
+		Version:     Version,
+		APIKey:      key,
+		CORSOrigins: origins,
+		RateLimit:   rl,
 	})
 
 	httpServer := &http.Server{

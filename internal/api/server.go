@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -14,10 +15,12 @@ import (
 
 // ServerConfig holds configuration for the API server.
 type ServerConfig struct {
-	Port    int
-	BaseDir string
-	Version string
-	APIKey  string // If set, all non-health endpoints require X-API-Key header
+	Port        int
+	BaseDir     string
+	Version     string
+	APIKey      string   // If set, all non-health endpoints require X-API-Key header
+	CORSOrigins []string // Allowed CORS origins; empty = "*"
+	RateLimit   int      // Max requests per IP per minute; 0 = no limit
 }
 
 // Server is the StackKits HTTP API server.
@@ -43,7 +46,10 @@ func (s *Server) Handler() http.Handler {
 	if s.config.APIKey != "" {
 		handler = apiKeyMiddleware(s.config.APIKey)(handler)
 	}
-	handler = corsMiddleware(handler)
+	if s.config.RateLimit > 0 {
+		handler = rateLimitMiddleware(s.config.RateLimit)(handler)
+	}
+	handler = corsMiddleware(s.config.CORSOrigins)(handler)
 	handler = loggingMiddleware(handler)
 	handler = recoveryMiddleware(handler)
 	return handler
@@ -152,17 +158,114 @@ func requestIDMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func corsMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Request-ID, X-API-Key, X-User-ID, X-Org-ID")
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
-			return
+func corsMiddleware(origins []string) func(http.Handler) http.Handler {
+	allowOrigin := "*"
+	if len(origins) > 0 {
+		allowOrigin = strings.Join(origins, ", ")
+	}
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if len(origins) > 0 {
+				reqOrigin := r.Header.Get("Origin")
+				matched := false
+				for _, o := range origins {
+					if o == reqOrigin {
+						matched = true
+						break
+					}
+				}
+				if matched {
+					w.Header().Set("Access-Control-Allow-Origin", reqOrigin)
+					w.Header().Set("Vary", "Origin")
+				} else {
+					w.Header().Set("Access-Control-Allow-Origin", origins[0])
+					w.Header().Set("Vary", "Origin")
+				}
+			} else {
+				w.Header().Set("Access-Control-Allow-Origin", allowOrigin)
+			}
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Request-ID, X-API-Key, X-User-ID, X-Org-ID")
+			if r.Method == http.MethodOptions {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// ── Rate Limiting ─────────────────────────────────────────────────
+
+// rateLimitEntry tracks request counts for a client IP.
+type rateLimitEntry struct {
+	count  int
+	window time.Time
+}
+
+// rateLimitMiddleware applies a simple per-IP sliding-window rate limit.
+// maxPerMinute is the maximum number of requests allowed per IP per minute.
+// Health endpoints are exempt.
+func rateLimitMiddleware(maxPerMinute int) func(http.Handler) http.Handler {
+	var mu sync.Mutex
+	clients := make(map[string]*rateLimitEntry)
+
+	// Cleanup old entries every 5 minutes
+	go func() {
+		for {
+			time.Sleep(5 * time.Minute)
+			mu.Lock()
+			now := time.Now()
+			for ip, entry := range clients {
+				if now.Sub(entry.window) > time.Minute {
+					delete(clients, ip)
+				}
+			}
+			mu.Unlock()
 		}
-		next.ServeHTTP(w, r)
-	})
+	}()
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Exempt health endpoints from rate limiting
+			if r.URL.Path == "/health" || r.URL.Path == "/api/v1/health" {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			// Extract client IP (X-Forwarded-For for proxied requests)
+			ip := r.Header.Get("X-Forwarded-For")
+			if ip == "" {
+				ip = r.RemoteAddr
+			} else {
+				// Take first IP from comma-separated list
+				if idx := strings.IndexByte(ip, ','); idx != -1 {
+					ip = strings.TrimSpace(ip[:idx])
+				}
+			}
+
+			mu.Lock()
+			now := time.Now()
+			entry, exists := clients[ip]
+			if !exists || now.Sub(entry.window) > time.Minute {
+				clients[ip] = &rateLimitEntry{count: 1, window: now}
+				mu.Unlock()
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			entry.count++
+			if entry.count > maxPerMinute {
+				mu.Unlock()
+				w.Header().Set("Retry-After", "60")
+				writeError(w, r, http.StatusTooManyRequests, "rate limit exceeded")
+				return
+			}
+			mu.Unlock()
+
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 // statusResponseWriter wraps http.ResponseWriter to capture the status code.

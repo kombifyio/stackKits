@@ -117,21 +117,13 @@ Items are categorized by severity and mapped to roadmap milestones.
 
 ## P2 — Medium Priority
 
-### TD-33: No API Rate Limiting (I1)
+### ~~TD-33: No API Rate Limiting (I1)~~ → RESOLVED
 
-**Location:** `internal/api/server.go`  
-**Problem:** No rate limiting middleware. Generation endpoints are computationally expensive.  
-**Fix:** Add configurable rate limiter (per-IP or per-API-key).  
-**Milestone:** M1
-**Task:** StackKits-l3s.4
+> Moved to [Resolved](#resolved) on 2026-02-11. Added per-IP sliding-window rate limiter with `--rate-limit` flag / `STACKKITS_RATE_LIMIT` env (default: 60 req/min). Health endpoints exempt.
 
-### TD-34: Zero API Handler Test Coverage (I2)
+### ~~TD-34: Zero API Handler Test Coverage (I2)~~ → RESOLVED
 
-**Location:** `internal/api/`  
-**Problem:** No unit tests for handlers.go (~580 lines) or server.go (~190 lines). All 13 endpoints untested.  
-**Fix:** Add httptest-based unit tests for every handler.  
-**Milestone:** M1
-**Task:** StackKits-l3s.5
+> Moved to [Resolved](#resolved) on 2026-02-11. Added `handlers_test.go` with 42 test cases covering all handlers + middleware (API key, CORS, rate limiting).
 
 ### ~~TD-35: Logging Middleware Missing Response Status (I3)~~ → RESOLVED
 
@@ -141,13 +133,9 @@ Items are categorized by severity and mapped to roadmap milestones.
 
 > Moved to [Resolved](#resolved) on 2026-02-11. Implemented JSON output mode in `runStatus` using same data as table output.
 
-### TD-37: CLI prepare Memory Check Missing (I7)
+### ~~TD-37: CLI prepare Memory Check Missing (I7)~~ → RESOLVED
 
-**Location:** `cmd/stackkit/commands/prepare.go` L262  
-**Problem:** `checkLocalResources` reports "Memory: (check manually)" instead of actually checking available RAM.  
-**Fix:** Use `runtime.MemStats` or read `/proc/meminfo` on Linux, `GlobalMemoryStatusEx` on Windows.  
-**Milestone:** M3
-**Task:** StackKits-l3s.10
+> Moved to [Resolved](#resolved) on 2026-02-11. Implemented `runtime.ReadMemStats` + `/proc/meminfo` parsing on Linux, with graceful OS fallback.
 
 ### TD-38: Interactive init Is a Stub (I9)
 
@@ -157,13 +145,9 @@ Items are categorized by severity and mapped to roadmap milestones.
 **Milestone:** M4
 **Task:** StackKits-l3s.12
 
-### TD-39: Hardcoded stackKitDirs in API Handler (I10)
+### ~~TD-39: Hardcoded stackKitDirs in API Handler (I10)~~ → RESOLVED
 
-**Location:** `internal/api/handlers.go` L81  
-**Problem:** Hardcoded list of StackKit directories. Adding new StackKits requires code change.  
-**Fix:** Auto-discover StackKit directories from filesystem via `stackkit.yaml` presence.  
-**Milestone:** M3
-**Task:** StackKits-l3s.13
+> Moved to [Resolved](#resolved) on 2026-02-11. Replaced hardcoded `stackKitDirs` with auto-discovery loop scanning baseDir for `stackkit.yaml`.
 
 ### TD-12: Variants Directory Still Exists
 
@@ -214,13 +198,9 @@ Items are categorized by severity and mapped to roadmap milestones.
 
 ## P3 — Low Priority
 
-### TD-40: CORS Wildcard Not Configurable (N1)
+### ~~TD-40: CORS Wildcard Not Configurable (N1)~~ → RESOLVED
 
-**Location:** `internal/api/server.go` CORS middleware  
-**Problem:** CORS origin is hardcoded to `*`. Should be configurable for production.  
-**Fix:** Add `--cors-origins` flag or env var.  
-**Milestone:** M3
-**Task:** StackKits-l3s.14
+> Moved to [Resolved](#resolved) on 2026-02-11. Added `--cors-origins` flag / `STACKKITS_CORS_ORIGINS` env with per-request origin matching and `Vary: Origin`.
 
 ### TD-41: No Pagination on List Endpoints (N2)
 
@@ -324,6 +304,11 @@ Items are categorized by severity and mapped to roadmap milestones.
 | TD-35 | Logging middleware missing response status | 2026-02-11 | Added `statusResponseWriter` wrapper to capture HTTP status in logs |
 | TD-36 | CLI status `--json` flag not implemented | 2026-02-11 | Implemented JSON output mode in `runStatus` |
 | TD-42 | Deprecated `strings.Title` usage | 2026-02-11 | Replaced with `cases.Title(language.English)` from `golang.org/x/text` |
+| TD-33 | No API rate limiting | 2026-02-11 | Per-IP sliding-window rate limiter with `--rate-limit` flag (default 60/min), health exempt |
+| TD-34 | Zero API handler test coverage | 2026-02-11 | Added `handlers_test.go` with 42 test cases for all handlers + middleware |
+| TD-37 | CLI prepare memory check missing | 2026-02-11 | `runtime.ReadMemStats` + `/proc/meminfo` on Linux, graceful OS fallback |
+| TD-39 | Hardcoded `stackKitDirs` in API handler | 2026-02-11 | Auto-discover StackKit dirs via `stackkit.yaml` presence |
+| TD-40 | CORS wildcard not configurable | 2026-02-11 | `--cors-origins` flag / `STACKKITS_CORS_ORIGINS` env with per-request matching |
 
 ---
 

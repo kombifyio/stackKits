@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"strings"
 
 	"github.com/kombihq/stackkits/internal/config"
 	"github.com/kombihq/stackkits/internal/cue"
@@ -254,12 +255,42 @@ func prepareRemoteSystem(ctx context.Context, spec *models.StackSpec) error {
 }
 
 func checkLocalResources(spec *models.StackSpec) {
-	// Get local system info
+	// CPU check
 	numCPU := runtime.NumCPU()
 	printSuccess("CPU: %d cores", numCPU)
 
-	// Memory check would require platform-specific code
-	printInfo("Memory: (check manually)")
+	// Memory check — use runtime.MemStats for Go-accessible info,
+	// then read system total from OS-specific /proc/meminfo on Linux.
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+
+	sysMB := m.Sys / 1024 / 1024
+	if sysMB > 0 {
+		printSuccess("Go runtime memory: %d MB allocated", sysMB)
+	}
+
+	// Try reading system total memory (Linux)
+	if data, err := os.ReadFile("/proc/meminfo"); err == nil {
+		var totalKB uint64
+		for _, line := range strings.Split(string(data), "\n") {
+			if strings.HasPrefix(line, "MemTotal:") {
+				fmt.Sscanf(line, "MemTotal: %d kB", &totalKB)
+				break
+			}
+		}
+		if totalKB > 0 {
+			totalGB := float64(totalKB) / 1024 / 1024
+			printSuccess("System memory: %.1f GB", totalGB)
+			if totalGB < 2.0 {
+				printWarning("Low memory — some services may not start. Consider using compute tier 'low'.")
+			}
+		} else {
+			printInfo("System memory: could not parse /proc/meminfo")
+		}
+	} else {
+		// Windows/macOS — no /proc/meminfo available
+		printInfo("System memory: auto-detection not available on this OS (check manually)")
+	}
 }
 
 func installDockerRemote(ctx context.Context, client *ssh.Client, osType string) error {

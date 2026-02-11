@@ -65,14 +65,6 @@ func (s *Server) handleOpenAPISpec(w http.ResponseWriter, r *http.Request) {
 
 // ── Catalog: List StackKits ───────────────────────────────────────
 
-// stackKitDirs are the well-known directories where StackKits live.
-var stackKitDirs = []string{
-	"base-homelab",
-	"dev-homelab",
-	"modern-homelab",
-	"ha-homelab",
-}
-
 type stackKitSummary struct {
 	Name        string   `json:"name"`
 	DisplayName string   `json:"displayName"`
@@ -84,33 +76,11 @@ type stackKitSummary struct {
 func (s *Server) handleListStackKits(w http.ResponseWriter, r *http.Request) {
 	loader := config.NewLoader(s.config.BaseDir)
 	var kits []stackKitSummary
+	seen := make(map[string]bool)
 
-	// Scan well-known directories
-	for _, name := range stackKitDirs {
-		dir, err := loader.FindStackKitDir(name)
-		if err != nil {
-			continue
-		}
-		sk, err := loader.LoadStackKit(filepath.Join(dir, "stackkit.yaml"))
-		if err != nil {
-			continue
-		}
-		kits = append(kits, stackKitSummary{
-			Name:        sk.Metadata.Name,
-			DisplayName: sk.Metadata.DisplayName,
-			Description: sk.Metadata.Description,
-			Version:     sk.Metadata.Version,
-			Tags:        sk.Metadata.Tags,
-		})
-	}
-
-	// Also scan any directory containing stackkit.yaml
+	// Auto-discover: scan all directories containing stackkit.yaml
 	entries, err := os.ReadDir(s.config.BaseDir)
 	if err == nil {
-		seen := make(map[string]bool, len(kits))
-		for _, k := range kits {
-			seen[k.Name] = true
-		}
 		for _, entry := range entries {
 			if !entry.IsDir() {
 				continue
@@ -123,6 +93,7 @@ func (s *Server) handleListStackKits(w http.ResponseWriter, r *http.Request) {
 			if err != nil || seen[sk.Metadata.Name] {
 				continue
 			}
+			seen[sk.Metadata.Name] = true
 			kits = append(kits, stackKitSummary{
 				Name:        sk.Metadata.Name,
 				DisplayName: sk.Metadata.DisplayName,
