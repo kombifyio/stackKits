@@ -74,45 +74,45 @@ Before implementation, a full audit identified critical inconsistencies across S
 
 #### Docs Cleanup (this repo)
 
-- [ ] Archive `docs/architecture.md` → superseded by `ARCHITECTURE_V4.md`
-- [ ] Archive `docs/variants.md` → replaced by Add-On + Context model
-- [ ] Archive `docs/STATUS_QUO.md` → pre-v4, no longer accurate
-- [ ] Archive `docs/DEFAULT_SPECS_README.md` → references K8s, old variants
-- [ ] Archive `docs/EVALUATION_REPORT.md` → corrupt encoding, superseded by 2026-02-07 version
-- [ ] Archive `docs/CODE_REVIEW_2026-01-27.md` → duplicates root CODE_REVIEW_TECHNICAL_REPORT.md
-- [ ] Archive `docs/cleanup/` (8 files) → consolidated into Cleanup-Plan.md already
-- [ ] Update `docs/README.md` → new index reflecting v4 docs
-- [ ] Update `docs/creating-stackkits.md` → Add-On/Context structure, not variant directories
-- [ ] Update `docs/stack-spec-reference.md` → remove `k3s:` section, `variant:` → Add-Ons
-- [ ] Update `docs/templates.md` → replace `variant` variable with Add-On/Context
-- [ ] Update `docs/TARGET_STATE.md` → remove K8s prep references
-- [ ] Update `docs/CLI.md` → add Add-On/Context commands
+- [x] Archive `docs/architecture.md` → superseded by `ARCHITECTURE_V4.md`
+- [x] Archive `docs/variants.md` → replaced by Add-On + Context model
+- [x] Archive `docs/STATUS_QUO.md` → pre-v4, no longer accurate
+- [x] Archive `docs/DEFAULT_SPECS_README.md` → references K8s, old variants
+- [x] Archive `docs/EVALUATION_REPORT.md` → corrupt encoding, superseded by 2026-02-07 version
+- [x] Archive `docs/CODE_REVIEW_2026-01-27.md` → duplicates root CODE_REVIEW_TECHNICAL_REPORT.md
+- [x] Archive `docs/cleanup/` (8 files) → consolidated into Cleanup-Plan.md already
+- [x] Update `docs/README.md` → new index reflecting v4 docs
+- [ ] Update `docs/creating-stackkits.md` → deferred to M4 (variant dirs still exist in code, TD-12)
+- [x] Update `docs/stack-spec-reference.md` → removed K8s sections and examples
+- [ ] Update `docs/templates.md` → deferred to M4 (variant variable matches actual HCL code)
+- [x] Update `docs/TARGET_STATE.md` → removed K8s prep references
+- [ ] Update `docs/CLI.md` → deferred to M2 (Add-On/Context commands not yet implemented)
 
 #### Root Files Cleanup
 
-- [ ] Delete `{{range` (junk file at root)
-- [ ] Delete `stackkit.exe` (committed binary — already in .gitignore)
-- [ ] Add `stackkit.exe` to `.gitignore` explicitly
-- [ ] Update root `README.md` → remove variant references in "StackKit Specification" section
-- [ ] Update `DEPLOYMENT.md` → remove "Kubernetes manifests" reference
+- [x] Delete `{{range` (junk file at root)
+- [x] Delete `stackkit.exe` (committed binary — already in .gitignore)
+- [x] Add `stackkit.exe` to `.gitignore` explicitly
+- [x] Update root `README.md` → remove variant references in "StackKit Specification" section
+- [x] Update `DEPLOYMENT.md` → remove "Kubernetes manifests" reference
 - [ ] Update `DEPLOYMENT_CONTRACT.md` → fix naming inconsistencies
-- [ ] Update `stack-spec.yaml` → remove `variant: default`, `mode: simple`
+- [x] Update `stack-spec.yaml` → remove `variant: default`, `mode: simple`
 - [ ] Archive root `CODE_REVIEW_TECHNICAL_REPORT.md` → pre-v4
 
 #### CUE/Schema Consistency
 
-- [ ] Package naming: `devhomelab` → `dev_homelab`
-- [ ] File naming: `modern-homelab/stackkit.cue` → `stackfile.cue`
-- [ ] Remove duplicate schema definitions (`base/layers.cue` vs `base/platform/identity.cue`)
-- [ ] Fix package declarations in `base/platform/*.cue` (declares `package base` in subdirectory)
-- [ ] Fix package declarations in `base/schema/*.cue` (same issue)
-- [ ] Fix `dev-homelab/exports.cue` package conflict
-- [ ] Compute tier naming: Go `minimal/standard/performance` → CUE `low/standard/high` (align to CUE)
-- [ ] Platform type: remove `kubernetes` from Go validator (ADR-0002)
-- [ ] Fix Layer 3 PAAS validation logic (currently inverted in Go)
-- [ ] Consolidate `#BaseHomelabStack` vs `#BaseHomelabKit` → single canonical schema
-- [ ] Fix Coolify image typo: `coolabsio` → `coollabsio`
-- [ ] Fix whoami service missing `host` port in PortMapping
+- [x] Package naming: `devhomelab` → `dev_homelab`
+- [x] File naming: `modern-homelab/stackkit.cue` → `stackfile.cue`
+- [x] Remove duplicate schema definitions (`base/layers.cue` vs `base/platform/identity.cue`)
+- [x] Fix package declarations in `base/platform/*.cue` (declares `package base` in subdirectory)
+- [x] Fix package declarations in `base/schema/*.cue` (same issue)
+- [x] Fix `dev-homelab/exports.cue` package conflict
+- [x] Compute tier naming: Go `minimal/standard/performance` → CUE `low/standard/high` (align to CUE)
+- [x] Platform type: remove `kubernetes` from Go validator (ADR-0002)
+- [x] Fix Layer 3 PAAS validation logic (currently inverted in Go)
+- [x] Consolidate `#BaseHomelabStack` vs `#BaseHomelabKit` → single canonical schema
+- [x] Fix Coolify image typo: `coolabsio` → `coollabsio`
+- [x] Fix whoami service missing `host` port in PortMapping
 
 #### Cross-Repo (docs Mintlify repo)
 

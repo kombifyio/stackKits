@@ -58,12 +58,12 @@ type LayerValidationResult struct {
 
 // StackKitValidationResult contains complete validation results
 type StackKitValidationResult struct {
-	Valid      bool                     `json:"valid"`
-	StackKit   string                   `json:"stackkit"`
-	Layer1     *LayerValidationResult   `json:"layer1"`
-	Layer2     *LayerValidationResult   `json:"layer2"`
-	Layer3     *LayerValidationResult   `json:"layer3"`
-	AllErrors  []LayerError             `json:"allErrors,omitempty"`
+	Valid     bool                   `json:"valid"`
+	StackKit  string                 `json:"stackkit"`
+	Layer1    *LayerValidationResult `json:"layer1"`
+	Layer2    *LayerValidationResult `json:"layer2"`
+	Layer3    *LayerValidationResult `json:"layer3"`
+	AllErrors []LayerError           `json:"allErrors,omitempty"`
 }
 
 // LayerValidator performs 3-layer architecture validation
@@ -200,9 +200,9 @@ func (v *LayerValidator) validateLayer2(stackkitDir string) *LayerValidationResu
 		result.Errors = append(result.Errors, LayerError{
 			Layer:   LayerPlatform,
 			Code:    "L2_MISSING_PLATFORM",
-			Message: "ERROR: Layer 2 platform not declared - must specify platform: 'docker' | 'docker-swarm' | 'kubernetes' in stackkit.yaml",
+			Message: "ERROR: Layer 2 platform not declared - must specify platform: 'docker' | 'docker-swarm' | 'bare-metal' in stackkit.yaml",
 			Field:   "platform",
-			Hint:    "Add platform field with value: docker | docker-swarm | kubernetes",
+			Hint:    "Add platform field with value: docker | docker-swarm | bare-metal",
 		})
 	} else {
 		// Validate platform type value
@@ -214,13 +214,13 @@ func (v *LayerValidator) validateLayer2(stackkitDir string) *LayerValidationResu
 				Code:    "L2_INVALID_PLATFORM",
 				Message: "Layer 2 platform has invalid type",
 				Field:   "platform",
-				Hint:    "Platform must be one of: docker, docker-swarm, kubernetes",
+				Hint:    "Platform must be one of: docker, docker-swarm, bare-metal",
 			})
 		} else {
 			validPlatforms := map[string]bool{
 				"docker":       true,
 				"docker-swarm": true,
-				"kubernetes":   true,
+				"bare-metal":   true,
 			}
 			if !validPlatforms[platformStr] {
 				result.Valid = false
@@ -229,7 +229,7 @@ func (v *LayerValidator) validateLayer2(stackkitDir string) *LayerValidationResu
 					Code:    "L2_INVALID_PLATFORM_VALUE",
 					Message: fmt.Sprintf("Layer 2 platform '%s' is not valid", platformStr),
 					Field:   "platform",
-					Hint:    "Platform must be one of: docker, docker-swarm, kubernetes",
+					Hint:    "Platform must be one of: docker, docker-swarm, bare-metal",
 				})
 			}
 		}
@@ -289,64 +289,65 @@ func (v *LayerValidator) validateLayer3(stackkitDir string) *LayerValidationResu
 			Code:    "L3_MISSING_SERVICES",
 			Message: "Layer 3 applications missing - no services defined",
 			Field:   "services",
-			Hint:    "Add services block with at least one PAAS service",
+			Hint:    "Add services block with at least one application service",
 		})
 		return result
 	}
 
-	// Check for PAAS/management service
-	hasPAAS := false
-	paasServices := []string{"dokploy", "coolify", "dokku", "portainer", "dockge"}
+	// Check that Layer 3 does NOT contain PAAS/management services
+	// PAAS services belong in Layer 2 (Platform), not Layer 3 (Applications)
+	paasServices := []string{"dokploy", "coolify", "dokku"}
 
-	// Iterate through services to find PAAS type
+	// Iterate through services to find misplaced PAAS services
 	iter, err := services.Fields(cue.Concrete(false))
 	if err == nil {
 		for iter.Next() {
 			svcName := iter.Selector().String()
 			svcValue := iter.Value()
 
-			// Check if service has type field
+			isPAAS := false
+
+			// Check if service has type field indicating PAAS
 			typeField := svcValue.LookupPath(cue.ParsePath("type"))
 			if typeField.Exists() {
 				typeStr, _ := typeField.String()
-				if typeStr == "paas" || typeStr == "management" {
-					hasPAAS = true
-					break
+				if typeStr == "paas" {
+					isPAAS = true
 				}
 			}
 
-			// Check if service has role field that indicates PAAS
+			// Check if service has role field indicating PAAS
 			roleField := svcValue.LookupPath(cue.ParsePath("role"))
 			if roleField.Exists() {
 				roleStr, _ := roleField.String()
-				if roleStr == "paas" || roleStr == "management" {
-					hasPAAS = true
-					break
+				if roleStr == "paas" {
+					isPAAS = true
 				}
 			}
 
 			// Check if service name matches known PAAS services
 			for _, paas := range paasServices {
 				if strings.Contains(strings.ToLower(svcName), paas) {
-					hasPAAS = true
+					isPAAS = true
 					break
 				}
 			}
-			if hasPAAS {
-				break
+
+			// Check layer field — services explicitly marked as layer 2 are misplaced
+			layerField := svcValue.LookupPath(cue.ParsePath("layer"))
+			if layerField.Exists() {
+				layerStr, _ := layerField.String()
+				if strings.HasPrefix(layerStr, "2") {
+					isPAAS = true
+				}
+			}
+
+			if isPAAS {
+				result.Warnings = append(result.Warnings,
+					fmt.Sprintf("Service '%s' appears to be a PAAS/platform service — it belongs in Layer 2 (Platform), not Layer 3 (Applications). Move it to the paas section.", svcName),
+				)
 			}
 		}
-	}
-
-	if !hasPAAS {
-		result.Valid = false
-		result.Errors = append(result.Errors, LayerError{
-			Layer:   LayerApplications,
-			Code:    "L3_MISSING_PAAS",
-			Message: "ERROR: Missing PAAS/management service - every StackKit needs at least one service with type='paas' (dokploy, coolify, etc.)",
-			Field:   "services",
-			Hint:    "Add at least one of: dokploy, coolify, dokku, portainer, dockge with type: 'paas' or 'management'",
-		})
 	}
 
 	return result

@@ -12,11 +12,11 @@ import (
 )
 
 var (
-	initVariant       string
-	initComputeTier   string
-	initMode          string
-	initOutputDir     string
-	initForce         bool
+	initVariant        string
+	initComputeTier    string
+	initMode           string
+	initOutputDir      string
+	initForce          bool
 	initNonInteractive bool
 )
 
@@ -39,7 +39,7 @@ Examples:
 
 func init() {
 	initCmd.Flags().StringVar(&initVariant, "variant", "default", "Service variant to use")
-	initCmd.Flags().StringVar(&initComputeTier, "compute-tier", "minimal", "Compute tier (minimal, standard, performance)")
+	initCmd.Flags().StringVar(&initComputeTier, "compute-tier", "standard", "Compute tier (low, standard, high)")
 	initCmd.Flags().StringVar(&initMode, "mode", "simple", "Deployment mode (simple, advanced)")
 	initCmd.Flags().StringVarP(&initOutputDir, "output", "o", "deploy", "Output directory for generated files")
 	initCmd.Flags().BoolVarP(&initForce, "force", "f", false, "Overwrite existing files")

@@ -47,29 +47,17 @@ Items are categorized by severity and mapped to roadmap milestones.
 
 ## P1 — High Priority
 
-### TD-04: Compute Tier Naming Inconsistency
+### ~~TD-04: Compute Tier Naming Inconsistency~~ → RESOLVED
 
-**Location:** Go models vs CUE schemas  
-**Problem:** Go uses `minimal/standard/performance`, CUE uses `low/standard/high`.  
-**Impact:** Go↔CUE bridge produces mismatches; user-facing inconsistency.  
-**Fix:** Align to CUE naming (`low/standard/high`) everywhere.  
-**Milestone:** M0
+> Moved to [Resolved](#resolved) on 2026-02-12.
 
-### TD-05: Platform Type Mismatch
+### ~~TD-05: Platform Type Mismatch~~ → RESOLVED
 
-**Location:** Go validator in `internal/` vs CUE schemas  
-**Problem:** Go validator accepts `"kubernetes"`, but CUE only allows `docker/docker-swarm/bare-metal`. ADR-0002 explicitly excludes Kubernetes from v1.  
-**Impact:** Specs with `kubernetes` pass Go validation but fail CUE validation.  
-**Fix:** Remove `kubernetes` from Go validator.  
-**Milestone:** M0
+> Moved to [Resolved](#resolved) on 2026-02-12.
 
-### TD-06: Layer 3 PAAS Validation Inverted
+### ~~TD-06: Layer 3 PAAS Validation Inverted~~ → RESOLVED
 
-**Location:** Go `layer_validator.go`  
-**Problem:** Go code searches for PAAS in Layer 3, but per architecture PAAS is Layer 2 and Layer 3 MUST NOT contain PAAS services.  
-**Impact:** Incorrect validation — rejects valid configs, accepts invalid ones.  
-**Fix:** Invert logic: Layer 3 rejects PAAS services, Layer 2 allows them.  
-**Milestone:** M0
+> Moved to [Resolved](#resolved) on 2026-02-12.
 
 ### ~~TD-07: Dual Main Schemas in base-homelab~~ → RESOLVED
 
@@ -233,6 +221,10 @@ Items are categorized by severity and mapped to roadmap milestones.
 | — | ha-homelab `object-storage` missing from ServiceType | 2026-02-12 | Added to `#ServiceType` enum in `base/stackkit.cue` |
 | — | dev-homelab import alias shadowing | 2026-02-12 | Changed import to `dockerplatform "..."` |
 | — | dev-homelab schema mismatches (14 errors) | 2026-02-12 | Fixed base schemas (middlewares, tinyauth, category, driver) + dev-homelab values (maxFile, retention struct, paths) |
+| TD-04 | Compute tier naming (`minimal/performance` → `low/high`) | 2026-02-12 | Aligned Go models, validator, tests, and CLI to CUE naming (`low/standard/high`) |
+| TD-05 | Platform type mismatch (`kubernetes` in Go validator) | 2026-02-12 | Removed `kubernetes`, added `bare-metal` in Go validator per ADR-0002 |
+| TD-06 | Layer 3 PAAS validation inverted | 2026-02-12 | Rewrote `validateLayer3`: warns if PAAS found (PAAS belongs in Layer 2), no longer requires it |
+| — | K8s refs in docs (stack-spec-reference, TARGET_STATE) | 2026-02-12 | Removed K8s schema sections, examples, and references from active docs |
 
 ---
 

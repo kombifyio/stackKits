@@ -33,7 +33,7 @@ StackKits provides infrastructure templates (CUE schemas) that power kombify Sta
 │  ┌──────────────────────────────────────────────────────┐  │
 │  │              go-stackkits CLI                         │  │
 │  │  - Validates CUE schemas                             │  │
-│  │  - Generates Docker Compose / Kubernetes manifests   │  │
+│  │  - Generates Docker Compose / OpenTofu configurations │  │
 │  │  - Publishes to artifact repository                  │  │
 │  └──────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────┘

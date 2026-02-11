@@ -142,7 +142,7 @@ func TestValidateSpec(t *testing.T) {
 	})
 
 	t.Run("validates valid compute tiers", func(t *testing.T) {
-		validTiers := []string{"minimal", "standard", "performance"}
+		validTiers := []string{"low", "standard", "high"}
 
 		for _, tier := range validTiers {
 			spec := &models.StackSpec{

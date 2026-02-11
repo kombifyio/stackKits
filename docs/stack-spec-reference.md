@@ -24,7 +24,7 @@ version: "1.0"  # Spec version
 stack:
   name: string           # Stack identifier (DNS-compatible)
   kit: string            # StackKit name (e.g., "base-homelab")
-  variant: string        # Variant path (e.g., "os/ubuntu-24")
+  context: string        # Node context (e.g., "local", "cloud", "pi")
   addons: [string]       # Add-on list (e.g., ["monitoring"])
 
 nodes:
@@ -45,13 +45,9 @@ nodes:
       tier: string       # "low" | "standard" | "high"
       min_ram_gb: int    # Minimum RAM (GB)
       min_cpu_cores: int # Minimum CPU cores
-    docker:              # For Docker-based StackKits
+    docker:              # Docker runtime configuration
       version: string    # Docker version
       installed: bool    # Pre-installed?
-    k3s:                 # For Kubernetes-based StackKits
-      role: string       # "server" | "agent"
-      version: string    # K3s version
-      options: [string]  # CLI flags
 
 services:
   - name: string         # Service identifier
@@ -62,22 +58,14 @@ services:
     volumes: [string]    # Volume mounts (host:container:mode)
     env:                 # Environment variables
       KEY: value
-    labels:              # Container/Pod labels
+    labels:              # Container labels
       key: value
     needs: [string]      # Dependencies (service names)
-    deploy:              # Deployment config (Docker Swarm/K8s)
+    deploy:              # Deployment config (Docker Swarm)
       mode: string       # "replicated" | "global"
       replicas: int
       placement:
         constraints: [string]
-    k8s:                 # Kubernetes-specific
-      namespace: string
-      replicas: int
-      ingress:
-        enabled: bool
-        host: string
-        tls:
-          enabled: bool
 
 network:
   mode: string           # "local" | "public" | "hybrid"
@@ -85,9 +73,6 @@ network:
   subnet: string         # Network subnet (CIDR)
   gateway: string        # Gateway IP
   driver: string         # "bridge" | "overlay"
-  k8s_service_cidr: string  # K8s service CIDR
-  k8s_pod_cidr: string      # K8s pod CIDR
-  ingress_ip: string        # External ingress IP
   dns:
     provider: string     # DNS provider (cloudflare, route53)
     email: string        # ACME email
@@ -179,7 +164,7 @@ version: "1.0"
 stack:
   name: ha-homelab
   kit: ha-homelab
-  variant: os/ubuntu-24
+  context: local
   addons: [monitoring]
 
 nodes:
@@ -234,7 +219,7 @@ network:
   driver: overlay
 ```
 
-### Example 3: modern-homelab (Kubernetes)
+### Example 3: modern-homelab (Multi-Node Docker with VPN)
 
 ```yaml
 version: "1.0"
@@ -242,57 +227,41 @@ version: "1.0"
 stack:
   name: modern-homelab
   kit: modern-homelab
-  variant: os/ubuntu-24
-  addons: [monitoring, observability]
+  context: cloud
+  addons: [monitoring, vpn-overlay]
 
 nodes:
-  - name: k3s-control
+  - name: local-server
     type: main
+    provider: local
     ip: 192.168.1.100
-    k3s:
-      role: server
-      version: "v1.31.4+k3s1"
-      options:
-        - "--disable=traefik"
-        - "--tls-san=192.168.1.100"
+    docker:
+      version: "27.5.1"
   
-  - name: k3s-worker-1
+  - name: cloud-worker
     type: worker
-    ip: 192.168.1.101
-    k3s:
-      role: agent
-  
-  - name: k3s-worker-2
-    type: worker
-    ip: 192.168.1.102
-    k3s:
-      role: agent
+    provider: hetzner
+    ip: 49.12.x.x
+    docker:
+      version: "27.5.1"
 
 services:
-  - name: ingress-nginx
-    type: ingress
-    k8s:
-      namespace: ingress-nginx
-      install_method: helm
-      chart: ingress-nginx/ingress-nginx
+  - name: traefik
+    type: reverse-proxy
+    node: local-server
+    image: traefik:v3.2
+    ports: [80, 443]
 
-  - name: dokploy
-    type: deployment-platform
-    k8s:
-      namespace: default
-      replicas: 2
-      ingress:
-        enabled: true
-        host: dokploy.yourdomain.com
-        tls:
-          enabled: true
-          issuer: letsencrypt-prod
+  - name: coolify
+    type: paas
+    node: cloud-worker
+    image: ghcr.io/coollabsio/coolify:latest
+    ports: [8000]
 
 network:
-  mode: public
-  k8s_service_cidr: 10.43.0.0/16
-  k8s_pod_cidr: 10.42.0.0/16
-  ingress_ip: 192.168.1.100
+  mode: hybrid
+  docker_network: kombi_net
+  subnet: 172.20.0.0/16
 
 tls:
   enabled: true
@@ -309,7 +278,7 @@ tls:
 | `version` | ✅ | Spec format version (currently "1.0") |
 | `stack.name` | ✅ | Stack identifier (DNS-compatible, lowercase) |
 | `stack.kit` | ✅ | StackKit name (must exist in repo) |
-| `stack.variant` | ✅ | Variant path (e.g., "os/ubuntu-24") |
+| `stack.context` | ❌ | Node context (auto-detected or explicit: local/cloud/pi) |
 | `stack.addons` | ❌ | Add-ons to enable (e.g., ["monitoring"]) |
 
 ### Node Fields
@@ -327,7 +296,6 @@ tls:
 | `os.version` | ✅ | OS version (e.g., "24.04") |
 | `compute.tier` | ✅ | Resource tier (low/standard/high) |
 | `docker.version` | Docker only | Docker version to install |
-| `k3s.role` | K8s only | K3s role (server/agent) |
 
 ### Service Fields
 
@@ -343,7 +311,6 @@ tls:
 | `labels` | ❌ | Container/Pod labels (key-value map) |
 | `needs` | ❌ | Service dependencies (array of service names) |
 | `deploy` | HA only | Swarm deployment config |
-| `k8s` | K8s only | Kubernetes-specific config |
 
 ### Network Fields
 
@@ -353,8 +320,7 @@ tls:
 | `docker_network` | Docker | Docker network name |
 | `subnet` | ❌ | Network subnet (CIDR notation) |
 | `driver` | HA | Network driver (bridge/overlay) |
-| `k8s_service_cidr` | K8s | K8s service CIDR |
-| `ingress_ip` | Public | External ingress IP |
+| `dns.provider` | Public | DNS provider (cloudflare, route53) |
 
 ## Validation Rules
 
@@ -362,7 +328,7 @@ tls:
 
 - `stack.name` must match `^[a-z][a-z0-9-]+$` (DNS-compatible)
 - `stack.kit` must reference an existing StackKit
-- `stack.variant` must exist in the StackKit's variants/
+- `stack.context` is auto-detected from node hardware or set explicitly
 
 ### Node Validation
 
@@ -374,7 +340,7 @@ tls:
 ### Service Validation
 
 - Service names must be unique within stack
-- `service.node` must reference an existing node (or "any" for K8s)
+- `service.node` must reference an existing node
 - `service.needs` must reference existing services (no circular deps)
 - Ports must be in range 1-65535
 
@@ -382,7 +348,6 @@ tls:
 
 - `mode: public` requires `tls.enabled: true`
 - `driver: overlay` requires Docker Swarm (multiple nodes)
-- K8s CIDRs must not overlap with node IPs
 
 ## Differences from kombination.yaml
 

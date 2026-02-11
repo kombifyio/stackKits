@@ -4,7 +4,7 @@
 
 ## 1. Vision Statement
 
-StackKits is the standardization system for homelab and self-hosted infrastructure, built from declarative, pre-validated infrastructure blueprints. It enables technically minded users to reliably deploy modern homelab environments – from simple single-server setups to highly available multi-node architectures – without needing to master every detail of Terraform/OpenTofu, Docker, Swarm, or (later) Kubernetes. StackKits forms the technical foundation of the KombiStack / Kombify product family and integrates into a broader multi-repo ecosystem.
+StackKits is the standardization system for homelab and self-hosted infrastructure, built from declarative, pre-validated infrastructure blueprints. It enables technically minded users to reliably deploy modern homelab environments – from simple single-server setups to highly available multi-node architectures – without needing to master every detail of Terraform/OpenTofu, Docker, or Swarm. StackKits forms the technical foundation of the KombiStack / Kombify product family and integrates into a broader multi-repo ecosystem.
 
 ## 2. Core Value Proposition
 
@@ -18,7 +18,7 @@ StackKits is the standardization system for homelab and self-hosted infrastructu
 
 3. **Multi-layer infrastructure abstraction**
 
-   The three-layer architecture (OS → Platform → Application) clearly separates base operating system, orchestration platform (Docker, later Kubernetes), and service layer. This improves reuse, extensibility, and maintainability.
+   The three-layer architecture (OS → Platform → Application) clearly separates base operating system, orchestration platform (Docker, Docker Swarm), and service layer. This improves reuse, extensibility, and maintainability.
 
 4. **Flexible deployment modes (Simple vs. Advanced)**
    - **Simple Mode:** Straightforward OpenTofu/Terraform execution for smaller or simpler setups.
@@ -74,15 +74,14 @@ StackKits is the standardization system for homelab and self-hosted infrastructu
 - Docker as the primary platform for the first three StackKits.
 - Standardized Docker networks, volumes, and security defaults.
 - Optional PaaS layer:
-  - Supported Docker-based PaaS options such as Dockploy and Coolify, with room for additional alternatives.
-- Preparation for Kubernetes support:
-  - Abstract platform interfaces so that services can be ported from Docker to Kubernetes without rewriting core logic.
+  - Supported Docker-based PaaS options such as Dokploy and Coolify, with room for additional alternatives.
+- Abstracted platform interfaces to support future orchestration backends without rewriting core service logic.
 
 **FR6 – Application Layer (Layer 3)**
 
 - Services defined as modular building blocks:
   - Self-hosted tools (for example photo services, file storage, AI stacks, monitoring, logging, etc.).
-- Clear dependency modeling to Layer 2 (for example Docker resources, Swarm services; later Kubernetes resources).
+- Clear dependency modeling to Layer 2 (for example Docker resources, Swarm services).
 - Configuration profiles:
   - **Standard profile** per service.
   - Optional **alternative profiles** per category (for example “photo service: Immich OR alternative X”).
@@ -158,7 +157,7 @@ StackKits is the standardization system for homelab and self-hosted infrastructu
 - StackKits provided as open-source repositories (for example on GitHub).
 - Clear repository layout, for example:
   - `/core` – CUE schemas, core validation logic, shared types.
-  - `/platforms` – Docker (initial), later Kubernetes and others.
+  - `/platforms` – Docker and Docker Swarm platform definitions.
   - `/stacks` – base-homelab, modern-homelab, ha-homelab, add-ons.
   - `/docs` – STATUS*[QUO.md](http://QUO.md), TARGET*[STATE.md](http://STATE.md), how-tos, architecture docs.
 - Conventions for contributions, versioning, and compatibility guarantees.
@@ -177,7 +176,7 @@ StackKits is the standardization system for homelab and self-hosted infrastructu
 1. **Technology stack**
    - CUE as the central validation and configuration modeling language.
    - OpenTofu/Terraform as the infrastructure-as-code engine.
-   - Docker as the initial orchestration platform, with Kubernetes planned.
+   - Docker and Docker Swarm as the orchestration platforms (per ADR-0002).
    - Terramate for advanced orchestration, change detection, parallel execution, and drift detection.
 2. **Scalability and performance**
    - Support from single-node setups to multi-node clusters (3+ nodes).
@@ -216,9 +215,9 @@ StackKits is the standardization system for homelab and self-hosted infrastructu
 
 ## 6. Future Components (Planned)
 
-1. **Kubernetes Platform Layer**
-   - Full support for Kubernetes as an alternative to Docker.
-   - Dedicated homelab templates for Kubernetes-based AI and service workloads.
+1. **Additional Platform Layers**
+   - Potential support for additional orchestration platforms beyond Docker/Swarm.
+   - Dedicated homelab templates for specialized AI and service workloads.
 2. **Add-On Library / Marketplace**
    - Curated collection of add-ons (monitoring packages, logging stacks, security hardening, AI bundles, etc.).
    - Potential for community-contributed add-ons with quality and compatibility checks.

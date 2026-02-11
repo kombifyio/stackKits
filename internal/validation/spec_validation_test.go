@@ -500,7 +500,7 @@ func TestNetworkModeValidation(t *testing.T) {
 
 // TestComputeTierValidation tests compute tier validation
 func TestComputeTierValidation(t *testing.T) {
-	validTiers := []string{"minimal", "standard", "performance", ""}
+	validTiers := []string{"low", "standard", "high", ""}
 
 	for _, tier := range validTiers {
 		t.Run("valid tier: "+tier, func(t *testing.T) {

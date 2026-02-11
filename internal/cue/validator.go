@@ -118,12 +118,12 @@ func (v *Validator) ValidateSpec(spec *models.StackSpec) (*models.ValidationResu
 	}
 
 	// Validate compute tier
-	validTiers := map[string]bool{"minimal": true, "standard": true, "performance": true}
+	validTiers := map[string]bool{"low": true, "standard": true, "high": true}
 	if spec.Compute.Tier != "" && !validTiers[spec.Compute.Tier] {
 		result.Valid = false
 		result.Errors = append(result.Errors, models.ValidationError{
 			Path:    "compute.tier",
-			Message: fmt.Sprintf("invalid compute tier '%s', must be one of: minimal, standard, performance", spec.Compute.Tier),
+			Message: fmt.Sprintf("invalid compute tier '%s', must be one of: low, standard, high", spec.Compute.Tier),
 			Code:    "INVALID_VALUE",
 		})
 	}

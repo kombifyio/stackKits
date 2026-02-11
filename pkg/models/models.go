@@ -97,7 +97,7 @@ type NetworkSpec struct {
 
 // ComputeSpec defines compute tier configuration
 type ComputeSpec struct {
-	Tier string `yaml:"tier" json:"tier"` // "minimal", "standard", "performance"
+	Tier string `yaml:"tier" json:"tier"` // "low", "standard", "high"
 }
 
 // SSHSpec defines SSH configuration

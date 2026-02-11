@@ -210,13 +210,14 @@ services: {
 	assert.True(t, found, "Should have L2_MISSING_PLATFORM error")
 }
 
-// TestLayerValidator_ValidateStackKit_MissingLayer3 tests missing PAAS service
-func TestLayerValidator_ValidateStackKit_MissingLayer3(t *testing.T) {
+// TestLayerValidator_ValidateStackKit_Layer3WithoutPAAS tests that Layer 3 passes without PAAS
+// (PAAS belongs in Layer 2, not Layer 3)
+func TestLayerValidator_ValidateStackKit_Layer3WithoutPAAS(t *testing.T) {
 	tmpDir := t.TempDir()
 	stackkitDir := filepath.Join(tmpDir, "test-stackkit")
 	require.NoError(t, os.MkdirAll(stackkitDir, 0755))
 
-	// Missing PAAS service
+	// Services without PAAS — this is correct for Layer 3
 	cueContent := `
 package test
 
@@ -253,7 +254,7 @@ network: {
 	}
 }
 
-// Layer 3: Applications (no PAAS service)
+// Layer 3: Applications (no PAAS — correct, PAAS is Layer 2)
 services: {
 	whoami: {
 		type: "utility"
@@ -268,18 +269,12 @@ services: {
 	result, err := validator.ValidateStackKit(stackkitDir)
 
 	require.NoError(t, err)
-	assert.False(t, result.Valid, "Expected invalid StackKit")
-	assert.False(t, result.Layer3.Valid, "Layer 3 should be invalid")
+	assert.True(t, result.Layer3.Valid, "Layer 3 should be valid without PAAS services")
 
-	found := false
+	// Should NOT have L3_MISSING_PAAS error
 	for _, e := range result.Layer3.Errors {
-		if e.Code == "L3_MISSING_PAAS" {
-			found = true
-			assert.Contains(t, e.Message, "PAAS/management service")
-			break
-		}
+		assert.NotEqual(t, "L3_MISSING_PAAS", e.Code, "Should not require PAAS in Layer 3")
 	}
-	assert.True(t, found, "Should have L3_MISSING_PAAS error")
 }
 
 // TestLayerValidator_ValidateStackKit_InvalidPlatform tests invalid platform value
@@ -604,7 +599,7 @@ services: { dokploy: { type: "paas", enabled: true } }
 
 // TestLayerValidator_ValidateStackKit_AllPlatformTypes tests all valid platform types
 func TestLayerValidator_ValidateStackKit_AllPlatformTypes(t *testing.T) {
-	validPlatforms := []string{"docker", "docker-swarm", "kubernetes"}
+	validPlatforms := []string{"docker", "docker-swarm", "bare-metal"}
 
 	for _, platform := range validPlatforms {
 		t.Run(platform, func(t *testing.T) {
@@ -714,4 +709,3 @@ func TestLayerError_Error(t *testing.T) {
 	assert.Contains(t, err.Error(), "ERROR:")
 	assert.Contains(t, err.Error(), "Test error message")
 }
-
