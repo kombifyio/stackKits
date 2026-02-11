@@ -65,6 +65,11 @@ import (
 			shell: "/bin/bash"
 			sudo:  true
 		}
+		service: {
+			name:  "kombi-svc"
+			shell: "/usr/sbin/nologin"
+			sudo:  false
+		}
 	}
 
 	container: {
