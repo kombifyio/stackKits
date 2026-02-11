@@ -1,0 +1,104 @@
+# GoReleaser configuration for StackKits CLI
+# See: https://goreleaser.com/customization/
+
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+    - go generate ./...
+
+builds:
+  - id: stackkit
+    main: ./cmd/stackkit
+    binary: stackkit
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X main.Version={{ .Version }}
+      - -X main.GitCommit={{ .Commit }}
+      - -X main.BuildDate={{ .Date }}
+
+archives:
+  - id: default
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    files:
+      - README.md
+      - LICENSE
+      - docs/CLI.md
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+      - "^chore:"
+      - "^style:"
+      - Merge pull request
+      - Merge branch
+  groups:
+    - title: "Breaking Changes"
+      regexp: '^.*?!:.+$'
+      order: 0
+    - title: "Features"
+      regexp: '^.*?feat(\(.+\))?:.+$'
+      order: 1
+    - title: "Bug Fixes"
+      regexp: '^.*?fix(\(.+\))?:.+$'
+      order: 2
+    - title: "Other"
+      order: 999
+
+release:
+  github:
+    owner: KombiverseLabs
+    name: StackKits
+  draft: false
+  prerelease: auto
+  name_template: "v{{ .Version }}"
+  header: |
+    ## StackKits CLI v{{ .Version }}
+
+    ### Installation
+
+    **macOS/Linux (Homebrew):**
+    ```bash
+    # Coming soon
+    ```
+
+    **Manual download:**
+    Download the appropriate archive for your platform below, extract it, and place `stackkit` in your PATH.
+
+    **Go install:**
+    ```bash
+    go install github.com/kombihq/stackkits/cmd/stackkit@v{{ .Version }}
+    ```
+  footer: |
+    **Full Changelog**: https://github.com/KombiverseLabs/StackKits/compare/{{ .PreviousTag }}...{{ .Tag }}

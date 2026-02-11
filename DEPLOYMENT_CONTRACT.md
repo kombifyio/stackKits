@@ -43,8 +43,8 @@
 ├─────────────────────────────────────────────────────────────┤
 │                                                              │
 │   ┌──────────────────┐     ┌──────────────────┐             │
-│   │  KombiSphere     │     │  kombifyStack    │             │
-│   │  (Portal)        │     │  (Core API)      │             │
+│   │  KombiSphere     │     │  kombify Stack  │             │
+│   │  (Portal)        │     │  (Core API)     │             │
 │   └────────┬─────────┘     └────────┬─────────┘             │
 │            │                        │                        │
 │            │   Uses templates from  │                        │
@@ -64,18 +64,22 @@
 
 ```
 StackKits/
-├── base/              # Core CUE schemas
+├── base/              # Core CUE schemas (types, validation)
+│   ├── stackkit.cue
 │   ├── network.cue
-│   ├── service.cue
-│   └── doc.cue
-├── base-homelab/      # Basic homelab template
-├── modern-homelab/    # Advanced template
-├── ha-homelab/        # High-availability template
-├── platforms/         # Platform-specific configs
-├── cmd/               # Go CLI tools
-├── pkg/               # Go libraries
-├── tests/             # CUE validation tests
-└── website-v2/        # Documentation site (Svelte)
+│   ├── security.cue
+│   ├── observability.cue
+│   └── ...
+├── base-homelab/      # Single Environment Kit
+├── dev-homelab/       # Developer Kit
+├── ha-homelab/        # High-Availability Kit
+├── modern-homelab/    # Multi-Node Kit (planned)
+├── cmd/               # Go CLI (stackkit)
+├── internal/          # Go internal packages
+├── pkg/               # Go public libraries
+├── tests/             # CUE + Go tests
+├── docs/              # Documentation
+└── website-v2/        # Documentation site (SvelteKit)
 ```
 
 ---
@@ -189,9 +193,9 @@ cue vet user-config.cue ./base-homelab/
 
 | Repo | Dependency Type | Notes |
 |------|-----------------|-------|
-| kombifyStack | Consumer | Stack loads StackKit definitions |
+| kombify Stack | Consumer | Stack loads StackKit definitions |
 | docs | Documentation | Published to docs site |
-| KombiSphere-Cloud | Display | Shows available templates |
+| kombify Cloud | Display | Shows available templates |
 
 ---
 
@@ -210,10 +214,10 @@ cue vet user-config.cue ./base-homelab/
 ```cue
 package mystackkit
 
-import "stackkits.io/base"
+import "github.com/kombihq/stackkits/base"
 
 // #MyService extends the base service
-#MyService: base.#Service & {
+#MyService: base.#ServiceDefinition & {
     // Custom fields here
     customField: string
 }

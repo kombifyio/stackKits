@@ -95,9 +95,9 @@ Before implementation, a full audit identified critical inconsistencies across S
 - [x] Add `stackkit.exe` to `.gitignore` explicitly
 - [x] Update root `README.md` → remove variant references in "StackKit Specification" section
 - [x] Update `DEPLOYMENT.md` → remove "Kubernetes manifests" reference
-- [ ] Update `DEPLOYMENT_CONTRACT.md` → fix naming inconsistencies
+- [x] Update `DEPLOYMENT_CONTRACT.md` → fix naming inconsistencies
 - [x] Update `stack-spec.yaml` → remove `variant: default`, `mode: simple`
-- [ ] Archive root `CODE_REVIEW_TECHNICAL_REPORT.md` → pre-v4
+- [x] Archive root `CODE_REVIEW_TECHNICAL_REPORT.md` → pre-v4
 
 #### CUE/Schema Consistency
 

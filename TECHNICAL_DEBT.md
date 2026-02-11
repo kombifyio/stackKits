@@ -159,13 +159,9 @@ Items are categorized by severity and mapped to roadmap milestones.
 **Fix:** Decide canonical site, archive the other.  
 **Milestone:** M9
 
-### TD-22: plans/ and missions/ Directories
+### ~~TD-22: plans/ and missions/ Directories~~ → RESOLVED
 
-**Location:** `plans/`, `missions/`  
-**Problem:** Historical planning documents from early development. May reference outdated concepts.  
-**Impact:** Low — not actively used but may confuse new contributors.  
-**Fix:** Review and archive or delete if superseded.  
-**Milestone:** M0
+> Moved to [Resolved](#resolved) on 2026-02-11.
 
 ### TD-23: kombify-admin/ Local Prisma Schema
 
@@ -191,13 +187,9 @@ Items are categorized by severity and mapped to roadmap milestones.
 **Fix:** Clarify in ADR: HA can use local or public. If local, Keepalived VIP; if public, cloud LB.  
 **Milestone:** M3
 
-### TD-26: Dokploy/Coolify Selection Logic (W12)
+### ~~TD-26: Dokploy/Coolify Selection Logic (W12)~~ → RESOLVED
 
-**Location:** `docs/architecture.md`, services definitions  
-**Problem:** Architecture doc says "no domain → Dokploy, domain → Coolify". But Dokploy supports custom domains fine.  
-**Impact:** Confusing simplified rule.  
-**Fix:** Clarify: "local → Dokploy (simpler), multi-node/cloud → Coolify (required for remote)".  
-**Milestone:** M0
+> Moved to [Resolved](#resolved) on 2026-02-11. Original `docs/architecture.md` (which contained the confusing rule) was archived. ROADMAP M2 now correctly specifies: \"Dokploy for local, Coolify for cloud/multi-node\".
 
 ---
 
@@ -225,6 +217,8 @@ Items are categorized by severity and mapped to roadmap milestones.
 | TD-05 | Platform type mismatch (`kubernetes` in Go validator) | 2026-02-12 | Removed `kubernetes`, added `bare-metal` in Go validator per ADR-0002 |
 | TD-06 | Layer 3 PAAS validation inverted | 2026-02-12 | Rewrote `validateLayer3`: warns if PAAS found (PAAS belongs in Layer 2), no longer requires it |
 | — | K8s refs in docs (stack-spec-reference, TARGET_STATE) | 2026-02-12 | Removed K8s schema sections, examples, and references from active docs |
+| TD-22 | plans/ and missions/ directories | 2026-02-11 | Archived to `docs/_archive/plans/` and `docs/_archive/missions/` |
+| TD-26 | Dokploy/Coolify selection logic | 2026-02-11 | Source doc archived; ROADMAP M2 clarifies: local→Dokploy, cloud→Coolify |
 
 ---
 
