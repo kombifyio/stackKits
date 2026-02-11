@@ -9,7 +9,7 @@ services:
       POSTGRES_PASSWORD: kombify_dev
       POSTGRES_DB: kombify_admin
     ports:
-      - "5432:5432"
+      - "5434:5432"
     volumes:
       - kombify_db_data:/var/lib/postgresql/data
     healthcheck:

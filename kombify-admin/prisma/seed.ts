@@ -13,6 +13,35 @@ import {
 
 const prisma = new PrismaClient();
 
+// Helper for StackKitTool upsert with nullable variantName
+async function upsertStackKitTool(data: {
+  stackkitId: string;
+  toolId: string;
+  variantName?: string | null;
+  isRequired?: boolean;
+  isDefault?: boolean;
+  deployOrder?: number;
+}) {
+  const existing = await prisma.stackKitTool.findFirst({
+    where: {
+      stackkitId: data.stackkitId,
+      toolId: data.toolId,
+      variantName: data.variantName ?? null,
+    },
+  });
+  if (existing) return existing;
+  return prisma.stackKitTool.create({
+    data: {
+      stackkitId: data.stackkitId,
+      toolId: data.toolId,
+      variantName: data.variantName,
+      isRequired: data.isRequired ?? false,
+      isDefault: data.isDefault ?? false,
+      deployOrder: data.deployOrder ?? 0,
+    },
+  });
+}
+
 async function main() {
   console.log('Seeding database...');
 
@@ -385,82 +414,26 @@ async function main() {
   // Base Homelab tool associations
   const baseHomelabTools = await Promise.all([
     // Required tools (all variants)
-    prisma.stackKitTool.upsert({
-      where: { stackkitId_toolId_variantName: { stackkitId: baseHomelabKit.id, toolId: toolMap.get('lldap')!.id, variantName: null } },
-      update: {},
-      create: { stackkitId: baseHomelabKit.id, toolId: toolMap.get('lldap')!.id, isRequired: true, isDefault: true, deployOrder: 1 },
-    }),
-    prisma.stackKitTool.upsert({
-      where: { stackkitId_toolId_variantName: { stackkitId: baseHomelabKit.id, toolId: toolMap.get('step-ca')!.id, variantName: null } },
-      update: {},
-      create: { stackkitId: baseHomelabKit.id, toolId: toolMap.get('step-ca')!.id, isRequired: true, isDefault: true, deployOrder: 2 },
-    }),
-    prisma.stackKitTool.upsert({
-      where: { stackkitId_toolId_variantName: { stackkitId: baseHomelabKit.id, toolId: toolMap.get('traefik')!.id, variantName: null } },
-      update: {},
-      create: { stackkitId: baseHomelabKit.id, toolId: toolMap.get('traefik')!.id, isRequired: true, isDefault: true, deployOrder: 10 },
-    }),
+    upsertStackKitTool({ stackkitId: baseHomelabKit.id, toolId: toolMap.get('lldap')!.id, isRequired: true, isDefault: true, deployOrder: 1 }),
+    upsertStackKitTool({ stackkitId: baseHomelabKit.id, toolId: toolMap.get('step-ca')!.id, isRequired: true, isDefault: true, deployOrder: 2 }),
+    upsertStackKitTool({ stackkitId: baseHomelabKit.id, toolId: toolMap.get('traefik')!.id, isRequired: true, isDefault: true, deployOrder: 10 }),
     // Default variant: Dokploy + Uptime Kuma
-    prisma.stackKitTool.upsert({
-      where: { stackkitId_toolId_variantName: { stackkitId: baseHomelabKit.id, toolId: toolMap.get('dokploy')!.id, variantName: 'default' } },
-      update: {},
-      create: { stackkitId: baseHomelabKit.id, toolId: toolMap.get('dokploy')!.id, variantName: 'default', isDefault: true, deployOrder: 20 },
-    }),
-    prisma.stackKitTool.upsert({
-      where: { stackkitId_toolId_variantName: { stackkitId: baseHomelabKit.id, toolId: toolMap.get('uptime-kuma')!.id, variantName: 'default' } },
-      update: {},
-      create: { stackkitId: baseHomelabKit.id, toolId: toolMap.get('uptime-kuma')!.id, variantName: 'default', isDefault: true, deployOrder: 30 },
-    }),
+    upsertStackKitTool({ stackkitId: baseHomelabKit.id, toolId: toolMap.get('dokploy')!.id, variantName: 'default', isDefault: true, deployOrder: 20 }),
+    upsertStackKitTool({ stackkitId: baseHomelabKit.id, toolId: toolMap.get('uptime-kuma')!.id, variantName: 'default', isDefault: true, deployOrder: 30 }),
     // Coolify variant
-    prisma.stackKitTool.upsert({
-      where: { stackkitId_toolId_variantName: { stackkitId: baseHomelabKit.id, toolId: toolMap.get('coolify')!.id, variantName: 'coolify' } },
-      update: {},
-      create: { stackkitId: baseHomelabKit.id, toolId: toolMap.get('coolify')!.id, variantName: 'coolify', isDefault: true, deployOrder: 20 },
-    }),
+    upsertStackKitTool({ stackkitId: baseHomelabKit.id, toolId: toolMap.get('coolify')!.id, variantName: 'coolify', isDefault: true, deployOrder: 20 }),
     // Beszel variant
-    prisma.stackKitTool.upsert({
-      where: { stackkitId_toolId_variantName: { stackkitId: baseHomelabKit.id, toolId: toolMap.get('dokploy')!.id, variantName: 'beszel' } },
-      update: {},
-      create: { stackkitId: baseHomelabKit.id, toolId: toolMap.get('dokploy')!.id, variantName: 'beszel', isDefault: true, deployOrder: 20 },
-    }),
-    prisma.stackKitTool.upsert({
-      where: { stackkitId_toolId_variantName: { stackkitId: baseHomelabKit.id, toolId: toolMap.get('beszel')!.id, variantName: 'beszel' } },
-      update: {},
-      create: { stackkitId: baseHomelabKit.id, toolId: toolMap.get('beszel')!.id, variantName: 'beszel', isDefault: true, deployOrder: 30 },
-    }),
+    upsertStackKitTool({ stackkitId: baseHomelabKit.id, toolId: toolMap.get('dokploy')!.id, variantName: 'beszel', isDefault: true, deployOrder: 20 }),
+    upsertStackKitTool({ stackkitId: baseHomelabKit.id, toolId: toolMap.get('beszel')!.id, variantName: 'beszel', isDefault: true, deployOrder: 30 }),
     // Minimal variant
-    prisma.stackKitTool.upsert({
-      where: { stackkitId_toolId_variantName: { stackkitId: baseHomelabKit.id, toolId: toolMap.get('dockge')!.id, variantName: 'minimal' } },
-      update: {},
-      create: { stackkitId: baseHomelabKit.id, toolId: toolMap.get('dockge')!.id, variantName: 'minimal', isDefault: true, deployOrder: 20 },
-    }),
-    prisma.stackKitTool.upsert({
-      where: { stackkitId_toolId_variantName: { stackkitId: baseHomelabKit.id, toolId: toolMap.get('portainer')!.id, variantName: 'minimal' } },
-      update: {},
-      create: { stackkitId: baseHomelabKit.id, toolId: toolMap.get('portainer')!.id, variantName: 'minimal', isDefault: true, deployOrder: 21 },
-    }),
-    prisma.stackKitTool.upsert({
-      where: { stackkitId_toolId_variantName: { stackkitId: baseHomelabKit.id, toolId: toolMap.get('netdata')!.id, variantName: 'minimal' } },
-      update: {},
-      create: { stackkitId: baseHomelabKit.id, toolId: toolMap.get('netdata')!.id, variantName: 'minimal', isDefault: true, deployOrder: 30 },
-    }),
+    upsertStackKitTool({ stackkitId: baseHomelabKit.id, toolId: toolMap.get('dockge')!.id, variantName: 'minimal', isDefault: true, deployOrder: 20 }),
+    upsertStackKitTool({ stackkitId: baseHomelabKit.id, toolId: toolMap.get('portainer')!.id, variantName: 'minimal', isDefault: true, deployOrder: 21 }),
+    upsertStackKitTool({ stackkitId: baseHomelabKit.id, toolId: toolMap.get('netdata')!.id, variantName: 'minimal', isDefault: true, deployOrder: 30 }),
     // Secure variant adds TinyAuth
-    prisma.stackKitTool.upsert({
-      where: { stackkitId_toolId_variantName: { stackkitId: baseHomelabKit.id, toolId: toolMap.get('tinyauth')!.id, variantName: 'secure' } },
-      update: {},
-      create: { stackkitId: baseHomelabKit.id, toolId: toolMap.get('tinyauth')!.id, variantName: 'secure', isDefault: true, deployOrder: 15 },
-    }),
+    upsertStackKitTool({ stackkitId: baseHomelabKit.id, toolId: toolMap.get('tinyauth')!.id, variantName: 'secure', isDefault: true, deployOrder: 15 }),
     // Optional tools (all variants)
-    prisma.stackKitTool.upsert({
-      where: { stackkitId_toolId_variantName: { stackkitId: baseHomelabKit.id, toolId: toolMap.get('dozzle')!.id, variantName: null } },
-      update: {},
-      create: { stackkitId: baseHomelabKit.id, toolId: toolMap.get('dozzle')!.id, isDefault: false, deployOrder: 50 },
-    }),
-    prisma.stackKitTool.upsert({
-      where: { stackkitId_toolId_variantName: { stackkitId: baseHomelabKit.id, toolId: toolMap.get('whoami')!.id, variantName: null } },
-      update: {},
-      create: { stackkitId: baseHomelabKit.id, toolId: toolMap.get('whoami')!.id, isDefault: false, deployOrder: 99 },
-    }),
+    upsertStackKitTool({ stackkitId: baseHomelabKit.id, toolId: toolMap.get('dozzle')!.id, isDefault: false, deployOrder: 50 }),
+    upsertStackKitTool({ stackkitId: baseHomelabKit.id, toolId: toolMap.get('whoami')!.id, isDefault: false, deployOrder: 99 }),
   ]);
 
   console.log(`Created ${baseHomelabTools.length} base-homelab tool associations`);

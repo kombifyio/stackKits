@@ -22,8 +22,8 @@ import * as path from 'path';
 
 const prisma = new PrismaClient();
 
-// Output directory for generated CUE files
-const OUTPUT_DIR = path.resolve(__dirname, '../../base/generated');
+// Output directory for generated CUE files (relative to project root)
+const OUTPUT_DIR = path.resolve(process.cwd(), '../base/generated');
 
 /**
  * Ensure output directory exists
