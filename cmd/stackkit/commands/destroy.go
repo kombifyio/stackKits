@@ -124,10 +124,10 @@ func runDestroy(cmd *cobra.Command, args []string) error {
 	}
 
 	stateFile := filepath.Join(wd, ".stackkit", "state.yaml")
-	if err := os.MkdirAll(filepath.Dir(stateFile), 0755); err == nil {
-		if err := loader.SaveDeploymentState(state, stateFile); err != nil {
-			printWarning("Failed to save deployment state: %v", err)
-		}
+	if err := os.MkdirAll(filepath.Dir(stateFile), 0755); err != nil {
+		printWarning("Failed to create state directory: %v", err)
+	} else if err := loader.SaveDeploymentState(state, stateFile); err != nil {
+		printWarning("Failed to save deployment state: %v", err)
 	}
 
 	fmt.Println()
