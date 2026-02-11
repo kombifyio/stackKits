@@ -2,20 +2,57 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
 	"github.com/kombihq/stackkits/api/openapi"
 	"github.com/kombihq/stackkits/internal/config"
 	cuepkg "github.com/kombihq/stackkits/internal/cue"
+	skerrors "github.com/kombihq/stackkits/internal/errors"
 	"github.com/kombihq/stackkits/pkg/models"
 )
 
 // ── Health ────────────────────────────────────────────────────────
+
+// stackKitNamePattern matches the OpenAPI StackKitName pattern: ^[a-z0-9][a-z0-9-]*[a-z0-9]$
+var stackKitNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*[a-z0-9]$`)
+
+// validateStackKitName checks a name against the OpenAPI StackKitName pattern.
+// Returns a structured error if the name is invalid.
+func validateStackKitName(name string) *skerrors.StackKitError {
+	if name == "" {
+		return skerrors.NewValidationError("name_required", "stackkit name is required",
+			skerrors.WithSuggestion("Provide a StackKit name in the URL path"),
+			skerrors.WithSuggestion("List available StackKits: GET /api/v1/stackkits"),
+		)
+	}
+	if !stackKitNamePattern.MatchString(name) {
+		return skerrors.NewValidationError("invalid_name_format",
+			"invalid stackkit name: '"+name+"' — must match pattern ^[a-z0-9][a-z0-9-]*[a-z0-9]$",
+			skerrors.WithField("name", name),
+			skerrors.WithField("pattern", "^[a-z0-9][a-z0-9-]*[a-z0-9]$"),
+			skerrors.WithSuggestion("Use lowercase letters, digits, and hyphens only (e.g., base-homelab)"),
+			skerrors.WithSuggestion("Name must start and end with a letter or digit"),
+		)
+	}
+	return nil
+}
+
+// stackKitNotFoundError creates a structured error for missing StackKits.
+func stackKitNotFoundError(name string) *skerrors.StackKitError {
+	return skerrors.NewValidationError("stackkit_not_found",
+		"stackkit not found: "+name,
+		skerrors.WithField("name", name),
+		skerrors.WithSuggestion("List available StackKits: GET /api/v1/stackkits"),
+		skerrors.WithSuggestion("Check the name for typos — names are case-sensitive"),
+	)
+}
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	writeSuccess(w, r, http.StatusOK, map[string]interface{}{
@@ -112,15 +149,15 @@ func (s *Server) handleListStackKits(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleGetStackKit(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
-	if name == "" {
-		writeError(w, r, http.StatusBadRequest, "stackkit name is required")
+	if err := validateStackKitName(name); err != nil {
+		writeStructuredError(w, r, http.StatusBadRequest, err)
 		return
 	}
 
 	loader := config.NewLoader(s.config.BaseDir)
 	dir, err := loader.FindStackKitDir(name)
 	if err != nil {
-		writeError(w, r, http.StatusNotFound, "stackkit not found: "+name)
+		writeStructuredError(w, r, http.StatusNotFound, stackKitNotFoundError(name))
 		return
 	}
 
@@ -137,15 +174,15 @@ func (s *Server) handleGetStackKit(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleGetStackKitSchema(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
-	if name == "" {
-		writeError(w, r, http.StatusBadRequest, "stackkit name is required")
+	if err := validateStackKitName(name); err != nil {
+		writeStructuredError(w, r, http.StatusBadRequest, err)
 		return
 	}
 
 	loader := config.NewLoader(s.config.BaseDir)
 	dir, err := loader.FindStackKitDir(name)
 	if err != nil {
-		writeError(w, r, http.StatusNotFound, "stackkit not found: "+name)
+		writeStructuredError(w, r, http.StatusNotFound, stackKitNotFoundError(name))
 		return
 	}
 
@@ -193,15 +230,15 @@ func (s *Server) handleGetStackKitSchema(w http.ResponseWriter, r *http.Request)
 
 func (s *Server) handleGetStackKitDefaults(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
-	if name == "" {
-		writeError(w, r, http.StatusBadRequest, "stackkit name is required")
+	if err := validateStackKitName(name); err != nil {
+		writeStructuredError(w, r, http.StatusBadRequest, err)
 		return
 	}
 
 	loader := config.NewLoader(s.config.BaseDir)
 	dir, err := loader.FindStackKitDir(name)
 	if err != nil {
-		writeError(w, r, http.StatusNotFound, "stackkit not found: "+name)
+		writeStructuredError(w, r, http.StatusNotFound, stackKitNotFoundError(name))
 		return
 	}
 
@@ -245,15 +282,15 @@ func (s *Server) handleGetStackKitDefaults(w http.ResponseWriter, r *http.Reques
 
 func (s *Server) handleGetStackKitVariants(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
-	if name == "" {
-		writeError(w, r, http.StatusBadRequest, "stackkit name is required")
+	if err := validateStackKitName(name); err != nil {
+		writeStructuredError(w, r, http.StatusBadRequest, err)
 		return
 	}
 
 	loader := config.NewLoader(s.config.BaseDir)
 	dir, err := loader.FindStackKitDir(name)
 	if err != nil {
-		writeError(w, r, http.StatusNotFound, "stackkit not found: "+name)
+		writeStructuredError(w, r, http.StatusNotFound, stackKitNotFoundError(name))
 		return
 	}
 
@@ -310,7 +347,12 @@ func (s *Server) handleValidateSpec(w http.ResponseWriter, r *http.Request) {
 	validator := cuepkg.NewValidator(s.config.BaseDir)
 	result, err := validator.ValidateSpec(&spec)
 	if err != nil {
-		writeError(w, r, http.StatusUnprocessableEntity, "validation error: "+err.Error())
+		writeStructuredError(w, r, http.StatusUnprocessableEntity, skerrors.NewValidationError(
+			"spec_validation_failed", "validation error: "+err.Error(),
+			skerrors.WithCause(err),
+			skerrors.WithSuggestion("Check your spec against the schema: GET /api/v1/stackkits/"+spec.StackKit+"/schema"),
+			skerrors.WithSuggestion("Use partial validation to debug field-by-field: POST /api/v1/validate/partial"),
+		))
 		return
 	}
 
@@ -393,6 +435,117 @@ func (s *Server) handleValidatePartial(w http.ResponseWriter, r *http.Request) {
 				})
 			}
 		}
+		if subnet, ok := network["subnet"].(string); ok && subnet != "" {
+			// Basic CIDR format check
+			if !strings.Contains(subnet, "/") {
+				errors = append(errors, models.ValidationError{
+					Path:    "network.subnet",
+					Message: "subnet must be in CIDR notation (e.g., 172.20.0.0/16)",
+					Code:    "INVALID_SUBNET",
+				})
+			}
+		}
+	}
+
+	// Validate name format (same regex as StackKit name)
+	if name, ok := partial["name"].(string); ok && name != "" {
+		if !stackKitNamePattern.MatchString(name) {
+			errors = append(errors, models.ValidationError{
+				Path:    "name",
+				Message: "invalid name '" + name + "' — must match ^[a-z0-9][a-z0-9-]*[a-z0-9]$",
+				Code:    "INVALID_NAME",
+			})
+		}
+	}
+
+	// Validate email format
+	if email, ok := partial["email"].(string); ok && email != "" {
+		if !strings.Contains(email, "@") || !strings.Contains(email, ".") {
+			errors = append(errors, models.ValidationError{
+				Path:    "email",
+				Message: "invalid email format: '" + email + "'",
+				Code:    "INVALID_EMAIL",
+			})
+		}
+	}
+
+	// Validate domain format
+	if domain, ok := partial["domain"].(string); ok && domain != "" {
+		if strings.ContainsAny(domain, " \t") || !strings.Contains(domain, ".") {
+			errors = append(errors, models.ValidationError{
+				Path:    "domain",
+				Message: "invalid domain format: '" + domain + "'",
+				Code:    "INVALID_DOMAIN",
+			})
+		}
+	}
+
+	// Validate compute tier
+	if compute, ok := partial["compute"].(map[string]interface{}); ok {
+		if tier, ok := compute["tier"].(string); ok {
+			validTiers := map[string]bool{"low": true, "standard": true, "high": true}
+			if !validTiers[tier] {
+				errors = append(errors, models.ValidationError{
+					Path:    "compute.tier",
+					Message: "invalid compute tier '" + tier + "', expected low/standard/high",
+					Code:    "INVALID_COMPUTE_TIER",
+				})
+			}
+		}
+	}
+
+	// Validate SSH settings
+	if ssh, ok := partial["ssh"].(map[string]interface{}); ok {
+		if port, ok := ssh["port"].(float64); ok {
+			if port < 1 || port > 65535 {
+				errors = append(errors, models.ValidationError{
+					Path:    "ssh.port",
+					Message: "SSH port must be between 1 and 65535",
+					Code:    "INVALID_SSH_PORT",
+				})
+			}
+		}
+		if user, ok := ssh["user"].(string); ok && user != "" {
+			if strings.ContainsAny(user, " \t/\\") {
+				errors = append(errors, models.ValidationError{
+					Path:    "ssh.user",
+					Message: "SSH user contains invalid characters",
+					Code:    "INVALID_SSH_USER",
+				})
+			}
+		}
+	}
+
+	// Validate nodes
+	if nodes, ok := partial["nodes"].([]interface{}); ok {
+		validRoles := map[string]bool{"control-plane": true, "worker": true, "standalone": true}
+		namesSeen := make(map[string]bool)
+		for i, n := range nodes {
+			node, ok := n.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			prefix := "nodes[" + strings.Repeat("", 0) + fmt.Sprintf("%d", i) + "]"
+			if nodeName, ok := node["name"].(string); ok {
+				if namesSeen[nodeName] {
+					errors = append(errors, models.ValidationError{
+						Path:    prefix + ".name",
+						Message: "duplicate node name: '" + nodeName + "'",
+						Code:    "DUPLICATE_NODE_NAME",
+					})
+				}
+				namesSeen[nodeName] = true
+			}
+			if role, ok := node["role"].(string); ok {
+				if !validRoles[role] {
+					errors = append(errors, models.ValidationError{
+						Path:    prefix + ".role",
+						Message: "invalid node role '" + role + "', expected control-plane/worker/standalone",
+						Code:    "INVALID_NODE_ROLE",
+					})
+				}
+			}
+		}
 	}
 
 	result := models.ValidationResult{
@@ -433,7 +586,7 @@ func (s *Server) handleGenerateTFVars(w http.ResponseWriter, r *http.Request) {
 	loader := config.NewLoader(s.config.BaseDir)
 	dir, err := loader.FindStackKitDir(req.Spec.StackKit)
 	if err != nil {
-		writeError(w, r, http.StatusNotFound, "stackkit not found: "+req.Spec.StackKit)
+		writeStructuredError(w, r, http.StatusNotFound, stackKitNotFoundError(req.Spec.StackKit))
 		return
 	}
 
@@ -448,7 +601,12 @@ func (s *Server) handleGenerateTFVars(w http.ResponseWriter, r *http.Request) {
 	// Use the TerraformBridge to generate tfvars
 	bridge := cuepkg.NewTerraformBridge(dir)
 	if err := bridge.GenerateWithValidation(tempDir); err != nil {
-		writeError(w, r, http.StatusUnprocessableEntity, "generation failed: "+err.Error())
+		writeStructuredError(w, r, http.StatusUnprocessableEntity, skerrors.NewDeploymentError(
+			"generation_failed", "generation failed: "+err.Error(),
+			skerrors.WithCause(err),
+			skerrors.WithSuggestion("Validate your spec first: POST /api/v1/validate"),
+			skerrors.WithSuggestion("Check CUE schema compliance: GET /api/v1/stackkits/"+req.Spec.StackKit+"/schema"),
+		))
 		return
 	}
 
@@ -491,7 +649,7 @@ func (s *Server) handleGeneratePreview(w http.ResponseWriter, r *http.Request) {
 	loader := config.NewLoader(s.config.BaseDir)
 	dir, err := loader.FindStackKitDir(req.Spec.StackKit)
 	if err != nil {
-		writeError(w, r, http.StatusNotFound, "stackkit not found: "+req.Spec.StackKit)
+		writeStructuredError(w, r, http.StatusNotFound, stackKitNotFoundError(req.Spec.StackKit))
 		return
 	}
 
@@ -505,12 +663,20 @@ func (s *Server) handleGeneratePreview(w http.ResponseWriter, r *http.Request) {
 
 	bridge := cuepkg.NewTerraformBridge(dir)
 	if err := bridge.ValidateBeforeGeneration(); err != nil {
-		writeError(w, r, http.StatusUnprocessableEntity, "pre-generation validation failed: "+err.Error())
+		writeStructuredError(w, r, http.StatusUnprocessableEntity, skerrors.NewValidationError(
+			"pre_generation_validation_failed", "pre-generation validation failed: "+err.Error(),
+			skerrors.WithCause(err),
+			skerrors.WithSuggestion("Run full validation first: POST /api/v1/validate"),
+		))
 		return
 	}
 
 	if err := bridge.GenerateTFVars(tempDir); err != nil {
-		writeError(w, r, http.StatusUnprocessableEntity, "preview generation failed: "+err.Error())
+		writeStructuredError(w, r, http.StatusUnprocessableEntity, skerrors.NewDeploymentError(
+			"preview_generation_failed", "preview generation failed: "+err.Error(),
+			skerrors.WithCause(err),
+			skerrors.WithSuggestion("Validate your spec first: POST /api/v1/validate"),
+		))
 		return
 	}
 

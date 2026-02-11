@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/kombihq/stackkits/internal/config"
-	"github.com/kombihq/stackkits/internal/tofu"
+	"github.com/kombihq/stackkits/internal/iac"
 	"github.com/spf13/cobra"
 )
 
@@ -55,28 +55,23 @@ func runPlan(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("deploy directory not found: %s\nRun 'stackkit init' first", deployDir)
 	}
 
-	// Create tofu executor
-	executor := tofu.NewExecutor(
-		tofu.WithWorkDir(deployDir),
-	)
+	// Create IaC executor from spec (supports OpenTofu and Terramate modes)
+	executor, err := iac.NewExecutorFromSpec(spec, deployDir)
+	if err != nil {
+		return fmt.Errorf("failed to create executor: %w", err)
+	}
 
-	// Check if tofu is installed
+	// Check if tool is installed
 	if !executor.IsInstalled() {
-		return fmt.Errorf("OpenTofu is not installed. Run 'stackkit prepare' first")
+		return fmt.Errorf("%s is not installed. Run 'stackkit prepare' first", executor.Mode())
 	}
 
 	// Initialize if needed
 	tfStatePath := filepath.Join(deployDir, ".terraform")
 	if _, err := os.Stat(tfStatePath); os.IsNotExist(err) {
-		printInfo("Initializing OpenTofu...")
-		result, err := executor.Init(ctx)
-		if err != nil {
+		printInfo("Initializing %s...", executor.Mode())
+		if err := executor.Init(ctx); err != nil {
 			return fmt.Errorf("init error: %w", err)
-		}
-		if !result.Success {
-			printError("Init failed:")
-			fmt.Println(result.Stderr)
-			return fmt.Errorf("tofu init failed")
 		}
 		printSuccess("Initialized successfully")
 	}
@@ -89,30 +84,21 @@ func runPlan(cmd *cobra.Command, args []string) error {
 		planFile = filepath.Join(deployDir, "plan.tfplan")
 	}
 
-	result, err := executor.Plan(ctx, planFile)
+	planResult, err := executor.Plan(ctx, planFile)
 	if err != nil {
 		return fmt.Errorf("plan error: %w", err)
 	}
 
-	// Parse and display results
-	if result.Stdout != "" {
+	// Display plan output
+	if planResult.Output != "" {
 		fmt.Println()
-		fmt.Println(result.Stdout)
+		fmt.Println(planResult.Output)
 	}
-
-	if !result.Success && result.ExitCode != 2 {
-		printError("Plan failed:")
-		fmt.Println(result.Stderr)
-		return fmt.Errorf("tofu plan failed")
-	}
-
-	// Parse changes
-	changes := tofu.ParsePlanOutput(result.Stdout)
 
 	fmt.Println()
-	if changes.Add > 0 || changes.Change > 0 || changes.Destroy > 0 {
+	if planResult.HasChanges {
 		printInfo("Plan summary: %d to add, %d to change, %d to destroy",
-			changes.Add, changes.Change, changes.Destroy)
+			planResult.Add, planResult.Change, planResult.Destroy)
 
 		if planOut != "" {
 			printSuccess("Plan saved to: %s", planFile)

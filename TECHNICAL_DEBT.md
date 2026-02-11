@@ -87,23 +87,13 @@ Items are categorized by severity and mapped to roadmap milestones.
 
 > Moved to [Resolved](#resolved) on 2026-02-11. Rewrote `copyOrRenderTemplates` to use `template.Renderer` instead of plain file copy.
 
-### TD-31: iac and terramate Packages Are Dead Code (I6)
+### ~~TD-31: iac and terramate Packages Are Dead Code (I6)~~ → RESOLVED
 
-**Location:** `internal/iac/executor.go` (~380 lines), `internal/terramate/executor.go` (~459 lines)  
-**Problem:** CLI commands directly use `internal/tofu/`. The unified `iac.Executor` interface and Terramate wrapper are built and tested (~475 lines of tests) but never used.  
-**Impact:** ~840 lines of production code + tests are dead code. Terramate mode is unreachable from CLI.  
-**Fix:** Wire `iac.Executor` into CLI commands. Support `--engine terramate` flag.  
-**Milestone:** M6
-**Task:** StackKits-l3s.9
+> Moved to [Resolved](#resolved) on 2026-02-12. CLI commands (validate, plan, apply, destroy) now use `iac.NewExecutorFromSpec()`. Expanded `iac.Executor` interface with `Validate`, `Output` methods and `ExecResult` type. Both OpenTofu and Terramate backends wired through unified interface.
 
-### TD-32: internal/errors Package Mostly Unused (I8)
+### ~~TD-32: internal/errors Package Mostly Unused (I8)~~ → RESOLVED
 
-**Location:** `internal/errors/errors.go` (~271 lines)  
-**Problem:** Rich error system with categories, severity, auto-fix suggestions, and structured context — but CLI commands and API handlers use plain `fmt.Errorf` everywhere.  
-**Impact:** Poor error UX. Users get unstructured error messages. Auto-fix suggestions never shown.  
-**Fix:** Adopt `internal/errors` across CLI and API. Replace `fmt.Errorf` with structured errors where user-facing.  
-**Milestone:** M3
-**Task:** StackKits-l3s.11
+> Moved to [Resolved](#resolved) on 2026-02-12. Adopted `internal/errors` across API handlers and middleware. `writeStructuredError` returns category, code, and suggestions in JSON responses. Auth, rate-limit, validation, generation, and not-found errors now use structured error types. Added `validateStackKitName` with OpenAPI regex enforcement.
 
 ### TD-11: Headscale Port Conflict (W9)
 
@@ -309,6 +299,8 @@ Items are categorized by severity and mapped to roadmap milestones.
 | TD-37 | CLI prepare memory check missing | 2026-02-11 | `runtime.ReadMemStats` + `/proc/meminfo` on Linux, graceful OS fallback |
 | TD-39 | Hardcoded `stackKitDirs` in API handler | 2026-02-11 | Auto-discover StackKit dirs via `stackkit.yaml` presence |
 | TD-40 | CORS wildcard not configurable | 2026-02-11 | `--cors-origins` flag / `STACKKITS_CORS_ORIGINS` env with per-request matching |
+| TD-31 | iac/terramate packages are dead code | 2026-02-12 | CLI validate/plan/apply/destroy now use `iac.NewExecutorFromSpec`. Expanded `iac.Executor` with `Validate`, `Output`, `ExecResult` |
+| TD-32 | internal/errors package mostly unused | 2026-02-12 | `writeStructuredError` in API, structured errors for auth/rate-limit/validation/not-found. `validateStackKitName` regex. validatePartial expanded to cover email/domain/ssh/compute/nodes |
 
 ---
 

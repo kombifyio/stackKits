@@ -26,9 +26,11 @@ const (
 type Executor interface {
 	// Core operations
 	Init(ctx context.Context) error
-	Plan(ctx context.Context) (*PlanResult, error)
-	Apply(ctx context.Context, autoApprove bool) error
-	Destroy(ctx context.Context, autoApprove bool) error
+	Plan(ctx context.Context, outFile string) (*PlanResult, error)
+	Apply(ctx context.Context, autoApprove bool, planFile string) (*ExecResult, error)
+	Destroy(ctx context.Context, autoApprove bool) (*ExecResult, error)
+	Validate(ctx context.Context) (*ExecResult, error)
+	Output(ctx context.Context) (string, error)
 
 	// Day 2 operations (may not be supported in all modes)
 	DetectDrift(ctx context.Context) (*DriftResult, error)
@@ -38,6 +40,15 @@ type Executor interface {
 	Mode() ExecutionMode
 	IsInstalled() bool
 	Version(ctx context.Context) (string, error)
+}
+
+// ExecResult represents the result of an IaC command execution.
+type ExecResult struct {
+	Success  bool
+	Stdout   string
+	Stderr   string
+	ExitCode int
+	Duration time.Duration
 }
 
 // PlanResult represents the result of a plan operation
@@ -159,8 +170,8 @@ func (e *OpenTofuExecutor) Init(ctx context.Context) error {
 	return nil
 }
 
-func (e *OpenTofuExecutor) Plan(ctx context.Context) (*PlanResult, error) {
-	result, err := e.executor.Plan(ctx, "")
+func (e *OpenTofuExecutor) Plan(ctx context.Context, outFile string) (*PlanResult, error) {
+	result, err := e.executor.Plan(ctx, outFile)
 	if err != nil {
 		return nil, err
 	}
@@ -176,26 +187,57 @@ func (e *OpenTofuExecutor) Plan(ctx context.Context) (*PlanResult, error) {
 	}, nil
 }
 
-func (e *OpenTofuExecutor) Apply(ctx context.Context, autoApprove bool) error {
-	result, err := e.executor.Apply(ctx, "")
+func (e *OpenTofuExecutor) Apply(ctx context.Context, autoApprove bool, planFile string) (*ExecResult, error) {
+	result, err := e.executor.Apply(ctx, planFile)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if !result.Success {
-		return fmt.Errorf("apply failed: %s", result.Stderr)
-	}
-	return nil
+	return &ExecResult{
+		Success:  result.Success,
+		Stdout:   result.Stdout,
+		Stderr:   result.Stderr,
+		ExitCode: result.ExitCode,
+		Duration: result.Duration,
+	}, nil
 }
 
-func (e *OpenTofuExecutor) Destroy(ctx context.Context, autoApprove bool) error {
+func (e *OpenTofuExecutor) Destroy(ctx context.Context, autoApprove bool) (*ExecResult, error) {
 	result, err := e.executor.Destroy(ctx)
 	if err != nil {
-		return err
+		return nil, err
+	}
+	return &ExecResult{
+		Success:  result.Success,
+		Stdout:   result.Stdout,
+		Stderr:   result.Stderr,
+		ExitCode: result.ExitCode,
+		Duration: result.Duration,
+	}, nil
+}
+
+func (e *OpenTofuExecutor) Validate(ctx context.Context) (*ExecResult, error) {
+	result, err := e.executor.Validate(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &ExecResult{
+		Success:  result.Success,
+		Stdout:   result.Stdout,
+		Stderr:   result.Stderr,
+		ExitCode: result.ExitCode,
+		Duration: result.Duration,
+	}, nil
+}
+
+func (e *OpenTofuExecutor) Output(ctx context.Context) (string, error) {
+	result, err := e.executor.Output(ctx)
+	if err != nil {
+		return "", err
 	}
 	if !result.Success {
-		return fmt.Errorf("destroy failed: %s", result.Stderr)
+		return "", fmt.Errorf("output failed: %s", result.Stderr)
 	}
-	return nil
+	return result.Stdout, nil
 }
 
 func (e *OpenTofuExecutor) Refresh(ctx context.Context) error {
@@ -220,7 +262,7 @@ func (e *OpenTofuExecutor) DetectDrift(ctx context.Context) (*DriftResult, error
 	}
 
 	// Then plan to see differences
-	planResult, err := e.Plan(ctx)
+	planResult, err := e.Plan(ctx, "")
 	if err != nil {
 		return nil, err
 	}
@@ -298,7 +340,8 @@ func (e *TerramateExecutor) Init(ctx context.Context) error {
 	return nil
 }
 
-func (e *TerramateExecutor) Plan(ctx context.Context) (*PlanResult, error) {
+func (e *TerramateExecutor) Plan(ctx context.Context, outFile string) (*PlanResult, error) {
+	// Terramate orchestrates tofu plan across stacks; outFile is ignored
 	result, err := e.executor.RunPlan(ctx)
 	if err != nil {
 		return nil, err
@@ -316,26 +359,59 @@ func (e *TerramateExecutor) Plan(ctx context.Context) (*PlanResult, error) {
 	}, nil
 }
 
-func (e *TerramateExecutor) Apply(ctx context.Context, autoApprove bool) error {
+func (e *TerramateExecutor) Apply(ctx context.Context, autoApprove bool, planFile string) (*ExecResult, error) {
+	// Terramate handles plan-file semantics internally; planFile is ignored
 	result, err := e.executor.RunApply(ctx, autoApprove)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if !result.Success {
-		return fmt.Errorf("apply failed: %s", result.Stderr)
-	}
-	return nil
+	return &ExecResult{
+		Success:  result.Success,
+		Stdout:   result.Stdout,
+		Stderr:   result.Stderr,
+		ExitCode: result.ExitCode,
+		Duration: result.Duration,
+	}, nil
 }
 
-func (e *TerramateExecutor) Destroy(ctx context.Context, autoApprove bool) error {
+func (e *TerramateExecutor) Destroy(ctx context.Context, autoApprove bool) (*ExecResult, error) {
 	result, err := e.executor.RunDestroy(ctx, autoApprove)
 	if err != nil {
-		return err
+		return nil, err
+	}
+	return &ExecResult{
+		Success:  result.Success,
+		Stdout:   result.Stdout,
+		Stderr:   result.Stderr,
+		ExitCode: result.ExitCode,
+		Duration: result.Duration,
+	}, nil
+}
+
+func (e *TerramateExecutor) Validate(ctx context.Context) (*ExecResult, error) {
+	// Terramate doesn't have a dedicated validate; run plan as validation
+	result, err := e.executor.RunPlan(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &ExecResult{
+		Success:  result.Success,
+		Stdout:   result.Stdout,
+		Stderr:   result.Stderr,
+		ExitCode: result.ExitCode,
+		Duration: result.Duration,
+	}, nil
+}
+
+func (e *TerramateExecutor) Output(ctx context.Context) (string, error) {
+	result, err := e.executor.Output(ctx)
+	if err != nil {
+		return "", err
 	}
 	if !result.Success {
-		return fmt.Errorf("destroy failed: %s", result.Stderr)
+		return "", fmt.Errorf("output failed: %s", result.Stderr)
 	}
-	return nil
+	return result.Stdout, nil
 }
 
 func (e *TerramateExecutor) Refresh(ctx context.Context) error {

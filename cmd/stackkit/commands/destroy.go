@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/kombihq/stackkits/internal/config"
-	"github.com/kombihq/stackkits/internal/tofu"
+	"github.com/kombihq/stackkits/internal/iac"
 	"github.com/kombihq/stackkits/pkg/models"
 	"github.com/spf13/cobra"
 )
@@ -77,22 +77,22 @@ func runDestroy(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Create tofu executor
-	executor := tofu.NewExecutor(
-		tofu.WithWorkDir(deployDir),
-		tofu.WithAutoApprove(true), // We already confirmed
-	)
+	// Create IaC executor from spec (supports OpenTofu and Terramate modes)
+	executor, err := iac.NewExecutorFromSpec(spec, deployDir)
+	if err != nil {
+		return fmt.Errorf("failed to create executor: %w", err)
+	}
 
-	// Check if tofu is installed
+	// Check if tool is installed
 	if !executor.IsInstalled() {
-		return fmt.Errorf("OpenTofu is not installed")
+		return fmt.Errorf("%s is not installed", executor.Mode())
 	}
 
 	// Run destroy
 	printInfo("Destroying infrastructure...")
 	startTime := time.Now()
 
-	result, err := executor.Destroy(ctx)
+	result, err := executor.Destroy(ctx, true) // already confirmed above
 	if err != nil {
 		return fmt.Errorf("destroy error: %w", err)
 	}
@@ -109,7 +109,7 @@ func runDestroy(cmd *cobra.Command, args []string) error {
 		printError("Destroy encountered errors:")
 		fmt.Println(result.Stderr)
 		if !destroyForce {
-			return fmt.Errorf("tofu destroy failed")
+			return fmt.Errorf("%s destroy failed", executor.Mode())
 		}
 		printWarning("Continuing despite errors (--force)")
 	}

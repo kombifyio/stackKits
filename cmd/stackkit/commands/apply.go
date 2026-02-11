@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/kombihq/stackkits/internal/config"
-	"github.com/kombihq/stackkits/internal/tofu"
+	"github.com/kombihq/stackkits/internal/iac"
 	"github.com/kombihq/stackkits/pkg/models"
 	"github.com/spf13/cobra"
 )
@@ -63,29 +63,23 @@ func runApply(cmd *cobra.Command, args []string) error {
 		planFile = args[0]
 	}
 
-	// Create tofu executor
-	executor := tofu.NewExecutor(
-		tofu.WithWorkDir(deployDir),
-		tofu.WithAutoApprove(applyAutoApprove),
-	)
+	// Create IaC executor from spec (supports OpenTofu and Terramate modes)
+	executor, err := iac.NewExecutorFromSpec(spec, deployDir)
+	if err != nil {
+		return fmt.Errorf("failed to create executor: %w", err)
+	}
 
-	// Check if tofu is installed
+	// Check if tool is installed
 	if !executor.IsInstalled() {
-		return fmt.Errorf("OpenTofu is not installed. Run 'stackkit prepare' first")
+		return fmt.Errorf("%s is not installed. Run 'stackkit prepare' first", executor.Mode())
 	}
 
 	// Initialize if needed
 	tfStatePath := filepath.Join(deployDir, ".terraform")
 	if _, err := os.Stat(tfStatePath); os.IsNotExist(err) {
-		printInfo("Initializing OpenTofu...")
-		result, err := executor.Init(ctx)
-		if err != nil {
+		printInfo("Initializing %s...", executor.Mode())
+		if err := executor.Init(ctx); err != nil {
 			return fmt.Errorf("init error: %w", err)
-		}
-		if !result.Success {
-			printError("Init failed:")
-			fmt.Println(result.Stderr)
-			return fmt.Errorf("tofu init failed")
 		}
 		printSuccess("Initialized successfully")
 	}
@@ -94,7 +88,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 	printInfo("Applying changes...")
 	startTime := time.Now()
 
-	result, err := executor.Apply(ctx, planFile)
+	result, err := executor.Apply(ctx, applyAutoApprove, planFile)
 	if err != nil {
 		return fmt.Errorf("apply error: %w", err)
 	}
@@ -110,7 +104,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 	if !result.Success {
 		printError("Apply failed:")
 		fmt.Println(result.Stderr)
-		return fmt.Errorf("tofu apply failed")
+		return fmt.Errorf("%s apply failed", executor.Mode())
 	}
 
 	// Update deployment state
@@ -131,10 +125,10 @@ func runApply(cmd *cobra.Command, args []string) error {
 	printSuccess("Apply complete! (took %s)", duration.Round(time.Second))
 
 	// Get and display outputs
-	outputResult, err := executor.Output(ctx)
-	if err == nil && outputResult.Success && outputResult.Stdout != "" {
+	output, err := executor.Output(ctx)
+	if err == nil && output != "" {
 		printInfo("Deployment outputs:")
-		fmt.Println(outputResult.Stdout)
+		fmt.Println(output)
 	}
 
 	return nil

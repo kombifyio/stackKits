@@ -9,6 +9,7 @@ import (
 
 	"github.com/kombihq/stackkits/internal/config"
 	"github.com/kombihq/stackkits/internal/cue"
+	"github.com/kombihq/stackkits/internal/iac"
 	"github.com/kombihq/stackkits/internal/tofu"
 	"github.com/spf13/cobra"
 )
@@ -123,24 +124,26 @@ func runValidate(cmd *cobra.Command, args []string) error {
 		} else if !hasTF {
 			printWarning("No .tf files found in %s", deployDir)
 		} else {
-			executor := tofu.NewExecutor(
-				tofu.WithWorkDir(deployDir),
-			)
-
-			if !executor.IsInstalled() {
-				printWarning("OpenTofu is not installed — skipping tofu validate")
+			// Use unified iac executor — mode determined from spec
+			var executor iac.Executor
+			if spec != nil {
+				executor, err = iac.NewExecutorFromSpec(spec, deployDir)
+			} else {
+				executor, err = iac.NewExecutor(&iac.Config{WorkDir: deployDir, Mode: iac.ModeOpenTofu})
+			}
+			if err != nil {
+				printError("Failed to create executor: %v", err)
+				hasErrors = true
+			} else if !executor.IsInstalled() {
+				printWarning("%s is not installed — skipping validate", executor.Mode())
 			} else {
 				// Initialize if needed (validate requires init)
 				tfStatePath := filepath.Join(deployDir, ".terraform")
 				if _, err := os.Stat(tfStatePath); os.IsNotExist(err) {
-					printInfo("Initializing OpenTofu...")
+					printInfo("Initializing %s...", executor.Mode())
 					ctx := context.Background()
-					initResult, initErr := executor.Init(ctx)
-					if initErr != nil {
-						printError("OpenTofu init error: %v", initErr)
-						hasErrors = true
-					} else if !initResult.Success {
-						printError("OpenTofu init failed: %s", initResult.Stderr)
+					if initErr := executor.Init(ctx); initErr != nil {
+						printError("Init error: %v", initErr)
 						hasErrors = true
 					}
 				}
@@ -149,10 +152,10 @@ func runValidate(cmd *cobra.Command, args []string) error {
 					ctx := context.Background()
 					result, err := executor.Validate(ctx)
 					if err != nil {
-						printError("OpenTofu validate error: %v", err)
+						printError("Validate error: %v", err)
 						hasErrors = true
 					} else if !result.Success {
-						printError("OpenTofu validation failed:")
+						printError("Validation failed:")
 						// Parse JSON output from tofu validate -json
 						var valResult struct {
 							Valid       bool `json:"valid"`
@@ -182,7 +185,7 @@ func runValidate(cmd *cobra.Command, args []string) error {
 						}
 						hasErrors = true
 					} else {
-						printSuccess("OpenTofu configuration is valid")
+						printSuccess("IaC configuration is valid")
 					}
 				}
 			}

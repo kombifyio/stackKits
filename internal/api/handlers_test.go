@@ -239,6 +239,18 @@ func TestHandleGetStackKit(t *testing.T) {
 		resp := parseResponse(t, rec)
 		assert.Contains(t, string(resp["error"]), "not found")
 	})
+
+	t.Run("invalid name format", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/api/v1/stackkits/INVALID_NAME!", nil)
+		rec := httptest.NewRecorder()
+		srv.Handler().ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		resp := parseResponse(t, rec)
+		errStr := string(resp["error"])
+		assert.Contains(t, errStr, "invalid_name_format")
+		assert.Contains(t, errStr, "pattern")
+	})
 }
 
 // ── Get Schema ────────────────────────────────────────────────────
@@ -431,6 +443,104 @@ func TestHandleValidatePartial(t *testing.T) {
 		var result map[string]interface{}
 		require.NoError(t, json.Unmarshal(resp["data"], &result))
 		// Unusual network modes produce warnings, not errors
+		assert.Equal(t, true, result["valid"])
+	})
+
+	t.Run("invalid email", func(t *testing.T) {
+		body := `{"email":"notanemail"}`
+		req := httptest.NewRequest("POST", "/api/v1/validate/partial", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		resp := parseResponse(t, rec)
+		var result map[string]interface{}
+		require.NoError(t, json.Unmarshal(resp["data"], &result))
+		assert.Equal(t, false, result["valid"])
+	})
+
+	t.Run("invalid domain", func(t *testing.T) {
+		body := `{"domain":"no spaces"}`
+		req := httptest.NewRequest("POST", "/api/v1/validate/partial", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		resp := parseResponse(t, rec)
+		var result map[string]interface{}
+		require.NoError(t, json.Unmarshal(resp["data"], &result))
+		assert.Equal(t, false, result["valid"])
+	})
+
+	t.Run("invalid compute tier", func(t *testing.T) {
+		body := `{"compute":{"tier":"mega"}}`
+		req := httptest.NewRequest("POST", "/api/v1/validate/partial", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		resp := parseResponse(t, rec)
+		var result map[string]interface{}
+		require.NoError(t, json.Unmarshal(resp["data"], &result))
+		assert.Equal(t, false, result["valid"])
+	})
+
+	t.Run("invalid SSH port", func(t *testing.T) {
+		body := `{"ssh":{"port":99999}}`
+		req := httptest.NewRequest("POST", "/api/v1/validate/partial", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		resp := parseResponse(t, rec)
+		var result map[string]interface{}
+		require.NoError(t, json.Unmarshal(resp["data"], &result))
+		assert.Equal(t, false, result["valid"])
+	})
+
+	t.Run("invalid node role", func(t *testing.T) {
+		body := `{"nodes":[{"name":"node1","role":"boss"}]}`
+		req := httptest.NewRequest("POST", "/api/v1/validate/partial", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		resp := parseResponse(t, rec)
+		var result map[string]interface{}
+		require.NoError(t, json.Unmarshal(resp["data"], &result))
+		assert.Equal(t, false, result["valid"])
+	})
+
+	t.Run("duplicate node names", func(t *testing.T) {
+		body := `{"nodes":[{"name":"node1","role":"worker"},{"name":"node1","role":"worker"}]}`
+		req := httptest.NewRequest("POST", "/api/v1/validate/partial", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		resp := parseResponse(t, rec)
+		var result map[string]interface{}
+		require.NoError(t, json.Unmarshal(resp["data"], &result))
+		assert.Equal(t, false, result["valid"])
+	})
+
+	t.Run("valid expanded fields", func(t *testing.T) {
+		body := `{"email":"test@example.com","domain":"lab.local","compute":{"tier":"standard"},"ssh":{"port":22,"user":"root"}}`
+		req := httptest.NewRequest("POST", "/api/v1/validate/partial", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		resp := parseResponse(t, rec)
+		var result map[string]interface{}
+		require.NoError(t, json.Unmarshal(resp["data"], &result))
 		assert.Equal(t, true, result["valid"])
 	})
 }

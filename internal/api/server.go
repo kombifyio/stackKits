@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	skerrors "github.com/kombihq/stackkits/internal/errors"
 )
 
 // ServerConfig holds configuration for the API server.
@@ -92,8 +93,11 @@ type successResponse struct {
 }
 
 type errorDetail struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
+	Code        int      `json:"code"`
+	Message     string   `json:"message"`
+	Category    string   `json:"category,omitempty"`
+	ErrorCode   string   `json:"error_code,omitempty"`
+	Suggestions []string `json:"suggestions,omitempty"`
 }
 
 type errorResponse struct {
@@ -123,6 +127,20 @@ func writeError(w http.ResponseWriter, r *http.Request, status int, message stri
 	writeJSON(w, status, errorResponse{
 		Error: errorDetail{Code: status, Message: message},
 		Meta:  metaFromRequest(r),
+	})
+}
+
+// writeStructuredError writes a StackKitError as a JSON response with category, code, and suggestions.
+func writeStructuredError(w http.ResponseWriter, r *http.Request, status int, err *skerrors.StackKitError) {
+	writeJSON(w, status, errorResponse{
+		Error: errorDetail{
+			Code:        status,
+			Message:     err.Message,
+			Category:    string(err.Category),
+			ErrorCode:   err.Code,
+			Suggestions: err.Suggestions,
+		},
+		Meta: metaFromRequest(r),
 	})
 }
 
@@ -258,7 +276,13 @@ func rateLimitMiddleware(maxPerMinute int) func(http.Handler) http.Handler {
 			if entry.count > maxPerMinute {
 				mu.Unlock()
 				w.Header().Set("Retry-After", "60")
-				writeError(w, r, http.StatusTooManyRequests, "rate limit exceeded")
+				writeStructuredError(w, r, http.StatusTooManyRequests, skerrors.NewResourceError(
+					"rate_limit_exceeded", "rate limit exceeded",
+					skerrors.WithField("limit", maxPerMinute),
+					skerrors.WithField("window", "1m"),
+					skerrors.WithSuggestion("Wait 60 seconds before retrying"),
+					skerrors.WithSuggestion("Reduce request frequency or contact administrator to increase limits"),
+				))
 				return
 			}
 			mu.Unlock()
@@ -323,11 +347,19 @@ func apiKeyMiddleware(validKey string) func(http.Handler) http.Handler {
 			}
 			key := strings.TrimSpace(r.Header.Get("X-API-Key"))
 			if key == "" {
-				writeError(w, r, http.StatusUnauthorized, "missing X-API-Key header")
+				writeStructuredError(w, r, http.StatusUnauthorized, skerrors.NewAuthError(
+					"missing_api_key", "missing X-API-Key header",
+					skerrors.WithSuggestion("Include the X-API-Key header in your request"),
+					skerrors.WithSuggestion("Health endpoint does not require authentication: GET /api/v1/health"),
+				))
 				return
 			}
 			if key != validKey {
-				writeError(w, r, http.StatusForbidden, "invalid API key")
+				writeStructuredError(w, r, http.StatusForbidden, skerrors.NewAuthError(
+					"invalid_api_key", "invalid API key",
+					skerrors.WithSuggestion("Verify your API key is correct"),
+					skerrors.WithSuggestion("API keys are set via the --api-key flag on the server"),
+				))
 				return
 			}
 			next.ServeHTTP(w, r)
