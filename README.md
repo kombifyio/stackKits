@@ -2,7 +2,7 @@
 
 > **IaC-First Infrastructure Templates with CUE Validation and OpenTofu Execution**
 
-[![License](https://img.shields.io/badge/License-Apache%202.0%20%2B%20GPLv3-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![CUE](https://img.shields.io/badge/CUE-v0.9-blue)](https://cuelang.org/)
 [![OpenTofu](https://img.shields.io/badge/OpenTofu-v1.6-green)](https://opentofu.org/)
 
@@ -15,7 +15,7 @@
 - **Validated Configuration** - CUE schemas catch errors before deployment
 - **IaC-First Architecture** - OpenTofu as execution engine, not custom scripts
 - **Multi-OS Support** - Ubuntu, Debian, and more via variants
-- **Standalone or Integrated** - Use via CLI or with kombify Stack (KombiStack) Web UI
+- **Standalone or Integrated** - Use via CLI or with kombify Stack Web UI
 
 ### Prerequisites
 
@@ -167,9 +167,9 @@ stackkit apply
 
 See [docs/CLI.md](docs/CLI.md) for the full command reference.
 
-### Using with KombiStack
+### Using with kombify Stack
 
-StackKits are automatically loaded by KombiStack. Simply specify your intent:
+StackKits are automatically loaded by kombify Stack. Simply specify your intent:
 
 ```yaml
 # kombination.yaml (User Intent - created via UI Wizard)
@@ -189,20 +189,13 @@ services:
     type: reverse-proxy
 ```
 
-KombiStack will automatically:
+kombify Stack will automatically:
 
 1. Validate via Unifier Pipeline
-2. Resolve StackKit (`base-homelab`)
-3. Apply OS variant (auto-detect)
-4. Generate `stack-spec.yaml` (standardized)
-5. Provision via OpenTofu
-
-**Important:** KombiStack uses a two-file system:
-
-- `kombination.yaml` - User intent (from UI)
-- `stack-spec.yaml` - Unifier output (StackKit input)
-
-See [Spec-File Separation](../KombiStack/docs/architecture/spec-file-separation.md) for details.
+2. Resolve StackKit pattern (`base` / `modern` / `ha`)
+3. Auto-detect Node-Context (local / cloud / pi)
+4. Apply matching Add-Ons
+5. Generate IaC files and provision via OpenTofu
 
 ### Manual Validation (Development)
 
@@ -226,36 +219,8 @@ kind: StackKit
 metadata:
   name: base-homelab
   version: "1.0.0"
-  description: "Single-server homelab"
-modes:
-  simple:
-    description: "Single OpenTofu file"
-  advanced:
-    description: "Terramate-orchestrated"
-```
-
-### default-spec.yaml - CLI Template
-
-Ready-to-use deployment template (see [DEFAULT_SPECS_README.md](./DEFAULT_SPECS_README.md)):
-
-```yaml
-version: "1.0"
-stack:
-  name: my-homelab
-  kit: base-homelab
-  variant: os/ubuntu-24
-
-nodes:
-  - name: homelab-server
-    ip: 192.168.1.100 # ⚠️ ANPASSEN
-    ssh:
-      user: admin # ⚠️ ANPASSEN
-
-services:
-  - name: traefik
-    type: reverse-proxy
-  - name: dokploy
-    type: deployment-platform
+  description: "Single-environment homelab"
+  pattern: base       # Architecture pattern
 ```
 
 ### stackfile.cue - Main Schema
@@ -270,20 +235,21 @@ import "github.com/kombihq/stackkits/base"
         name: "base-homelab"
     }
     nodes: [#MainNode]
-    services: [#TraefikService, #DokployService, ...]
+    services: { traefik: #TraefikService, dokploy: #DokployService, ... }
 }
 ```
 
-### variants/ - OS & Compute Variants
+### addons/ - Composable Extensions
 
 ```cue
-// variants/os/ubuntu-24.cue
-#Ubuntu24Variant: {
-    os: {
-        distribution: "ubuntu"
-        version: "24.04"
+// addons/monitoring/addon.cue
+#MonitoringAddOn: #AddOn & {
+    metadata: {
+        name: "monitoring"
+        category: "observability"
     }
-    packages: { ... }
+    compatible_stackkits: ["base", "modern", "ha"]
+    services: { prometheus: ..., grafana: ..., alertmanager: ... }
 }
 ```
 
@@ -301,15 +267,15 @@ make test-integration
 
 ### Getting Started
 
-- [Documentation index](docs/README.md) - Canonical project docs ⭐
-- [Cleanup methodology](docs/cleanup/README.md) - Reusable cleanup process (project-agnostic)
+- [Documentation index](docs/README.md) — Canonical project docs ⭐
 
 ### Core Concepts
 
-- [Architecture v4](docs/ARCHITECTURE_V4.md) - Three-concept model, Progressive Capability, Add-Ons
-- [Architecture v3](docs/architecture.md) - Legacy 3-layer architecture (superseded)
-- [Target State](docs/TARGET_STATE.md) - Product vision
-- [Roadmap](docs/ROADMAP.md) - v4 implementation phases
+- [Architecture v4](docs/ARCHITECTURE_V4.md) — Three-concept model, Progressive Capability, Add-Ons
+- [Target State](docs/TARGET_STATE.md) — Product vision
+- [Roadmap](docs/ROADMAP.md) — M0–M9 milestones, timeline, dependencies
+- [Technical Debt](TECHNICAL_DEBT.md) — Known issues and debt register
+- [Evaluation Report](docs/EVALUATION_REPORT_2026-02-07.md) — Comprehensive code review
 
 ## 🔧 Architecture
 
@@ -355,7 +321,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## 📄 License
 
-MIT License - see [LICENSE](LICENSE) for details.
+Apache-2.0 — see [LICENSE](LICENSE) for details.
 
 ---
 

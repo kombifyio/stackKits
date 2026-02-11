@@ -24,6 +24,9 @@ COPY . .
 # Build the CLI
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /build/stackkit ./cmd/stackkit
 
+# Build the HTTP API server
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /build/stackkit-server ./cmd/stackkit-server
+
 # -----------------------------------------------------------------------------
 # Stage 2: Install OpenTofu
 # -----------------------------------------------------------------------------
@@ -57,8 +60,11 @@ COPY --from=tofu-installer /usr/local/bin/tofu /usr/local/bin/tofu
 # Copy StackKit CLI binary
 COPY --from=builder /build/stackkit /usr/local/bin/stackkit
 
+# Copy StackKit HTTP API server binary
+COPY --from=builder /build/stackkit-server /usr/local/bin/stackkit-server
+
 # Ensure binaries are executable
-RUN chmod +x /usr/local/bin/tofu /usr/local/bin/stackkit
+RUN chmod +x /usr/local/bin/tofu /usr/local/bin/stackkit /usr/local/bin/stackkit-server
 
 # Create workspace directory
 WORKDIR /workspace
@@ -66,9 +72,20 @@ WORKDIR /workspace
 # Set environment variables
 ENV DOCKER_HOST=tcp://vm:2375
 ENV STACKKIT_BIN=stackkit
+ENV STACKKITS_BASE_DIR=/workspace
+
+# Copy StackKit directories
+COPY base/ /workspace/base/
+COPY base-homelab/ /workspace/base-homelab/
+COPY dev-homelab/ /workspace/dev-homelab/
+COPY modern-homelab/ /workspace/modern-homelab/
+COPY ha-homelab/ /workspace/ha-homelab/
+
+# Expose HTTP API port
+EXPOSE 8082
 
 # Verify installations
 RUN tofu version && stackkit --help
 
-# Default command
-CMD ["stackkit", "--help"]
+# Default: run HTTP API server (override with CMD ["stackkit", ...] for CLI mode)
+CMD ["stackkit-server", "--port", "8082", "--base-dir", "/workspace"]

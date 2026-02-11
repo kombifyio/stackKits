@@ -1,4 +1,4 @@
-package devhomelab
+package dev_homelab
 
 // =============================================================================
 // Dev Homelab Stackfile - 3-Layer Architecture
@@ -26,7 +26,7 @@ package devhomelab
 
 import (
 	"github.com/kombihq/stackkits/base"
-	"github.com/kombihq/stackkits/platforms/docker"
+	dockerplatform "github.com/kombihq/stackkits/platforms/docker"
 )
 
 #Stack: base.#BaseStackKit & {
@@ -266,7 +266,7 @@ import (
 	}
 
 	// Extend Docker platform configuration
-	docker: docker.#DockerConfig & {
+	docker: dockerplatform.#DockerConfig & {
 		version:         "24.0"
 		compose_version: "2.24"
 		buildkit:        true
@@ -280,7 +280,7 @@ import (
 	// -------------------------------------------------------------------------
 	// LAYER 2: PLATFORM - Traefik Configuration
 	// -------------------------------------------------------------------------
-	traefik: docker.#TraefikConfig & {
+	traefik: dockerplatform.#TraefikConfig & {
 		enabled: true
 		version: "v3.1"
 		dashboard: {
@@ -342,7 +342,7 @@ import (
 		logging: {
 			driver: "json-file"
 			maxSize: "50m"
-			maxFiles: 5
+			maxFile: 5
 		}
 
 		health: {
@@ -355,8 +355,10 @@ import (
 		backup: {
 			enabled:   true
 			schedule:  "0 2 * * *"
-			retention: 7
-			volumes: [
+			retention: {
+				daily: 7
+			}
+			paths: [
 				"dokploy-data",
 				"dokploy-postgres-data",
 				"kuma-data",

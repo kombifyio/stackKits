@@ -4,8 +4,8 @@ kind: StackKit
 
 metadata:
   name: base-homelab
-  version: "2.0.0"
-  description: "Single-server homelab with Docker, Dokploy and monitoring"
+  version: "4.0.0"
+  description: "Single-environment deployment with Docker, Dokploy and monitoring"
   author: "KombiStack Team"
   license: "Apache-2.0"
   repository: "https://github.com/kombihq/stackkits"

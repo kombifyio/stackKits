@@ -1,294 +1,433 @@
 # StackKits Roadmap
 
-> **Last Updated:** 2026-02-07  
-> **Status:** Active Development — Architecture v4 Transition  
+> **Last Updated:** 2026-02-11  
+> **Status:** Active Development — Architecture v4 Migration  
 > **Current Version:** v1.0.0-beta  
-> **Architecture:** [ARCHITECTURE_V4.md](./ARCHITECTURE_V4.md)
+> **Architecture:** [ARCHITECTURE_V4.md](./ARCHITECTURE_V4.md)  
+> **Evaluation:** [EVALUATION_REPORT_2026-02-07.md](./EVALUATION_REPORT_2026-02-07.md)
 
 ---
 
 ## Executive Summary
 
-StackKits v4 introduces a fundamental redesign around **three concepts** (StackKit as architecture pattern, Node-Context, and composable Add-Ons) plus a **Progressive Capability Model** (Levels 0–4). This roadmap focuses on implementing these concepts while completing the already functional Base Kit.
+StackKits v4 is a fundamental redesign around **three concepts**:
 
-### Current State Assessment
+1. **StackKit** = Architecture pattern (base / modern / ha)
+2. **Node-Context** = Runtime environment (local / cloud / pi), auto-detected
+3. **Add-Ons** = Composable extensions replacing monolithic variants
+
+Combined with a **Progressive Capability Model** (Levels 0–4), this replaces the old variant-based, node-count-driven design.
+
+This roadmap consolidates all planned work into a single milestone-based plan (M0–M9), covering CUE schema fixes, v4 migration, StackKit completion, cross-repo consistency, and ecosystem integration.
+
+---
+
+## Current State Assessment (2026-02-11)
 
 | Component | Status | Notes |
 |-----------|--------|-------|
 | CUE base schemas | 90% | ~2800 lines, production-quality. Package bugs in `base/platform/` and `base/schema/` |
-| base-homelab | 60% | CUE validates, services defined, needs E2E testing + Add-On migration |
+| base-homelab | 60% | CUE validates, services defined, needs E2E testing + variant→Add-On migration |
 | dev-homelab | 40% | Package conflicts in `exports.cue`, needs restructuring |
-| modern-homelab | 0% | Schema only, all services `status: "planned"` |
+| modern-homelab | 0% | Entirely K8s/k3s-based — needs **complete rewrite** for Docker multi-node |
 | ha-homelab | 0% | Schema only, 8 explicit TODOs |
-| stackkit CLI | 80% | 9 commands functional (Go), needs Add-On support |
+| stackkit CLI | 80% | 9 commands functional (Go), needs Add-On/Context commands |
 | Add-On system | 0% | **NEW** — replaces monolithic variants |
 | Context system | 0% | **NEW** — replaces manual compute tier selection |
 | kombify Stack integration | 30% | Unifier pipeline exists, needs v4 alignment |
+| API server | 20% | HTTP scaffold + OpenAPI spec served, no endpoints yet |
+| Documentation | 40% | Many outdated docs referencing old concepts (K8s, variants, old naming) |
 
 ---
 
-## Phase Overview
+## Cross-Repo Consistency Audit (K1–K15)
 
-```
-Phase 1 (Weeks 1-4):    Foundation — Fix bugs, create Add-On/Context scaffolding
-Phase 2 (Weeks 5-8):    StackKit Completion — base E2E, modern/ha redefinition
-Phase 3 (Weeks 9-12):   Integration — kombify Stack alignment, Unifier v4
-Phase 4 (Weeks 13-16):  Operations — Day-2, marketplace, documentation
-```
+Before implementation, a full audit identified critical inconsistencies across StackKits, kombify Stack, kombify Core, and docs repos.
+
+### Critical Findings
+
+| # | Finding | Repos Affected | Severity |
+|---|---------|----------------|----------|
+| K1 | **K8s references in docs** — Mintlify pages describe K8s/k3s despite removal | docs | High |
+| K2 | **License inconsistency** — different licenses cited in different places | docs, StackKits, Stack | High (✅ fixed) |
+| K3 | **Naming inconsistency** — "kombifyStack", "KombiStack", "kombify Stack" etc. | all | High |
+| K4 | **Duplicate concept pages** — 3× StackKits explanations, 2× spec-driven pages | docs | Medium |
+| K5 | **ha-homelab description** — docs say K8s, code is Docker Swarm | docs | High |
+| K6 | **modern-homelab.mdx** — 591 lines entirely about K8s/k3s/FluxCD/Longhorn | docs | High |
+| K7 | **GitHub org references** — kombify, kombifyLabs, Soulcreek, kombihq mixed | docs, Stack | Medium |
+| K8 | **URL casing** — /Cloud/ vs /cloud/ mixed | docs | Low |
+| K9 | **Outdated service references** — "Authelia", "Portainer" instead of "TinyAuth", "Dokploy" | docs | Medium |
+| K10 | **"Terraform" on marketing** — should be "OpenTofu" | StackKits | Medium |
+| K11 | **Empty Core README** — kombify Core README has no content | Core | Low |
+| K12 | **Beyond-IaC undocumented** — gRPC Agents, AI concepts not in public docs | docs | High |
+| K13 | **Add-On system undocumented** — neither concept nor schema described | docs | Medium |
+| K14 | **Persona system undocumented** — Wizard decision tree missing | docs | Medium |
+| K15 | **Local/Cloud split undocumented** — Backend differentiation not documented | docs | Medium |
 
 ---
 
-## Phase 1: Foundation (Weeks 1–4)
+## Milestones
 
-**Goal:** Fix existing bugs, establish Add-On and Context infrastructure, complete Base Kit.
+### M0: Hygiene & v4 Migration (Weeks 1–3) — IN PROGRESS
 
-### 1.1 CUE Bug Fixes (P0)
+**Goal:** Clean slate. Remove all v3/old-concept artifacts from code and docs. Establish v4 as the only source of truth.
 
+#### Docs Cleanup (this repo)
+
+- [ ] Archive `docs/architecture.md` → superseded by `ARCHITECTURE_V4.md`
+- [ ] Archive `docs/variants.md` → replaced by Add-On + Context model
+- [ ] Archive `docs/STATUS_QUO.md` → pre-v4, no longer accurate
+- [ ] Archive `docs/DEFAULT_SPECS_README.md` → references K8s, old variants
+- [ ] Archive `docs/EVALUATION_REPORT.md` → corrupt encoding, superseded by 2026-02-07 version
+- [ ] Archive `docs/CODE_REVIEW_2026-01-27.md` → duplicates root CODE_REVIEW_TECHNICAL_REPORT.md
+- [ ] Archive `docs/cleanup/` (8 files) → consolidated into Cleanup-Plan.md already
+- [ ] Update `docs/README.md` → new index reflecting v4 docs
+- [ ] Update `docs/creating-stackkits.md` → Add-On/Context structure, not variant directories
+- [ ] Update `docs/stack-spec-reference.md` → remove `k3s:` section, `variant:` → Add-Ons
+- [ ] Update `docs/templates.md` → replace `variant` variable with Add-On/Context
+- [ ] Update `docs/TARGET_STATE.md` → remove K8s prep references
+- [ ] Update `docs/CLI.md` → add Add-On/Context commands
+
+#### Root Files Cleanup
+
+- [ ] Delete `{{range` (junk file at root)
+- [ ] Delete `stackkit.exe` (committed binary — already in .gitignore)
+- [ ] Add `stackkit.exe` to `.gitignore` explicitly
+- [ ] Update root `README.md` → remove variant references in "StackKit Specification" section
+- [ ] Update `DEPLOYMENT.md` → remove "Kubernetes manifests" reference
+- [ ] Update `DEPLOYMENT_CONTRACT.md` → fix naming inconsistencies
+- [ ] Update `stack-spec.yaml` → remove `variant: default`, `mode: simple`
+- [ ] Archive root `CODE_REVIEW_TECHNICAL_REPORT.md` → pre-v4
+
+#### CUE/Schema Consistency
+
+- [ ] Package naming: `devhomelab` → `dev_homelab`
+- [ ] File naming: `modern-homelab/stackkit.cue` → `stackfile.cue`
+- [ ] Remove duplicate schema definitions (`base/layers.cue` vs `base/platform/identity.cue`)
 - [ ] Fix package declarations in `base/platform/*.cue` (declares `package base` in subdirectory)
 - [ ] Fix package declarations in `base/schema/*.cue` (same issue)
-- [ ] Resolve schema duplication between `base/layers.cue` and `base/platform/*.cue`
-- [ ] Fix `dev-homelab/exports.cue` package conflict with `stackfile.cue`
-- [ ] Align Go↔CUE naming: compute tiers (`minimal/standard/performance` → consistent naming)
-- [ ] Align Go↔CUE naming: platform types (Go accepts `kubernetes`, CUE doesn't)
-- [ ] Fix Layer 3 PAAS validation logic (currently inverted)
-- [ ] Resolve `base-homelab/stackfile.cue` dual schema (`#BaseHomelabStack` vs `#BaseHomelabKit`)
-- [ ] Align CUE module path: `github.com/kombihq/stackkits` (match kombify Stack expectation)
+- [ ] Fix `dev-homelab/exports.cue` package conflict
+- [ ] Compute tier naming: Go `minimal/standard/performance` → CUE `low/standard/high` (align to CUE)
+- [ ] Platform type: remove `kubernetes` from Go validator (ADR-0002)
+- [ ] Fix Layer 3 PAAS validation logic (currently inverted in Go)
+- [ ] Consolidate `#BaseHomelabStack` vs `#BaseHomelabKit` → single canonical schema
+- [ ] Fix Coolify image typo: `coolabsio` → `coollabsio`
+- [ ] Fix whoami service missing `host` port in PortMapping
 
-### 1.2 Add-On System Scaffolding
+#### Cross-Repo (docs Mintlify repo)
 
-Create the composable Add-On infrastructure that replaces monolithic variants.
+- [ ] Remove all K8s references from concept pages (K1, K5, K6)
+- [ ] Enforce naming standard: "kombify Stack", "kombify Sim", "kombify StackKits", "kombify Cloud" (K3)
+- [ ] Consolidate duplicate concept pages (K4)
+- [ ] Fix URL casing (K8)
+- [ ] Update service names: Authelia → TinyAuth/PocketID, Portainer → Dokploy (K9)
+- [ ] Unify GitHub org references (K7)
+- [ ] Rewrite `modern-homelab.mdx` for Docker multi-node (K6)
+- [ ] Update `ha-homelab.mdx` for Docker Swarm (K5)
 
-```
-addons/
-├── _schema/
-│   └── addon.cue              # #AddOn schema definition
-├── monitoring/
-│   ├── addon.cue              # Metadata, compatibility, constraints
-│   └── services.cue           # Prometheus + Grafana + Alertmanager
-├── backup/
-│   ├── addon.cue
-│   └── services.cue           # Restic + targets
-├── vpn-overlay/
-│   ├── addon.cue
-│   └── services.cue           # Headscale/Tailscale
-└── README.md
-```
-
-- [ ] Define `#AddOn` CUE schema with metadata, compatibility, resources, services
-- [ ] Create `addons/` directory structure
-- [ ] Migrate `base-homelab/variants/coolify.cue` → `addons/coolify-paas/addon.cue`
-- [ ] Migrate `base-homelab/variants/beszel.cue` → `addons/monitoring/` (subset)
-- [ ] Migrate `base-homelab/variants/minimal-compute.cue` → `contexts/pi.cue` defaults
-- [ ] Migrate `base-homelab/variants/secure-variant.cue` → base security defaults (fold in)
-- [ ] Implement Add-On dependency resolution in CUE
-- [ ] Add `stackkit addon add/list/remove` CLI commands
-
-### 1.3 Context System Scaffolding
-
-Create Node-Context modules for environment-aware defaults.
-
-```
-contexts/
-├── local.cue               # Full Docker, local TLS, Dokploy
-├── cloud.cue               # Let's Encrypt, Coolify, egress-aware
-└── pi.cue                  # ARM images, reduced services, tmpfs
-```
-
-- [ ] Define context detection criteria in CUE constraints
-- [ ] Create `contexts/local.cue` with local hardware defaults
-- [ ] Create `contexts/cloud.cue` with cloud provider defaults
-- [ ] Create `contexts/pi.cue` with Raspberry Pi / ARM defaults
-- [ ] Implement context-driven PAAS selection (Dokploy for local, Coolify for cloud)
-- [ ] Implement context-driven TLS strategy (self-signed vs Let's Encrypt)
-- [ ] Implement context-driven resource limits
-
-### 1.4 Base Kit E2E Testing
-
-- [ ] Create test environment (local VM or Docker via kombify Sim)
-- [ ] Test full OpenTofu deployment flow
-- [ ] Validate Layer 1 identity (LLDAP + Step-CA)
-- [ ] Validate Layer 2 platform (Traefik + Dokploy)
-- [ ] Validate Layer 3 applications via Dokploy
-- [ ] Run with each Context (local, cloud, pi)
-
-### Phase 1 Deliverables
-
-| Deliverable | Acceptance Criteria |
-|-------------|---------------------|
-| All CUE bugs fixed | `cue vet ./base/... ./base-homelab/...` passes |
-| Add-On schema | `#AddOn` schema defined, 3+ add-ons migrated from variants |
-| Context modules | `local.cue`, `cloud.cue`, `pi.cue` with smart defaults |
-| base-homelab E2E | Full deployment succeeds in local context |
-| CLI Add-On commands | `stackkit addon add/list/remove` functional |
+**Done Criteria:** `cue vet ./base/... ./base-homelab/...` passes. No K8s/variant references in active docs. Consistent naming everywhere.
 
 ---
 
-## Phase 2: StackKit Completion (Weeks 5–8)
+### M1: Core IaC Pipeline (Weeks 3–6)
 
-**Goal:** Complete all three StackKits as architecture patterns, not node-count definitions.
+**Goal:** CUE schemas produce real, deployable infrastructure. Base Kit end-to-end.
 
-### 2.1 Base Kit Refinement
+- [ ] CUE-as-SSoT: CUE validates + exports `tfvars.json` (not template rendering)
+- [ ] OpenTofu modularization: split `main.tf` (1130 lines) into modules (traefik, dokploy, monitoring, identity)
+- [ ] `bridge.go` rewrite: CUE export → tfvars.json pipeline
+- [ ] base-homelab end-to-end: `validate → generate → plan → apply`
+- [ ] CI/CD pipeline: `cue vet ./...`, Go tests, lint on every push
+- [ ] JSON schema export for IDE support (`cue export --schema`)
+- [ ] Fix `base.#Layer3Applications.services` constraint (Array vs Map — W8)
+- [ ] Port collision detection as CUE constraint
+- [ ] Service dependency validation (`needs[]` references enabled services)
+
+**Done Criteria:** `stackkit validate && stackkit generate && stackkit plan` works for base-homelab.
+
+---
+
+### M2: Context System & Backend Split (Weeks 5–8)
+
+**Goal:** Node-Context replaces manual compute tier selection. Local vs Cloud differentiation works.
+
+#### Context System Implementation
+
+- [ ] Define context detection criteria in CUE constraints
+- [ ] Create `contexts/local.cue` — full Docker, local TLS, Dokploy
+- [ ] Create `contexts/cloud.cue` — Let's Encrypt, Coolify, egress-aware
+- [ ] Create `contexts/pi.cue` — ARM images, reduced services, tmpfs
+- [ ] Context-driven PAAS selection (Dokploy for local, Coolify for cloud)
+- [ ] Context-driven TLS strategy (self-signed vs Let's Encrypt)
+- [ ] Context-driven resource limits
+
+#### Backend Split
+
+- [ ] `base-homelab-local` vs `base-homelab-cloud` CUE differentiation
+- [ ] `#NodeDefinition.type` extension: `"local" | "cloud"` with different SSH defaults
+- [ ] Cloud provider abstraction: Hetzner module as first cloud backend
+- [ ] VPN bridging schema for hybrid setups (Headscale/WireGuard)
+
+**Done Criteria:** `stackkit apply` works with `--context local` and `--context cloud`. Context auto-detection from hardware.
+
+---
+
+### M3: StackKit Completion (Weeks 9–12)
+
+**Goal:** All three StackKits implemented as architecture patterns per v4.
+
+#### Base Kit Refinement
 
 - [ ] Remove old `variants/` directory (replaced by Add-Ons and Contexts)
 - [ ] Consolidate to single schema (`#BaseHomelabKit` only)
-- [ ] Update `default-spec.yaml` to v2 `kombination.yaml` format
-- [ ] Document Base Kit as "single-environment pattern" (local or cloud VPS)
-- [ ] Add Context × base matrix tests (local, cloud, pi)
+- [ ] Update spec format to v2 `kombination.yaml`
+- [ ] Context × base matrix tests (local, cloud, pi)
 
-### 2.2 Modern Homelab Kit Implementation
+#### Modern Homelab Kit — COMPLETE REWRITE
 
-Redefine as **hybrid infrastructure pattern** (always local + cloud).
+Current state: entirely K8s/k3s-based. Must be rewritten as **hybrid Docker multi-node**.
 
-- [ ] Define VPN overlay networking as core requirement (not add-on)
+- [ ] Delete all K8s/FluxCD/Longhorn schemas and tests
+- [ ] Define VPN overlay networking as core requirement
 - [ ] Implement Coolify as default PAAS (required for multi-environment)
 - [ ] Add split DNS configuration (local vs public)
 - [ ] Define service placement rules (which services go where)
-- [ ] Implement `modern × local` context (local + Tailscale exit node)
-- [ ] Implement `modern × cloud` context (multi-cloud mesh)
+- [ ] Implement `modern × local` and `modern × cloud` contexts
 - [ ] Create E2E test with 2-node deployment (1 local + 1 cloud)
 
-### 2.3 High Availability Kit Implementation
-
-Redefine as **high-availability cluster pattern**.
+#### High Availability Kit
 
 - [ ] Implement Docker Swarm orchestration config
 - [ ] Add Keepalived VIP for load balancing
 - [ ] Define quorum-based consensus rules in CUE
-- [ ] Implement LLDAP cluster configuration
-- [ ] Implement Step-CA HA mode
-- [ ] Add Authentik as L2 identity (cluster-aware)
-- [ ] Implement `ha × local` context (Swarm cluster, local LB)
-- [ ] Implement `ha × cloud` context (managed LB, auto-scaling)
+- [ ] Implement LLDAP cluster + Step-CA HA
+- [ ] Implement `ha × local` and `ha × cloud` contexts
 - [ ] Mark `ha × pi` as not recommended (resource validation)
 
-### 2.4 Context-Driven Defaults Matrix
+#### dev-homelab
 
-Implement the 9 curated configurations (3 StackKits × 3 Contexts):
+- [ ] Fix import problem with `platforms/docker`
+- [ ] Write schema tests (analog to base-homelab)
+- [ ] Create templates (Docker Compose + OpenTofu)
 
-| | local | cloud | pi |
-|---|---|---|---|
-| **base** | Dokploy, self-signed TLS | Coolify, Let's Encrypt | Lean Docker, reduced services |
-| **modern** | Tailscale exit node, hybrid DNS | Multi-cloud mesh | Edge relay role |
-| **ha** | Swarm + Keepalived | Cloud HA + managed LB | N/A (not recommended) |
-
-- [ ] Implement all 9 combinations as CUE constraint sets
-- [ ] Validate each combination with `cue vet`
-- [ ] Create test fixtures for each combination
-
-### Phase 2 Deliverables
-
-| Deliverable | Acceptance Criteria |
-|-------------|---------------------|
-| base-homelab v4.0 | Clean schema, no variants, context-aware (Base Kit) |
-| modern-homelab v4.0 | Hybrid pattern implemented, 2-node E2E test (Modern Homelab Kit) |
-| ha-homelab v4.0 | Cluster pattern implemented, Swarm config (High Availability Kit) |
-| 9-cell matrix | All StackKit × Context combinations validate |
-| Updated kombination.yaml | v2 spec format with stackkit/context/addons |
+**Done Criteria:** All 8 StackKit × Context combinations validate (`ha × pi` excluded). Each StackKit has ≥1 deployable configuration.
 
 ---
 
-## Phase 3: kombify Stack Integration (Weeks 9–12)
+### M4: Add-On System (Weeks 11–14)
 
-**Goal:** Align the kombify Stack Unifier pipeline with StackKits v4 concepts.
+**Goal:** Composable Add-Ons replace monolithic variants. First Add-Ons are functional.
 
-### 3.1 Unifier Pipeline v4 Alignment
+#### Add-On Infrastructure
 
-Update `pkg/unifier/` in kombify Stack to understand the new 3-concept model.
+- [ ] Define `#AddOn` CUE schema (metadata, compatibility, constraints, resources, services)
+- [ ] Create `addons/` directory structure with `_schema/addon.cue`
+- [ ] Implement Add-On dependency resolution in CUE
+- [ ] CLI commands: `stackkit addon add/list/remove/search`
+
+#### Migrate Variants → Add-Ons
+
+- [ ] `base-homelab/variants/service/coolify.cue` → `addons/coolify-paas/`
+- [ ] `base-homelab/variants/service/beszel.cue` → `addons/monitoring/` (subset)
+- [ ] `base-homelab/variants/service/minimal.cue` → `contexts/pi.cue` defaults (fold in)
+- [ ] `base-homelab/variants/service/default.cue` → base defaults (fold in)
+- [ ] `base-homelab/variants/compute/compute.cue` → Context system
+- [ ] `base-homelab/variants/os/*.cue` → OS detection (auto, not user-chosen)
+- [ ] Delete `base-homelab/variants/` directory after migration
+
+#### Core Add-Ons
+
+- [ ] `addons/monitoring/` — Prometheus + Grafana + Alertmanager
+- [ ] `addons/backup/` — Restic + configurable targets
+- [ ] `addons/vpn-overlay/` — Headscale/Tailscale mesh
+- [ ] `addons/gpu-workloads/` — NVIDIA/AMD GPU passthrough (local/cloud only)
+- [ ] `addons/media/` — Jellyfin + *arr stack
+- [ ] `addons/smart-home/` — Home Assistant + MQTT (local/pi only)
+
+**Done Criteria:** `#AddOn` schema defined. ≥3 Add-Ons migrated from variants. CLI commands functional.
+
+---
+
+### M5: CUE Decision Logic (Weeks 13–15)
+
+**Goal:** All documented-but-unimplemented CUE constraints are enforced.
+
+#### Priority A (Block incorrect deployments)
+
+- [ ] D1: Network mode decision (local → Bridge, public → Traefik+ACME, hybrid → VPN+Split-DNS)
+- [ ] D2: PAAS auto-selection (local domain → Dokploy, public → Coolify)
+- [ ] D4: Firewall port auto-generation (from `services[*].network.ports`)
+- [ ] D9: TLS ACME domain constraint (ACME + .local = error)
+- [ ] D14: Container image version policy (no `latest` in production)
+
+#### Priority B (Security & stability)
+
+- [ ] D3: Identity provider cascade (zeroTrust → TinyAuth OR PocketID must be active)
+- [ ] D5: Volume backup filter (auto from `volumes[backup==true]`)
+- [ ] D7: Resource budget validation (sum services RAM ≤ node RAM)
+- [ ] D8: Port collision detection (duplicate host ports)
+- [ ] D10: Node count platform constraint (docker-swarm → min 3 nodes)
+
+#### Priority C (Extended logic)
+
+- [ ] D6: Service dependency validation (`needs[]` references enabled service)
+- [ ] D11: Variant→Add-On feature matrix (CUE logic, not manual tests)
+- [ ] D12: Upgrade path validation (allowed Add-On transitions)
+- [ ] D13: mTLS service policy (StepCAMTLSPolicy enforced)
+
+**Done Criteria:** `cue vet ./...` checks all constraints. Invalid configs rejected with clear messages.
+
+---
+
+### M6: Terramate & Day-2 Operations (Weeks 15–17)
+
+**Goal:** Terramate integrated into CLI. Drift detection functional.
+
+- [ ] Terramate integration in CLI: `stackkit drift` command
+- [ ] Terramate change detection: `terramate run --changed` workflow
+- [ ] Terramate stack tags for layer assignment (`stack.tags = ["layer:1", "identity"]`)
+- [ ] Drift detection as scheduled run
+- [ ] OpenTofu state backend strategy: S3 for prod, local for dev, per Context
+- [ ] OpenTofu provider locking (`.terraform.lock.hcl`)
+- [ ] CUE schema versioning
+
+**Done Criteria:** `stackkit drift --check` detects deviations.
+
+---
+
+### M7: kombify Stack Integration (Weeks 17–21)
+
+**Goal:** Unifier pipeline in kombify Stack understands StackKits v4.
 
 - [ ] Update `resolver.go`: StackKit selection by architecture pattern (not node count)
-- [ ] Update `addons.go`: Load Add-Ons from `addons/` directory (not inline conditions)
-- [ ] Update `analyze.go`: Generate Node-Context from agent hardware reports
-- [ ] Update `unify.go`: Merge StackKit + Context + Add-Ons into unified CUE evaluation
-- [ ] Update `stackkit_loader.go`: Load `contexts/*.cue` alongside StackKit schemas
-- [ ] Align CUE module path: both repos use `github.com/kombihq/stackkits`
+- [ ] Update `addons.go`: load Add-Ons from `addons/` directory
+- [ ] Update `analyze.go`: generate Node-Context from agent hardware reports
+- [ ] Update `unify.go`: merge StackKit + Context + Add-Ons into unified CUE evaluation
+- [ ] Update `stackkit_loader.go`: load `contexts/*.cue` alongside StackKit schemas
+- [ ] Align CUE module path across repos
+- [ ] Update web wizard for 3-concept flow (pattern → nodes → add-ons → customize → deploy)
+- [ ] Agent context auto-detection via `Register` RPC hardware reports
 
-### 3.2 StackKit Resolver Update
-
-Current resolver uses aliases like `hybrid-cloud`, `cloud-native`, `minimal-arm`. Update to:
-
-| Old Alias | New Resolution |
-|-----------|---------------|
-| `hybrid-cloud` | `modern` StackKit + `cloud` Context |
-| `cloud-native` | `modern` StackKit + `cloud` Context |
-| `minimal-arm` | `base` StackKit + `pi` Context |
-| `developer-local` | `base` StackKit + `local` Context |
-| `high-availability` | `ha` StackKit + auto Context |
-
-- [ ] Refactor resolver to return StackKit + Context pair
-- [ ] Remove node-count-based selection logic
-- [ ] Add pattern-based selection (single-env → base, hybrid → modern, HA → ha)
-
-### 3.3 Web Wizard Update
-
-Update kombify Stack frontend wizard for 3-concept model.
-
-- [ ] Step 1: Choose architecture pattern (base/modern/ha) with visual comparison
-- [ ] Step 2: Node registration (Context auto-detected per node)
-- [ ] Step 3: Add-On selection (filtered by StackKit + Context compatibility)
-- [ ] Step 4: Customization (service overrides, domain, etc.)
-- [ ] Step 5: Review + deploy
-
-### 3.4 Agent Integration for Context Detection
-
-- [ ] Agent reports hardware profile on `Register` RPC (RAM, CPU, arch, GPU)
-- [ ] Agent reports cloud provider metadata (if available)
-- [ ] kombify Stack classifies Context from agent report
-- [ ] Context flows into Unifier pipeline
-
-### Phase 3 Deliverables
-
-| Deliverable | Acceptance Criteria |
-|-------------|---------------------|
-| Unifier v4 | Pipeline processes StackKit + Context + Add-Ons |
-| Resolver v4 | Pattern-based StackKit selection |
-| Web wizard v4 | 3-concept flow in frontend |
-| Context auto-detection | Agent → Context classification working |
+**Done Criteria:** Unifier pipeline processes StackKit + Context + Add-Ons. Web wizard reflects v4.
 
 ---
 
-## Phase 4: Operations & Ecosystem (Weeks 13–16)
+### M8: Beyond-IaC & AI Foundation (Weeks 19–25)
 
-**Goal:** Day-2 operations, Add-On marketplace, documentation, community.
+**Goal:** Runtime intelligence layer prototype. AI-assisted operations as SaaS concept.
 
-### 4.1 Day-2 Operations (Level 3)
+#### gRPC Agent Integration
 
-- [ ] Drift detection for Add-On configurations
-- [ ] Certificate auto-renewal orchestration
-- [ ] Service health monitoring via agent heartbeats
-- [ ] Rolling update support for ha StackKit
-- [ ] Configuration change rollback
+- [ ] CUE outputs consumable by gRPC agent
+- [ ] `kombination.yaml` structure harmonized with StackKit schemas
+- [ ] Agent capabilities as CUE schema (`#NodeCapabilities`)
+- [ ] Service placement algorithm (filter → score → place) as CUE constraints
 
-### 4.2 Add-On Ecosystem
+#### Integration Paths v1
 
-- [ ] Add-On registry/marketplace (kombify Sphere integration)
-- [ ] Community Add-On contribution workflow
-- [ ] Add-On versioning and compatibility matrix
-- [ ] `stackkit addon search` for marketplace discovery
+- [ ] CUE schema for `#IntegrationPath` (type, direction, auth, events)
+- [ ] First implementations: Cloudflare DNS, Slack/Discord webhooks
+- [ ] Integration events: `service.deployed`, `health.degraded`, `backup.completed`
 
-### 4.3 Documentation
+#### AI Self-Healing (Prototype)
 
-- [ ] Update Mintlify docs with v4 concepts
-- [ ] Create StackKit selection guide (pattern-based)
-- [ ] Create Add-On authoring guide
-- [ ] Create Context customization guide
-- [ ] Update API reference for v4 spec format
-- [ ] Migration guide from v3 variants to v4 Add-Ons
+- [ ] Pipeline: Detect → Diagnose → Heal
+- [ ] Escalation model: Low (auto-restart) → Medium (rollback) → High (rebalance) → Critical (notify)
+- [ ] Health score calculation (0–100)
+- [ ] Anomaly detection baseline
 
-### 4.4 Level 4 Preparation (SaaS)
+**Done Criteria:** Base-homelab deployment sends status via gRPC agent and creates DNS record at Cloudflare.
 
-- [ ] Define AI-assisted operations API surface
-- [ ] Natural language → kombination.yaml prototype
-- [ ] Cost optimization engine for cloud contexts
-- [ ] Community intelligence aggregation (anonymized)
+---
 
-### Phase 4 Deliverables
+### M9: Documentation & Public Readiness (Parallel, Weeks 15–25)
 
-| Deliverable | Acceptance Criteria |
-|-------------|---------------------|
-| Day-2 operations | Drift detection, cert renewal, health monitoring |
-| Add-On marketplace | Registry with search, install, version management |
-| Complete documentation | All Mintlify pages updated, guides published |
-| Level 4 prototype | NLP config demo in kombify Sphere |
+**Goal:** Public docs are current, consistent, and complete.
+
+#### Mintlify Docs
+
+- [ ] Beyond-IaC concept page (K12)
+- [ ] Add-On system concept page (K13)
+- [ ] Persona system concept page (K14)
+- [ ] Local/Cloud split documentation (K15)
+- [ ] All StackKit pages updated to v4
+- [ ] Migration guides (base → ha, base → modern)
+- [ ] Visual decision tree (Mermaid): which StackKit for which use case
+- [ ] CLI + Add-On documentation
+
+#### Marketing & Website
+
+- [ ] Fix "Terraform" → "OpenTofu" on marketing site (K10)
+- [ ] Remove K8s references from marketing
+- [ ] Consolidate `marketing/` vs `website-v2/` (decide canonical site)
+
+#### API Documentation
+
+- [ ] Catalog endpoints (`GET /api/v1/stackkits`, `GET /api/v1/stackkits/{name}`)
+- [ ] Validation endpoint (`POST /api/v1/validate`)
+- [ ] Generation endpoint (`POST /api/v1/generate/tfvars`)
+
+**Done Criteria:** Every Mintlify page shows current content. No dead links. No K8s references.
+
+---
+
+## Timeline Overview
+
+```
+2026 Q1 (Feb–Mar)
+  ├── M0: Hygiene & v4 Migration ────────┤  (Weeks 1–3, IN PROGRESS)
+  ├── M1: Core IaC Pipeline ────────────┤  (Weeks 3–6)
+  └── M2: Context & Backend Split ──────┤  (Weeks 5–8)
+
+2026 Q2 (Apr–May)
+  ├── M3: StackKit Completion ──────────┤  (Weeks 9–12)
+  ├── M4: Add-On System ────────────────┤  (Weeks 11–14)
+  └── M5: CUE Decision Logic ──────────┤  (Weeks 13–15)
+
+2026 Q2–Q3 (Jun–Jul)
+  ├── M6: Terramate & Day-2 ───────────┤  (Weeks 15–17)
+  ├── M7: kombify Stack Integration ───┤  (Weeks 17–21)
+  ├── M8: Beyond-IaC & AI ────────────┤  (Weeks 19–25)
+  └── M9: Docs & Readiness ───────────┤  (parallel, Weeks 15–25)
+```
+
+**Overlaps are intentional:** M9 (Docs) runs parallel to M6–M8. M1–M2 overlap on CUE/OpenTofu work.
+
+---
+
+## Dependency Graph
+
+```
+M0 (Hygiene)
+ │
+ ├──── M1 (IaC Pipeline) ──── M2 (Context) ──── M3 (StackKit Completion)
+ │                                                       │
+ ├──── M9 (Docs) [parallel from M0] ────────────────────┤
+ │                                                       │
+ │                                      M4 (Add-Ons) ───┤
+ │                                      M5 (CUE Logic) ─┤
+ │                                                       │
+ │                                      M6 (Terramate) ─┤
+ │                                      M7 (Stack Int.) ─┤
+ │                                                       │
+ │                                      M8 (Beyond-IaC) ─┤
+```
+
+**Blocking:** M0→M1→M2→M3→M4, M1→M6, M3→M7, M7→M8  
+**Non-blocking:** M0 starts now. M9 runs anytime. M4+M5 can begin parallel to M3.
+
+---
+
+## Risks
+
+| Risk | Probability | Impact | Mitigation |
+|------|:-----------:|:------:|------------|
+| CUE export complexity underestimated | Medium | High | Prototype with 1 service first, not all at once |
+| modern-homelab rewrite scope | High | Medium | Clear differentiation from ha-homelab in M3 |
+| AI features too ambitious | High | Low | M8 explicitly scoped as prototype |
+| Cross-repo synchronization drift | Medium | Medium | M0 creates the basis, M9 maintains |
+| Single-developer bottleneck | High | High | Small milestones, feedback loops, pipeline automation |
+| Old concepts leaking into new code | Medium | High | M0 archival + TECHNICAL_DEBT.md tracking |
 
 ---
 
@@ -297,22 +436,52 @@ Update kombify Stack frontend wizard for 3-concept model.
 | Metric | Target |
 |--------|--------|
 | `cue vet` passes for all StackKits | 100% |
-| E2E deployment success rate (base) | > 95% |
+| E2E deployment success (base, local) | > 95% |
 | StackKit × Context combinations validated | 8/9 (ha×pi excluded) |
-| Add-Ons migrated from variants | All |
-| kombify Stack Unifier processes v4 format | Yes |
+| All variants migrated to Add-Ons | 100% |
+| Unifier processes v4 format | Yes |
 | Documentation coverage | > 90% |
-| Time to deploy (base, local, no add-ons) | < 10 minutes |
+| Time to deploy (base, local, no add-ons) | < 10 min |
+| Zero K8s/variant references in active docs | Yes |
+
+---
+
+## Database & API Status
+
+**StackKits does NOT use a database.** It's a CUE schema + OpenTofu repo.
+
+The **StackKit catalog/admin UI** stores data in `kombify-DB` under `content_stackkits`, `content_stackkit_tools`, etc.
+
+| What | Where |
+|------|-------|
+| CUE schemas, OpenTofu configs | This repo |
+| StackKit catalog data | `kombify-DB` → `content_*` tables |
+| Prisma schema for TS admin UI | `kombify-DB/prisma/schema.prisma` |
+| SQL migrations | `kombify-DB/migrations/000003_content.up.sql` |
+
+**API server status:**
+
+| Component | Status |
+|-----------|--------|
+| HTTP scaffold (Go, port 8082) | ✅ Done |
+| OpenAPI spec at `/api/v1/openapi.yaml` | ✅ Done |
+| Catalog endpoints | ⬜ Not started |
+| Validation endpoint | ⬜ Not started |
+| Generation endpoint | ⬜ Not started |
 
 ---
 
 ## Architecture Reference
 
-For detailed architecture documentation, see [ARCHITECTURE_V4.md](./ARCHITECTURE_V4.md).
+See [ARCHITECTURE_V4.md](./ARCHITECTURE_V4.md) for detailed architecture documentation.
 
 Key concepts:
-- **StackKit** = Architecture pattern (base/modern/ha)
-- **Node-Context** = Runtime environment (local/cloud/pi), auto-detected
+- **StackKit** = Architecture pattern (base / modern / ha)
+- **Node-Context** = Runtime environment (local / cloud / pi), auto-detected
 - **Add-Ons** = Composable extensions (replace variants)
 - **Progressive Capability Model** = Levels 0–4 (CLI → SaaS)
 - **3-Layer Architecture** = L1 Foundation, L2 Platform, L3 Applications (preserved)
+
+---
+
+*This document is updated at each milestone completion. Next review: after M0.*

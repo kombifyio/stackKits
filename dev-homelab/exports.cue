@@ -1,4 +1,4 @@
-package devhomelab
+package dev_homelab
 
 // Exports for 3-Layer Validation
 // This file provides the top-level fields required for layer validation

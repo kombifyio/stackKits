@@ -98,6 +98,9 @@ package base
 	// Short description (one line)
 	description: string
 
+	// Category for grouping (e.g., "development", "production")
+	category?: string
+
 	// Long description (Markdown, optional)
 	longDescription?: string
 
@@ -233,7 +236,7 @@ package base
 	// Management
 	"management" | "auth" |
 	// Specialized
-	"media" | "custom"
+	"media" | "object-storage" | "custom"
 
 // #ServiceNetworkConfig defines service networking
 #ServiceNetworkConfig: {
@@ -246,6 +249,7 @@ package base
 		rule?:   string
 		tls?:    bool | *true
 		port?:   int // Target port for Traefik
+		middlewares?: [...string]
 	}
 
 	// Network mode

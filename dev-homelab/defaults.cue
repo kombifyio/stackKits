@@ -1,4 +1,4 @@
-package devhomelab
+package dev_homelab
 
 // Dev Homelab Defaults
 // Production-ready defaults with security hardening

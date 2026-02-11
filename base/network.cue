@@ -9,6 +9,9 @@ package base
 	// Subnet for internal services
 	subnet: string | *"172.20.0.0/16"
 
+	// Network driver
+	driver?: string
+
 	// Gateway IP
 	gateway?: string
 

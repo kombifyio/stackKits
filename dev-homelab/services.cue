@@ -1,4 +1,4 @@
-package devhomelab
+package dev_homelab
 
 // =============================================================================
 // Dev Homelab Service Definitions - Hybrid Architecture
@@ -242,7 +242,7 @@ import "github.com/kombihq/stackkits/base"
 		interval: "30s"
 		timeout:  "10s"
 		retries:  5
-		start_period: "60s"
+		startPeriod: "60s"
 	}
 	
 	resources: {
@@ -306,7 +306,7 @@ import "github.com/kombihq/stackkits/base"
 		interval: "30s"
 		timeout:  "5s"
 		retries:  3
-		start_period: "30s"
+		startPeriod: "30s"
 	}
 	
 	resources: {

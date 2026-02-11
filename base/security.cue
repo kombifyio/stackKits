@@ -328,8 +328,8 @@ package base
 
 // #IdentityProvider defines the identity provider configuration
 #IdentityProvider: {
-	// Provider type (pocketid for local passkeys, lldap for directory, external for any OIDC)
-	type: "pocketid" | "lldap" | "external" | *"pocketid"
+	// Provider type (pocketid for local passkeys, lldap for directory, tinyauth for lightweight proxy, external for any OIDC)
+	type: "pocketid" | "lldap" | "tinyauth" | "external" | *"pocketid"
 
 	// Provider name
 	name: string

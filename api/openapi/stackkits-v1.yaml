@@ -1,0 +1,666 @@
+openapi: "3.1.0"
+info:
+  title: kombify StackKits API
+  version: "1.0.0"
+  description: |
+    kombify StackKits HTTP API — pre-packaged homelab infrastructure templates
+    with CUE schema validation and OpenTofu generation. Designed for consumption
+    by the kombify Stack control plane and AI agents via the kombify API Gateway.
+  contact:
+    name: kombify
+    url: https://kombify.io
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:8082
+    description: Local development
+  - url: https://api.kombify.io/stackkits
+    description: Production (via Kong)
+
+paths:
+  /health:
+    get:
+      operationId: healthRoot
+      summary: Root health check
+      tags: [Health]
+      responses:
+        "200":
+          $ref: "#/components/responses/HealthResponse"
+
+  /api/v1/health:
+    get:
+      operationId: health
+      summary: Service health check
+      tags: [Health]
+      responses:
+        "200":
+          $ref: "#/components/responses/HealthResponse"
+
+  /api/v1/capabilities:
+    get:
+      operationId: getCapabilities
+      summary: List all API capabilities (AI agent discovery)
+      tags: [Discovery]
+      responses:
+        "200":
+          description: List of capabilities
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessEnvelope"
+
+  /api/v1/openapi.yaml:
+    get:
+      operationId: getOpenAPISpec
+      summary: Get OpenAPI 3.1 specification
+      tags: [Discovery]
+      responses:
+        "200":
+          description: YAML OpenAPI spec
+          content:
+            application/yaml:
+              schema:
+                type: string
+
+  /api/v1/stackkits:
+    get:
+      operationId: listStackKits
+      summary: List all available StackKits
+      tags: [Catalog]
+      responses:
+        "200":
+          description: List of StackKit summaries
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/StackKitSummary"
+
+  /api/v1/stackkits/{name}:
+    get:
+      operationId: getStackKit
+      summary: Get full StackKit details
+      tags: [Catalog]
+      parameters:
+        - $ref: "#/components/parameters/StackKitName"
+      responses:
+        "200":
+          description: Full StackKit configuration
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - properties:
+                      data:
+                        $ref: "#/components/schemas/StackKit"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/stackkits/{name}/schema:
+    get:
+      operationId: getStackKitSchema
+      summary: Get raw CUE schema for a StackKit
+      tags: [Catalog]
+      parameters:
+        - $ref: "#/components/parameters/StackKitName"
+      responses:
+        "200":
+          description: CUE schema content
+          content:
+            text/plain:
+              schema:
+                type: string
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/stackkits/{name}/defaults:
+    get:
+      operationId: getStackKitDefaults
+      summary: Get default StackSpec values for a StackKit
+      tags: [Catalog]
+      parameters:
+        - $ref: "#/components/parameters/StackKitName"
+      responses:
+        "200":
+          description: Default spec values
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - properties:
+                      data:
+                        $ref: "#/components/schemas/StackSpec"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/stackkits/{name}/variants:
+    get:
+      operationId: getStackKitVariants
+      summary: List available variants for a StackKit
+      tags: [Catalog]
+      parameters:
+        - $ref: "#/components/parameters/StackKitName"
+      responses:
+        "200":
+          description: List of variants
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/VariantInfo"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/validate:
+    post:
+      operationId: validateSpec
+      summary: Validate a stack-spec against its StackKit schema
+      tags: [Validation]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StackSpec"
+      responses:
+        "200":
+          description: Validation result
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - properties:
+                      data:
+                        $ref: "#/components/schemas/ValidationResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /api/v1/validate/partial:
+    post:
+      operationId: validatePartial
+      summary: Validate partial spec fields (for wizard step-by-step validation)
+      tags: [Validation]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Partial StackSpec fields to validate
+      responses:
+        "200":
+          description: Partial validation result
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - properties:
+                      data:
+                        $ref: "#/components/schemas/ValidationResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/v1/generate/tfvars:
+    post:
+      operationId: generateTFVars
+      summary: Generate terraform.tfvars from a validated spec
+      tags: [Generation]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateRequest"
+      responses:
+        "200":
+          description: Generated tfvars
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - properties:
+                      data:
+                        $ref: "#/components/schemas/GenerateResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /api/v1/generate/preview:
+    post:
+      operationId: generatePreview
+      summary: Preview generated infrastructure without writing files
+      tags: [Generation]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateRequest"
+      responses:
+        "200":
+          description: Preview of generated output
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - properties:
+                      data:
+                        $ref: "#/components/schemas/PreviewResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+components:
+  parameters:
+    StackKitName:
+      name: name
+      in: path
+      required: true
+      description: StackKit name (e.g., base-homelab, dev-homelab)
+      schema:
+        type: string
+        pattern: "^[a-z0-9][a-z0-9-]*[a-z0-9]$"
+
+  schemas:
+    SuccessEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data: {}
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+
+    ResponseMeta:
+      type: object
+      properties:
+        request_id:
+          type: string
+          format: uuid
+        timestamp:
+          type: string
+          format: date-time
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: integer
+            message:
+              type: string
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+
+    StackKitSummary:
+      type: object
+      properties:
+        name:
+          type: string
+          example: base-homelab
+        displayName:
+          type: string
+          example: Base Homelab
+        description:
+          type: string
+        version:
+          type: string
+          example: "1.0.0"
+        tags:
+          type: array
+          items:
+            type: string
+
+    StackKit:
+      type: object
+      properties:
+        metadata:
+          $ref: "#/components/schemas/StackKitMetadata"
+        supportedOS:
+          type: array
+          items:
+            type: string
+        requirements:
+          $ref: "#/components/schemas/Requirements"
+        modes:
+          $ref: "#/components/schemas/Modes"
+        variants:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/Variant"
+        defaultVariant:
+          type: string
+        features:
+          $ref: "#/components/schemas/Features"
+
+    StackKitMetadata:
+      type: object
+      properties:
+        apiVersion:
+          type: string
+        kind:
+          type: string
+        name:
+          type: string
+        version:
+          type: string
+        displayName:
+          type: string
+        description:
+          type: string
+        author:
+          type: string
+        license:
+          type: string
+        homepage:
+          type: string
+        repository:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+
+    Requirements:
+      type: object
+      properties:
+        minimum:
+          $ref: "#/components/schemas/ResourceSpec"
+        recommended:
+          $ref: "#/components/schemas/ResourceSpec"
+
+    ResourceSpec:
+      type: object
+      properties:
+        cpu:
+          type: integer
+        ram:
+          type: integer
+          description: RAM in GB
+        disk:
+          type: integer
+          description: Disk in GB
+
+    Modes:
+      type: object
+      properties:
+        simple:
+          $ref: "#/components/schemas/ModeSpec"
+        advanced:
+          $ref: "#/components/schemas/ModeSpec"
+
+    ModeSpec:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        engine:
+          type: string
+          enum: [opentofu, terramate]
+        default:
+          type: boolean
+
+    Variant:
+      type: object
+      properties:
+        displayName:
+          type: string
+        description:
+          type: string
+        serviceCollection:
+          type: string
+        services:
+          type: array
+          items:
+            type: string
+        default:
+          type: boolean
+
+    VariantInfo:
+      type: object
+      properties:
+        name:
+          type: string
+        displayName:
+          type: string
+        description:
+          type: string
+        services:
+          type: array
+          items:
+            type: string
+        default:
+          type: boolean
+
+    Features:
+      type: object
+      properties:
+        multiNode:
+          type: boolean
+        vpnOverlay:
+          type: boolean
+        publicAccess:
+          type: boolean
+
+    StackSpec:
+      type: object
+      required: [stackkit]
+      properties:
+        name:
+          type: string
+        stackkit:
+          type: string
+          example: base-homelab
+        variant:
+          type: string
+        mode:
+          type: string
+          enum: [simple, advanced]
+        domain:
+          type: string
+        email:
+          type: string
+          format: email
+        network:
+          $ref: "#/components/schemas/NetworkSpec"
+        compute:
+          $ref: "#/components/schemas/ComputeSpec"
+        ssh:
+          $ref: "#/components/schemas/SSHSpec"
+        nodes:
+          type: array
+          items:
+            $ref: "#/components/schemas/NodeSpec"
+        services:
+          type: object
+        environment:
+          type: object
+          additionalProperties:
+            type: string
+
+    NetworkSpec:
+      type: object
+      properties:
+        mode:
+          type: string
+          enum: [local, public, hybrid]
+        subnet:
+          type: string
+        gateway:
+          type: string
+
+    ComputeSpec:
+      type: object
+      properties:
+        tier:
+          type: string
+          enum: [minimal, standard, performance]
+
+    SSHSpec:
+      type: object
+      properties:
+        keyPath:
+          type: string
+        user:
+          type: string
+        port:
+          type: integer
+
+    NodeSpec:
+      type: object
+      properties:
+        name:
+          type: string
+        role:
+          type: string
+          enum: [control-plane, worker, standalone]
+        ip:
+          type: string
+          format: ipv4
+        services:
+          type: array
+          items:
+            type: string
+
+    ValidationResult:
+      type: object
+      required: [valid]
+      properties:
+        valid:
+          type: boolean
+        errors:
+          type: array
+          items:
+            $ref: "#/components/schemas/ValidationError"
+        warnings:
+          type: array
+          items:
+            $ref: "#/components/schemas/ValidationError"
+
+    ValidationError:
+      type: object
+      properties:
+        path:
+          type: string
+        message:
+          type: string
+        code:
+          type: string
+
+    GenerateRequest:
+      type: object
+      required: [spec]
+      properties:
+        spec:
+          $ref: "#/components/schemas/StackSpec"
+        outputDir:
+          type: string
+          description: Custom output directory (server-side only)
+
+    GenerateResult:
+      type: object
+      properties:
+        tfvars:
+          type: object
+          description: Generated terraform variable values
+        outputDir:
+          type: string
+        file:
+          type: string
+
+    PreviewResult:
+      type: object
+      properties:
+        tfvars:
+          type: object
+        preview:
+          type: boolean
+          const: true
+        stackkit:
+          $ref: "#/components/schemas/StackKitSummary"
+
+    HealthData:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy]
+        service:
+          type: string
+        version:
+          type: string
+
+  responses:
+    HealthResponse:
+      description: Service is healthy
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: "#/components/schemas/SuccessEnvelope"
+              - properties:
+                  data:
+                    $ref: "#/components/schemas/HealthData"
+
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    UnprocessableEntity:
+      description: Validation or generation error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+tags:
+  - name: Health
+    description: Health checks
+  - name: Discovery
+    description: API capabilities and documentation
+  - name: Catalog
+    description: StackKit catalog — browse, search, and inspect available templates
+  - name: Validation
+    description: CUE-based spec validation
+  - name: Generation
+    description: OpenTofu variable generation from validated specs
