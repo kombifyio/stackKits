@@ -1,26 +1,32 @@
 // Package modern_homelab - Service Definitions
-// 
-// Modern Homelab = Multi-server Docker setup with:
-// - Coolify (PaaS for multi-node deployments)
-// - Identity stack (LLDAP + Step-CA + PocketID + TinyAuth)
-// - Full monitoring stack (Prometheus/Grafana/Loki)
-// - Public/remote access capabilities
 //
-// KEY DIFFERENCE FROM BASE-HOMELAB:
-// - Multi-node Docker (not single-node)
-// - Coolify instead of Dokploy (better multi-node support)
-// - Zero-trust identity access (VPN optional addon)
-// - Public access is default, not optional
+// Modern Homelab = Multi-node Docker Compose hybrid with:
+// - Identity-aware proxy stack (LLDAP + Step-CA + TinyAuth/PocketID)
+// - Coolify OR Dokploy as PaaS (context-driven)
+// - Traefik on cloud entry node
+// - Tunnel (Cloudflare/Pangolin) for CGNAT bypass
+// - VPN is optional (not required, identity stack provides zero-trust)
+//
+// KEY DIFFERENCES FROM BASE-HOMELAB:
+// - Multi-node Docker Compose (not single-node, no Swarm)
+// - PaaS context-driven: domain+wildcard → Coolify, else → Dokploy
+// - Identity-aware proxies make VPN optional
+// - Public access via cloud node is default
+// - Monitoring, backup, tunnels are composable add-ons
+//
+// PLACEMENT:
+// - Cloud node: Traefik, PaaS, TinyAuth, PocketID, Uptime Kuma, Grafana
+// - Local node: Workloads deployed via PaaS (Immich, Jellyfin, etc.)
+// - Daemonset: Grafana Alloy, cAdvisor, node-exporter (all nodes)
 
 package modern_homelab
 
 import "github.com/kombihq/stackkits/base"
 
 // =============================================================================
-// CORE SERVICES (Always Required)
+// CORE: TRAEFIK (Cloud Entry Point)
 // =============================================================================
 
-// #TraefikService - Reverse Proxy (same as base-homelab but with cloud config)
 #TraefikService: base.#ServiceDefinition & {
 	name:        "traefik"
 	displayName: "Traefik"
@@ -28,11 +34,10 @@ import "github.com/kombihq/stackkits/base"
 	type:        "reverse-proxy"
 	required:    true
 	image:       "traefik"
-	tag:         "v3.1"
+	tag:         "v3.3"
 	status:      "planned"
-	description: "Modern reverse proxy with automatic HTTPS - deployed on cloud entry node"
+	description: "Cloud entry-point reverse proxy with automatic HTTPS"
 
-	// Deployed on cloud node (public entry point)
 	placement: {
 		nodeType: "cloud"
 		strategy: "entry-point"
@@ -47,31 +52,88 @@ import "github.com/kombihq/stackkits/base"
 		mode: "bridge"
 	}
 
+	volumes: [
+		{
+			source:      "/var/run/docker.sock"
+			target:      "/var/run/docker.sock"
+			type:        "bind"
+			readOnly:    true
+			backup:      false
+			description: "Docker socket for container discovery"
+		},
+		{
+			source:      "traefik-certs"
+			target:      "/certs"
+			type:        "volume"
+			backup:      true
+			description: "SSL certificates storage"
+		},
+		{
+			source:      "traefik-config"
+			target:      "/etc/traefik"
+			type:        "volume"
+			backup:      true
+			description: "Traefik configuration"
+		},
+	]
+
+	healthCheck: {
+		enabled: true
+		http: {
+			path:   "/ping"
+			port:   8080
+			scheme: "http"
+		}
+		interval:    "10s"
+		timeout:     "5s"
+		retries:     3
+		startPeriod: "10s"
+	}
+
 	config: {
 		dashboard:    bool | *true
 		acme:         bool | *true
 		acmeEmail:    string
 		acmeProvider: "letsencrypt" | "letsencrypt-staging" | *"letsencrypt"
+		logLevel:     "DEBUG" | "INFO" | "WARN" | "ERROR" | *"INFO"
 	}
+
+	labels: {
+		"traefik.enable":                            "true"
+		"traefik.http.routers.api.entrypoints":      "websecure"
+		"traefik.http.routers.api.rule":             "Host(`traefik.{{.domain}}`)"
+		"traefik.http.routers.api.service":          "api@internal"
+		"traefik.http.routers.api.tls.certresolver": "letsencrypt"
+		"stackkit.layer":                            "2-platform"
+		"stackkit.managed-by":                       "terraform"
+	}
+
+	output: {
+		url:         "https://traefik.{{.domain}}"
+		description: "Traefik Dashboard"
+		credentials: note: "Protected by TinyAuth ForwardAuth"
+	}
+
+	restartPolicy: "unless-stopped"
 }
 
 // =============================================================================
-// VPN OVERLAY (Optional - use vpn-overlay addon if needed)
+// LAYER 2: PLATFORM IDENTITY
 // =============================================================================
 
-// #HeadscaleService - Self-hosted Tailscale control server
-#HeadscaleService: base.#ServiceDefinition & {
-	name:        "headscale"
-	displayName: "Headscale"
-	category:    "network"
-	type:        "vpn"
-	required:    false  // Optional: Identity stack (LLDAP+Step-CA+PocketID) is preferred
-	image:       "headscale/headscale"
-	tag:         "latest"
+// TinyAuth - Lightweight ForwardAuth proxy (default identity layer)
+#TinyAuthService: base.#ServiceDefinition & {
+	name:        "tinyauth"
+	displayName: "TinyAuth"
+	category:    "platform-identity"
+	type:        "auth"
+	required:    true
+	image:       "ghcr.io/steveiliop56/tinyauth"
+	tag:         "v3"
 	status:      "planned"
-	description: "Optional self-hosted Tailscale control server (enable via vpn-overlay addon)"
+	description: "Identity-aware ForwardAuth proxy for all Traefik routes"
+	needs:       ["traefik"]
 
-	// Deployed on cloud node (coordination server)
 	placement: {
 		nodeType: "cloud"
 		strategy: "single"
@@ -79,83 +141,144 @@ import "github.com/kombihq/stackkits/base"
 
 	network: {
 		ports: [
-			{host: 8085, container: 8080, protocol: "tcp", description: "Web UI"},
-			{host: 443, container: 443, protocol: "tcp", description: "DERP/Coordination"},
+			{host: 3002, container: 3000, protocol: "tcp", description: "Web UI"},
 		]
 		traefik: {
 			enabled: true
-			rule:    "Host(`hs.{{.domain}}`)"
+			rule:    "Host(`auth.{{.domain}}`)"
 			tls:     true
+			port:    3000
 		}
 	}
 
 	volumes: [
 		{
-			source:      "headscale-data"
-			target:      "/var/lib/headscale"
+			source:      "tinyauth-data"
+			target:      "/data"
 			type:        "volume"
 			backup:      true
-			description: "Headscale database and config"
+			description: "TinyAuth data and user database"
 		},
 	]
 
-	config: {
-		serverUrl:      string  // https://hs.domain.com
-		baseDomain:     string  // domain.com
-		derpEnabled:    bool | *true
-		magicDns:       bool | *true
-		nameservers:    [...string] | *["1.1.1.1", "8.8.8.8"]
+	healthCheck: {
+		enabled: true
+		http: {
+			path:   "/api/health"
+			port:   3000
+			scheme: "http"
+		}
+		interval:    "30s"
+		timeout:     "5s"
+		retries:     3
+		startPeriod: "10s"
 	}
+
+	resources: {
+		memory:    "128m"
+		memoryMax: "256m"
+		cpus:      0.25
+	}
+
+	labels: {
+		"traefik.enable":                                                        "true"
+		"traefik.http.routers.tinyauth.entrypoints":                             "websecure"
+		"traefik.http.routers.tinyauth.rule":                                    "Host(`auth.{{.domain}}`)"
+		"traefik.http.routers.tinyauth.tls.certresolver":                        "letsencrypt"
+		"traefik.http.services.tinyauth.loadbalancer.server.port":               "3000"
+		"traefik.http.middlewares.tinyauth.forwardauth.address":                 "http://tinyauth:3000/api/auth/verify"
+		"traefik.http.middlewares.tinyauth.forwardauth.authResponseHeaders":     "X-User,X-Email"
+		"stackkit.layer":      "2-platform"
+		"stackkit.managed-by": "terraform"
+	}
+
+	output: {
+		url:         "https://auth.{{.domain}}"
+		description: "TinyAuth Identity Proxy"
+		credentials: note: "Configured via LLDAP user directory"
+	}
+
+	restartPolicy: "unless-stopped"
 }
 
-// #TailscaleAgent - Tailscale client on each node
-#TailscaleAgent: base.#ServiceDefinition & {
-	name:        "tailscale"
-	displayName: "Tailscale Agent"
-	category:    "network"
-	type:        "vpn-client"
-	required:    true
-	image:       "tailscale/tailscale"
-	tag:         "stable"
+// PocketID - OIDC provider with passkeys (optional upgrade from TinyAuth)
+#PocketIDService: base.#ServiceDefinition & {
+	name:        "pocketid"
+	displayName: "PocketID"
+	category:    "platform-identity"
+	type:        "auth"
+	required:    false
+	enabled:     false
+	image:       "ghcr.io/pocket-id/pocket-id"
+	tag:         "latest"
 	status:      "planned"
-	description: "Tailscale client connecting to Headscale - runs on ALL nodes"
+	description: "OIDC provider with passkeys for SSO across all services"
+	needs:       ["traefik"]
 
-	// Deployed on every node
 	placement: {
-		nodeType: "all"
-		strategy: "daemonset"  // One per node
+		nodeType: "cloud"
+		strategy: "single"
 	}
 
 	network: {
-		mode: "host"  // Needs host networking for VPN
+		ports: [
+			{host: 3003, container: 80, protocol: "tcp", description: "Web UI"},
+		]
+		traefik: {
+			enabled: true
+			rule:    "Host(`id.{{.domain}}`)"
+			tls:     true
+			port:    80
+		}
 	}
 
-	config: {
-		authKey:     string  // Pre-auth key from Headscale
-		controlUrl:  string  // https://hs.domain.com
-		hostname:    string  // Node hostname
-		advertiseRoutes: [...string]  // Local subnets to advertise
+	volumes: [
+		{
+			source:      "pocketid-data"
+			target:      "/app/backend/data"
+			type:        "volume"
+			backup:      true
+			description: "PocketID database and keys"
+		},
+	]
+
+	resources: {
+		memory:    "256m"
+		memoryMax: "512m"
+		cpus:      0.5
 	}
+
+	labels: {
+		"stackkit.layer":      "2-platform"
+		"stackkit.managed-by": "terraform"
+	}
+
+	output: {
+		url:         "https://id.{{.domain}}"
+		description: "PocketID OIDC Provider"
+		credentials: note: "Admin credentials generated on first setup"
+	}
+
+	restartPolicy: "unless-stopped"
 }
 
 // =============================================================================
-// PLATFORM: COOLIFY (PaaS)
+// LAYER 2: PAAS (Context-Driven Selection)
 // =============================================================================
 
-// #CoolifyService - Self-hosted PaaS for multi-node deployments
+// Coolify - Full PaaS for users WITH domain + wildcard
 #CoolifyService: base.#ServiceDefinition & {
 	name:        "coolify"
 	displayName: "Coolify"
 	category:    "platform"
 	type:        "paas"
-	required:    true
-	image:       "coollabsio/coolify"
+	required:    false
+	image:       "ghcr.io/coollabsio/coolify"
 	tag:         "latest"
 	status:      "planned"
-	description: "Self-hosted Heroku/Vercel alternative with multi-server support"
-	needs:       ["traefik", "headscale"]
+	description: "Self-hosted PaaS with multi-server support and git deployments"
+	needs:       ["traefik"]
 
-	// Deployed on cloud node (management plane)
 	placement: {
 		nodeType: "cloud"
 		strategy: "single"
@@ -201,92 +324,58 @@ import "github.com/kombihq/stackkits/base"
 	]
 
 	config: {
-		appUrl:           string  // https://coolify.domain.com
-		pushEnabled:      bool | *true
-		autoUpdate:       bool | *false
+		appUrl:      string
+		pushEnabled: bool | *true
+		autoUpdate:  bool | *false
 		instanceSettings: {
-			isRegistrationEnabled:    bool | *false
-			isAutoUpdateEnabled:      bool | *false
+			isRegistrationEnabled: bool | *false
+			isAutoUpdateEnabled:   bool | *false
 		}
 	}
 
-	// Multi-node feature: Coolify can manage remote Docker hosts
+	// Multi-node: Coolify manages remote Docker hosts via SSH
 	multiNode: {
 		enabled: true
-		// Remote nodes connect via VPN (Tailscale IP addresses)
 		remoteHosts: [...{
-			name:     string
-			address:  string  // Tailscale IP (100.x.x.x)
-			user:     string | *"root"
-			port:     int | *22
+			name:    string
+			address: string
+			user:    string | *"root"
+			port:    int | *22
 		}]
 	}
+
+	resources: {
+		memory:    "2048m"
+		memoryMax: "4096m"
+		cpus:      2.0
+	}
+
+	labels: {
+		"stackkit.layer":      "2-platform"
+		"stackkit.managed-by": "terraform"
+	}
+
+	output: {
+		url:         "https://coolify.{{.domain}}"
+		description: "Coolify PaaS Dashboard"
+		credentials: note: "Admin credentials set during first setup"
+	}
+
+	restartPolicy: "unless-stopped"
 }
 
-// =============================================================================
-// MONITORING (Full Stack)
-// =============================================================================
-
-// #PrometheusService - Metrics collection
-#PrometheusService: base.#ServiceDefinition & {
-	name:        "prometheus"
-	displayName: "Prometheus"
-	category:    "monitoring"
-	type:        "metrics"
+// Dokploy - Simpler PaaS for users WITHOUT domain (traefik-me + MagicDNS)
+#DokployService: base.#ServiceDefinition & {
+	name:        "dokploy"
+	displayName: "Dokploy"
+	category:    "platform"
+	type:        "paas"
 	required:    false
-	enabled:     true
-	image:       "prom/prometheus"
-	tag:         "v2.48.0"
+	image:       "dokploy/dokploy"
+	tag:         "latest"
 	status:      "planned"
-	description: "Time-series database for metrics collection"
+	description: "Simple PaaS with traefik-me integration for domainless setups"
 	needs:       ["traefik"]
-
-	placement: {
-		nodeType: "cloud"
-		strategy: "single"
-	}
-
-	network: {
-		ports: [
-			{host: 9090, container: 9090, protocol: "tcp", description: "Web UI"},
-		]
-		traefik: {
-			enabled: true
-			rule:    "Host(`prometheus.{{.domain}}`)"
-			tls:     true
-		}
-	}
-
-	volumes: [
-		{
-			source:      "prometheus-data"
-			target:      "/prometheus"
-			type:        "volume"
-			backup:      true
-			description: "Prometheus TSDB data"
-		},
-	]
-
-	config: {
-		retention:       string | *"15d"
-		scrapeInterval:  string | *"15s"
-		alertmanager:    bool | *true
-	}
-}
-
-// #GrafanaService - Dashboards
-#GrafanaService: base.#ServiceDefinition & {
-	name:        "grafana"
-	displayName: "Grafana"
-	category:    "monitoring"
-	type:        "dashboards"
-	required:    false
-	enabled:     true
-	image:       "grafana/grafana"
-	tag:         "10.2.3"
-	status:      "planned"
-	description: "Visualization and dashboards for metrics and logs"
-	needs:       ["prometheus", "traefik"]
 
 	placement: {
 		nodeType: "cloud"
@@ -299,44 +388,71 @@ import "github.com/kombihq/stackkits/base"
 		]
 		traefik: {
 			enabled: true
-			rule:    "Host(`grafana.{{.domain}}`)"
+			rule:    "Host(`dokploy.{{.domain}}`)"
 			tls:     true
+			port:    3000
 		}
 	}
 
 	volumes: [
 		{
-			source:      "grafana-data"
-			target:      "/var/lib/grafana"
+			source:      "/var/run/docker.sock"
+			target:      "/var/run/docker.sock"
+			type:        "bind"
+			readOnly:    false
+			backup:      false
+			description: "Docker socket for container management"
+		},
+		{
+			source:      "dokploy-data"
+			target:      "/etc/dokploy"
 			type:        "volume"
 			backup:      true
-			description: "Grafana dashboards and config"
+			description: "Dokploy configuration and data"
 		},
 	]
 
 	config: {
-		adminUser:      string | *"admin"
-		adminPassword:  string  // Generated
-		anonymousAccess: bool | *false
-		datasources: {
-			prometheus: bool | *true
-			loki:       bool | *true
-		}
+		traefikMe: bool | *true
+		magicDns:  bool | *true
 	}
+
+	resources: {
+		memory:    "1024m"
+		memoryMax: "2048m"
+		cpus:      1.0
+	}
+
+	labels: {
+		"stackkit.layer":      "2-platform"
+		"stackkit.managed-by": "terraform"
+	}
+
+	output: {
+		url:         "https://dokploy.{{.domain}}"
+		description: "Dokploy PaaS Dashboard"
+		credentials: note: "Admin credentials set during first setup"
+	}
+
+	restartPolicy: "unless-stopped"
 }
 
-// #LokiService - Log aggregation
-#LokiService: base.#ServiceDefinition & {
-	name:        "loki"
-	displayName: "Loki"
+// =============================================================================
+// LAYER 3: UTILITY SERVICES (Core Platform)
+// =============================================================================
+
+// Dozzle - Real-time Docker log viewer
+#DozzleService: base.#ServiceDefinition & {
+	name:        "dozzle"
+	displayName: "Dozzle"
 	category:    "monitoring"
 	type:        "logging"
 	required:    false
 	enabled:     true
-	image:       "grafana/loki"
-	tag:         "2.9.3"
+	image:       "amir20/dozzle"
+	tag:         "latest"
 	status:      "planned"
-	description: "Log aggregation system - like Prometheus but for logs"
+	description: "Real-time Docker container log viewer with multi-host support"
 	needs:       ["traefik"]
 
 	placement: {
@@ -346,68 +462,48 @@ import "github.com/kombihq/stackkits/base"
 
 	network: {
 		ports: [
-			{host: 3100, container: 3100, protocol: "tcp", description: "HTTP API"},
+			{host: 8888, container: 8080, protocol: "tcp", description: "Web UI"},
 		]
+		traefik: {
+			enabled: true
+			rule:    "Host(`logs.{{.domain}}`)"
+			tls:     true
+			port:    8080
+		}
 	}
 
 	volumes: [
 		{
-			source:      "loki-data"
-			target:      "/loki"
-			type:        "volume"
-			backup:      true
-			description: "Loki index and chunks"
+			source:      "/var/run/docker.sock"
+			target:      "/var/run/docker.sock"
+			type:        "bind"
+			readOnly:    true
+			backup:      false
+			description: "Docker socket for log access"
 		},
 	]
 
-	config: {
-		retention: string | *"168h"  // 7 days
+	resources: {
+		memory:    "128m"
+		memoryMax: "256m"
+		cpus:      0.25
 	}
+
+	labels: {
+		"stackkit.layer":      "3-application"
+		"stackkit.managed-by": "terraform"
+	}
+
+	output: {
+		url:         "https://logs.{{.domain}}"
+		description: "Dozzle Log Viewer"
+		credentials: note: "Protected by TinyAuth ForwardAuth"
+	}
+
+	restartPolicy: "unless-stopped"
 }
 
-// #PromtailService - Log shipping agent
-#PromtailAgent: base.#ServiceDefinition & {
-	name:        "promtail"
-	displayName: "Promtail"
-	category:    "monitoring"
-	type:        "log-shipper"
-	required:    false
-	enabled:     true
-	image:       "grafana/promtail"
-	tag:         "2.9.3"
-	status:      "planned"
-	description: "Log shipping agent - runs on ALL nodes"
-	needs:       ["loki"]
-
-	// Deployed on every node
-	placement: {
-		nodeType: "all"
-		strategy: "daemonset"
-	}
-
-	volumes: [
-		{
-			source:      "/var/log"
-			target:      "/var/log"
-			type:        "bind"
-			readOnly:    true
-			description: "System logs"
-		},
-		{
-			source:      "/var/lib/docker/containers"
-			target:      "/var/lib/docker/containers"
-			type:        "bind"
-			readOnly:    true
-			description: "Docker container logs"
-		},
-	]
-
-	config: {
-		lokiUrl: string  // http://loki:3100 or via Tailscale IP
-	}
-}
-
-// #UptimeKumaService - Status monitoring (basic)
+// Uptime Kuma - External uptime monitoring
 #UptimeKumaService: base.#ServiceDefinition & {
 	name:        "uptime-kuma"
 	displayName: "Uptime Kuma"
@@ -418,7 +514,7 @@ import "github.com/kombihq/stackkits/base"
 	image:       "louislam/uptime-kuma"
 	tag:         "1"
 	status:      "planned"
-	description: "Self-hosted uptime monitoring"
+	description: "Self-hosted uptime monitoring and status page"
 	needs:       ["traefik"]
 
 	placement: {
@@ -434,6 +530,7 @@ import "github.com/kombihq/stackkits/base"
 			enabled: true
 			rule:    "Host(`status.{{.domain}}`)"
 			tls:     true
+			port:    3001
 		}
 	}
 
@@ -446,20 +543,39 @@ import "github.com/kombihq/stackkits/base"
 			description: "Uptime Kuma database"
 		},
 	]
+
+	resources: {
+		memory:    "256m"
+		memoryMax: "512m"
+		cpus:      0.5
+	}
+
+	labels: {
+		"stackkit.layer":      "3-application"
+		"stackkit.managed-by": "terraform"
+	}
+
+	output: {
+		url:         "https://status.{{.domain}}"
+		description: "Uptime Kuma Status Page"
+		credentials: note: "Admin credentials set on first login"
+	}
+
+	restartPolicy: "unless-stopped"
 }
 
-// #BeszelService - Alternative lightweight monitoring
-#BeszelService: base.#ServiceDefinition & {
-	name:        "beszel"
-	displayName: "Beszel"
-	category:    "monitoring"
-	type:        "metrics"
+// Whoami - Test/debug service for verifying Traefik routing
+#WhoamiService: base.#ServiceDefinition & {
+	name:        "whoami"
+	displayName: "Whoami"
+	category:    "debug"
+	type:        "application"
 	required:    false
-	enabled:     bool | *false  // Not default, use in beszel variant
-	image:       "henrygd/beszel"
+	enabled:     false
+	image:       "traefik/whoami"
 	tag:         "latest"
 	status:      "planned"
-	description: "Lightweight server monitoring with Docker stats"
+	description: "Debug service for testing Traefik routing and TLS"
 
 	placement: {
 		nodeType: "cloud"
@@ -468,80 +584,96 @@ import "github.com/kombihq/stackkits/base"
 
 	network: {
 		ports: [
-			{host: 8090, container: 8090, protocol: "tcp", description: "Web UI"},
+			{host: 8081, container: 80, protocol: "tcp", description: "HTTP"},
 		]
 		traefik: {
 			enabled: true
-			rule:    "Host(`monitoring.{{.domain}}`)"
+			rule:    "Host(`whoami.{{.domain}}`)"
 			tls:     true
+			port:    80
 		}
 	}
 
-	volumes: [
-		{
-			source:      "beszel-data"
-			target:      "/beszel_data"
-			type:        "volume"
-			backup:      true
-			description: "Beszel database"
-		},
+	resources: {
+		memory: "32m"
+		cpus:   0.1
+	}
+
+	labels: {
+		"stackkit.layer":      "3-application"
+		"stackkit.managed-by": "terraform"
+	}
+
+	restartPolicy: "unless-stopped"
+}
+
+// =============================================================================
+// SERVICE COLLECTIONS
+// =============================================================================
+
+// Services for Coolify-based deployment (user has domain + wildcard)
+#CoolifyServiceSet: {
+	traefik:    #TraefikService
+	tinyauth:   #TinyAuthService
+	pocketid:   #PocketIDService
+	coolify:    #CoolifyService & {enabled: true}
+	dozzle:     #DozzleService
+	uptimeKuma: #UptimeKumaService
+	whoami:     #WhoamiService
+}
+
+// Services for Dokploy-based deployment (no domain)
+#DokployServiceSet: {
+	traefik:    #TraefikService
+	tinyauth:   #TinyAuthService
+	pocketid:   #PocketIDService
+	dokploy:    #DokployService & {enabled: true}
+	dozzle:     #DozzleService
+	uptimeKuma: #UptimeKumaService
+	whoami:     #WhoamiService
+}
+
+// =============================================================================
+// PLACEMENT DEFINITIONS
+// =============================================================================
+
+#DefaultPlacement: {
+	// Cloud node: public-facing, management, always-on
+	cloud: [
+		"traefik",
+		"tinyauth",
+		"pocketid",
+		"coolify",
+		"dokploy",
+		"uptime-kuma",
+		"dozzle",
+		"grafana",
+		"victoriametrics",
+		"loki",
+		"vaultwarden",
+		"stalwart",
 	]
-}
 
-// =============================================================================
-// SERVICE COLLECTIONS (Variants)
-// =============================================================================
+	// Local node: compute, storage, data sovereignty
+	local: [
+		"immich",
+		"jellyfin",
+		"ollama",
+		"open-webui",
+		"home-assistant",
+		"cloudreve",
+		"nextcloud",
+		"radicale",
+		"guacamole",
+		"minio",
+		"gitea",
+	]
 
-// Default variant: Full stack
-#DefaultServices: {
-	traefik:     #TraefikService
-	headscale:   #HeadscaleService
-	tailscale:   #TailscaleAgent
-	coolify:     #CoolifyService
-	prometheus:  #PrometheusService
-	grafana:     #GrafanaService
-	loki:        #LokiService
-	promtail:    #PromtailAgent
-	uptimeKuma:  #UptimeKumaService
-}
-
-// Minimal variant: Basic setup
-#MinimalServices: {
-	traefik:     #TraefikService
-	headscale:   #HeadscaleService
-	tailscale:   #TailscaleAgent
-	coolify:     #CoolifyService
-	uptimeKuma:  #UptimeKumaService
-}
-
-// Beszel variant: Lightweight monitoring
-#BeszelServices: {
-	traefik:     #TraefikService
-	headscale:   #HeadscaleService
-	tailscale:   #TailscaleAgent
-	coolify:     #CoolifyService
-	beszel:      #BeszelService & {enabled: true}
-}
-
-// =============================================================================
-// NODE TOPOLOGY HELPERS
-// =============================================================================
-
-// #NodePlacement defines where services run
-#NodePlacement: {
-	// Cloud nodes: Public IP, entry point for internet traffic
-	cloud: [...string]
-	
-	// Local nodes: Behind NAT, accessed via VPN
-	local: [...string]
-	
-	// Services that run on all nodes
-	daemonset: [...string]
-}
-
-// Default placement for modern-homelab
-#DefaultPlacement: #NodePlacement & {
-	cloud: ["traefik", "headscale", "coolify", "prometheus", "grafana", "loki", "uptime-kuma"]
-	local: []  // Local nodes run workloads via Coolify
-	daemonset: ["tailscale", "promtail"]
+	// All nodes: agents and telemetry
+	daemonset: [
+		"grafana-alloy",
+		"cadvisor",
+		"node-exporter",
+		"restic-agent",
+	]
 }

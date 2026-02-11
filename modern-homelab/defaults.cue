@@ -1,192 +1,223 @@
 // Package modern_homelab - Default Values
-// 
-// Tier-specific defaults for Modern Homelab
-// These are sensible production-ready defaults for a hybrid Docker setup.
+//
+// Context-driven defaults for the Modern Homelab hybrid architecture.
+// Secrets via SOPS + age, PaaS via domain detection.
 
 package modern_homelab
 
 // =============================================================================
-// NODE DEFAULTS
+// CLOUD NODE DEFAULTS (VPS)
 // =============================================================================
 
-// Default cloud node specs (VPS sizing)
 #CloudNodeDefaults: {
-	// Hetzner Cloud example (cheapest production-ready)
 	provider: {
-		type:   "hetzner"
-		region: "fsn1"  // Falkenstein, Germany
-		size:   "cx21"  // 2 vCPU, 4 GB RAM
+		name:   "hetzner"
+		region: "fsn1"
+		size:   "cx22"      // 2 vCPU, 4 GB RAM
 		image:  "debian-12"
 	}
-	
+
 	docker: {
-		version:  "24.0"
+		version:  "27.0"
 		dataRoot: "/var/lib/docker"
 	}
-	
-	// Cloud nodes should have swap disabled
+
 	system: {
 		swapEnabled: false
 		swapSize:    0
 	}
 }
 
-// Default local node specs (on-premises)
+// =============================================================================
+// LOCAL NODE DEFAULTS (On-Premises)
+// =============================================================================
+
 #LocalNodeDefaults: {
-	provider: {
-		type: "bare-metal"
-	}
-	
 	docker: {
-		version:  "24.0"
+		version:  "27.0"
 		dataRoot: "/var/lib/docker"
 	}
-	
-	// Local nodes can have swap
+
 	system: {
 		swapEnabled: true
-		swapSize:    4096  // 4GB
+		swapSize:    4096
 	}
 }
 
 // =============================================================================
-// VPN DEFAULTS (Headscale)
+// TRAEFIK DEFAULTS
 // =============================================================================
 
-#VpnDefaults: {
-	enabled:     true
-	provider:    "headscale"
-	derpEnabled: true
-	derpRegions: ["default"]
-	magicDns:    true
-}
-
-// =============================================================================
-// SERVICE DEFAULTS
-// =============================================================================
-
-// Traefik defaults
 #TraefikDefaults: {
 	dashboard:    true
 	acme:         true
 	acmeProvider: "letsencrypt"
-	
-	// Log level for production
-	logLevel: "INFO"
-	
-	// Access log (for monitoring)
+	logLevel:     "INFO"
+
 	accessLog: {
 		enabled:  true
 		filePath: "/var/log/traefik/access.log"
 	}
-	
-	// Metrics for Prometheus
+
 	metrics: {
-		prometheus: true
+		prometheus:  true
 		entrypoint: "metrics"
 	}
 }
 
-// Coolify defaults
+// =============================================================================
+// PAAS DEFAULTS
+// =============================================================================
+
 #CoolifyDefaults: {
 	autoUpdate:  false
 	pushEnabled: true
-	
 	instanceSettings: {
 		isRegistrationEnabled: false
 		isAutoUpdateEnabled:   false
 	}
-	
-	// Default resource limits for Coolify-managed containers
 	resources: {
 		cpuLimit:    "2.0"
 		memoryLimit: "2048m"
 	}
 }
 
-// Monitoring defaults (PLG Stack)
-#MonitoringDefaults: {
-	prometheus: {
-		retention:      "15d"
-		scrapeInterval: "15s"
-		alertmanager:   true
-		
-		// Remote write disabled by default
-		remoteWrite: {
-			enabled: false
-		}
+#DokployDefaults: {
+	traefikMe: true     // Use traefik-me for local access without domain
+	magicDns:  true     // MagicDNS for service discovery
+	resources: {
+		cpuLimit:    "1.0"
+		memoryLimit: "1024m"
 	}
-	
+}
+
+// =============================================================================
+// MONITORING DEFAULTS
+// =============================================================================
+
+#MonitoringDefaults: {
+	victoriametrics: {
+		retention:      "30d"
+		scrapeInterval: "15s"
+		// Deduplication for HA setups
+		dedup: enabled: false
+	}
+
 	grafana: {
 		anonymousAccess: false
 		plugins: [
 			"grafana-piechart-panel",
 			"grafana-clock-panel",
 		]
-		
-		// Dashboards to provision
 		dashboards: {
 			nodeExporter: true
 			docker:       true
 			traefik:      true
 		}
 	}
-	
+
 	loki: {
-		retention: "168h"  // 7 days
-		
-		// Limits
-		ingestionRateLimit:   "4MB"
-		ingestionBurstSize:   "6MB"
-		maxQueryLookback:     "168h"
+		retention:          "168h"
+		ingestionRateLimit: "4MB"
+		ingestionBurstSize: "6MB"
+		maxQueryLookback:   "168h"
+	}
+
+	alloy: {
+		// Unified telemetry agent replacing Promtail
+		collectLogs:    true
+		collectMetrics: true
+		collectTraces:  false
 	}
 }
 
 // =============================================================================
-// VARIANT DEFAULTS
+// IDENTITY DEFAULTS (from base stack)
 // =============================================================================
 
-// Default variant: Full monitoring + VPN + Coolify
-#VariantDefault: {
-	services: {
-		traefik:     {enabled: true, config: #TraefikDefaults}
-		headscale:   {enabled: true, config: #VpnDefaults}
-		coolify:     {enabled: true, config: #CoolifyDefaults}
-		prometheus:  {enabled: true, config: #MonitoringDefaults.prometheus}
-		grafana:     {enabled: true, config: #MonitoringDefaults.grafana}
-		loki:        {enabled: true, config: #MonitoringDefaults.loki}
-		promtail:    {enabled: true}
-		uptimeKuma:  {enabled: true}
+#IdentityDefaults: {
+	// Layer 1: always on
+	lldap: {
+		enabled: true
+		baseDn:  "dc=homelab,dc=local"
+	}
+
+	stepCA: {
+		enabled:     true
+		provisioner: "acme"
+		// Auto-renew internal certs
+		autoRenew: true
+	}
+
+	// Layer 2: TinyAuth as default proxy
+	tinyauth: {
+		enabled: true
+		// ForwardAuth for all Traefik routes
+		forwardAuth: true
+	}
+
+	// Layer 2: PocketID optional OIDC
+	pocketid: {
+		enabled: false
 	}
 }
 
-// Minimal variant: Just Coolify + VPN + basic uptime
-#VariantMinimal: {
-	services: {
-		traefik:     {enabled: true, config: #TraefikDefaults}
-		headscale:   {enabled: true, config: #VpnDefaults}
-		coolify:     {enabled: true, config: #CoolifyDefaults}
-		prometheus:  {enabled: false}
-		grafana:     {enabled: false}
-		loki:        {enabled: false}
-		promtail:    {enabled: false}
-		uptimeKuma:  {enabled: true}
+// =============================================================================
+// TUNNEL DEFAULTS
+// =============================================================================
+
+#TunnelDefaults: {
+	// Default: Cloudflare Tunnel (free, simple)
+	provider: "cloudflare"
+
+	cloudflare: {
+		// Zero-trust access via Cloudflare
+		zeroTrust: true
+	}
+
+	pangolin: {
+		// Self-hosted alternative, AGPL-3
+		// WireGuard-based, includes SSO + Let's Encrypt
+		serverPort: 443
 	}
 }
 
-// Beszel variant: Lightweight monitoring alternative
-#VariantBeszel: {
-	services: {
-		traefik:     {enabled: true, config: #TraefikDefaults}
-		headscale:   {enabled: true, config: #VpnDefaults}
-		coolify:     {enabled: true, config: #CoolifyDefaults}
-		prometheus:  {enabled: false}
-		grafana:     {enabled: false}
-		loki:        {enabled: false}
-		promtail:    {enabled: false}
-		uptimeKuma:  {enabled: false}
-		beszel:      {enabled: true}
+// =============================================================================
+// BACKUP DEFAULTS
+// =============================================================================
+
+#BackupDefaults: {
+	// Restic for encrypted, deduplicated backups
+	provider: "restic"
+
+	schedule: "0 2 * * *"  // Daily at 2 AM
+	retention: {
+		keepDaily:   7
+		keepWeekly:  4
+		keepMonthly: 6
 	}
+
+	// 3-2-1 rule: local + offsite
+	targets: {
+		local: {
+			enabled: true
+			path:    "/backup/restic"
+		}
+		offsite: {
+			enabled:  false
+			provider: "b2"    // Backblaze B2 (cheapest)
+		}
+	}
+}
+
+// =============================================================================
+// SECRETS DEFAULTS
+// =============================================================================
+
+#SecretsDefaults: {
+	provider:    "sops-age"
+	ageKeyFile:  "/etc/sops/age-key.txt"
+	encryptedSecretsFile: "secrets.enc.yaml"
 }
 
 // =============================================================================
@@ -194,29 +225,25 @@ package modern_homelab
 // =============================================================================
 
 #NetworkDefaults: {
-	// Default Docker network for services
+	// Docker bridge for co-located services
 	serviceBridge: {
 		name:    "kombistack"
 		driver:  "bridge"
 		subnet:  "172.20.0.0/16"
 		gateway: "172.20.0.1"
 	}
-	
-	// Tailscale network range (assigned by Headscale)
-	tailscale: {
-		subnet: "100.64.0.0/10"  // CGNAT range
+
+	// DNS configuration
+	dns: {
+		servers: ["1.1.1.1", "8.8.8.8"]
 	}
-	
-	// Port ranges
+
+	// Reserved ports
 	ports: {
-		reserved: [22, 80, 443]  // SSH, HTTP, HTTPS
-		traefik:  [80, 443, 8080]
-		coolify:  [8000, 6001, 6002]
-		monitoring: {
-			prometheus: 9090
-			grafana:    3000
-			loki:       3100
-		}
+		reserved:   [22, 80, 443]
+		traefik:    [80, 443, 8080]
+		coolify:    [8000, 6001, 6002]
+		dokploy:    [3000]
 	}
 }
 
@@ -225,30 +252,26 @@ package modern_homelab
 // =============================================================================
 
 #SecurityDefaults: {
-	// Firewall rules (applied via OpenTofu)
 	firewall: {
 		inbound: [
 			{port: 22, protocol: "tcp", source: "0.0.0.0/0", description: "SSH"},
 			{port: 80, protocol: "tcp", source: "0.0.0.0/0", description: "HTTP"},
 			{port: 443, protocol: "tcp", source: "0.0.0.0/0", description: "HTTPS"},
-			{port: 41641, protocol: "udp", source: "0.0.0.0/0", description: "Tailscale"},
 		]
 		outbound: [
 			{port: 0, protocol: "all", destination: "0.0.0.0/0", description: "Allow all outbound"},
 		]
 	}
-	
-	// SSH hardening
+
 	ssh: {
 		permitRootLogin:        "prohibit-password"
 		passwordAuthentication: false
 		pubkeyAuthentication:   true
 	}
-	
-	// Docker security
+
 	docker: {
-		liverestore:    true
-		userlandProxy:  false
-		iptables:       true
+		liverestore:   true
+		userlandProxy: false
+		iptables:      true
 	}
 }

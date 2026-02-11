@@ -59,35 +59,33 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: 'kombify-admin/package-lock.json'
+          bun-version: latest
 
       - name: Install dependencies
         working-directory: kombify-admin
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: Generate Prisma client
         working-directory: kombify-admin
-        run: npx prisma generate
+        run: bunx prisma generate
 
       - name: Push database schema
         working-directory: kombify-admin
-        run: npx prisma db push
+        run: bunx prisma db push
 
       - name: Seed database
         working-directory: kombify-admin
-        run: npx prisma db seed
+        run: bunx prisma db seed
 
       - name: Generate CUE files
         working-directory: kombify-admin
         run: |
           TARGET="${{ inputs.target || 'all' }}"
           echo "Generating CUE files (target: $TARGET)"
-          npx ts-node scripts/generate-cue.ts "$TARGET"
+          bunx ts-node scripts/generate-cue.ts "$TARGET"
 
       - name: Setup CUE
         uses: cue-lang/setup-cue@v1.0.0

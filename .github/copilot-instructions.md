@@ -6,6 +6,21 @@ This file configures GitHub Copilot's behavior when working in the StackKits rep
 
 ---
 
+## Infrastructure: DNS & Azure Front Door
+
+**CRITICAL: Read this before making ANY infrastructure or domain-related changes.**
+
+- The domain `kombify.io` is registered at **Spaceship** (NOT Azure)
+- A **wildcard CNAME** record `*.kombify.io` points to **Azure Front Door (AFD)**
+- AFD manages ALL routing for every `*.kombify.io` subdomain
+- New subdomains do NOT require DNS/CNAME changes -- the wildcard covers them automatically
+- To add a new subdomain, configure a new **AFD routing rule** in Azure Portal
+- **NEVER ask the user to create CNAME records** -- the wildcard already handles this
+- Azure Front Door resource: `afd-kombify-prod` in resource group `rg-kombify-prod`
+- There is NO standalone stackKits app -- `stackkits.kombify.io` is a marketing website only
+
+---
+
 ## 🎯 Primary Workflow: Task-Driven Development with Beads
 
 Before starting ANY work, GitHub Copilot should:

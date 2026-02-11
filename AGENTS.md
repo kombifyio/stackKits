@@ -2,6 +2,24 @@
 
 This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get started.
 
+---
+
+## Infrastructure: DNS & Azure Front Door
+
+**CRITICAL: Read this before making ANY infrastructure or domain-related changes.**
+
+- The domain `kombify.io` is registered at **Spaceship** (NOT Azure)
+- A **wildcard CNAME** record `*.kombify.io` points to **Azure Front Door (AFD)**
+- AFD manages ALL routing for every `*.kombify.io` subdomain
+- New subdomains do NOT require DNS/CNAME changes -- the wildcard covers them automatically
+- To add a new subdomain, configure a new **AFD routing rule** pointing to the appropriate Azure backend
+- **NEVER ask the user to create CNAME records** -- the wildcard already handles this
+- Azure Front Door resource: `afd-kombify-prod` in resource group `rg-kombify-prod`
+
+This project is deployed to: **stackkits.kombify.io** (marketing website)
+
+---
+
 ## Quick Reference
 
 ```bash

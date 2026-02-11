@@ -1,230 +1,168 @@
 # Modern Homelab StackKit
 
-> ⚠️ **v1.1 PLANNED - Not part of v1.0 release**
-> 
-> **Status: Alpha/Planning** - Architecture designed, implementation not started
+> **Status: Alpha/Scaffolding** - Architecture designed, implementation in progress
 
-This StackKit is planned for **StackKits v1.1** and is **not functional** in the current release. The architecture and specifications below represent the planned design.
-
----
-
-## Prerequisites (v1.1)
-
-This StackKit has significant requirements compared to `base-homelab`:
-
-| Requirement | Details |
-|-------------|---------|
-| **Own Domain** | You must own a domain with DNS control (e.g., Cloudflare, Hetzner DNS) |
-| **Minimum 2 Nodes** | At least 1 cloud VPS + 1 local server |
-| **PaaS Platform** | Uses **Coolify** (not Dokploy like base-homelab) |
-| **Public IP** | Cloud node requires public IPv4 |
-| **DNS Provider API** | For automated TLS certificate provisioning |
-
-> 💡 **Looking for something simpler?** Use [`base-homelab`](../base-homelab/) instead - it works on a single local machine with Dokploy and is **fully functional in v1.0**.
+Hybrid homelab bridging local servers with cloud VPS via identity-aware proxies.
+Docker Compose per node, coordinated by Coolify or Dokploy.
 
 ---
 
-## What This StackKit Will Provide (v1.1)
-
-Multi-server hybrid homelab with **Docker + Coolify** for users who need:
-- Public-facing services with automatic TLS
-- Multi-node deployments (cloud + local servers)
-- Professional PaaS experience via Coolify
-- Secure remote access to on-premises servers via VPN
-
-## Planned Architecture
+## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                        PUBLIC INTERNET                              │
-└─────────────────────────────┬───────────────────────────────────────┘
-                              │ HTTPS (443)
-                              ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                     CLOUD NODE (VPS)                                │
-│  ┌─────────────────────────────────────────────────────────────┐   │
-│  │                    Traefik                                   │   │
-│  │              (Reverse Proxy + TLS)                           │   │
-│  └─────────────────────────────────────────────────────────────┘   │
-│  ┌──────────────┐ ┌──────────────┐ ┌──────────────────────────┐   │
-│  │  Coolify     │ │  Headscale   │ │  Prometheus + Grafana    │   │
-│  │  (PaaS)      │ │  (VPN Coord) │ │  Loki (Logs)             │   │
-│  └──────────────┘ └──────────────┘ └──────────────────────────┘   │
-│                              │ Tailscale VPN (100.x.x.x)           │
-└──────────────────────────────┼──────────────────────────────────────┘
-                              │
-        ┌─────────────────────┼─────────────────────┐
-        │                     │                     │
-        ▼                     ▼                     ▼
-┌───────────────┐   ┌───────────────┐   ┌───────────────┐
-│  LOCAL NODE 1 │   │  LOCAL NODE 2 │   │  LOCAL NODE N │
-│  (On-Prem)    │   │  (On-Prem)    │   │  (On-Prem)    │
-│               │   │               │   │               │
-│ ┌───────────┐ │   │ ┌───────────┐ │   │ ┌───────────┐ │
-│ │ Tailscale │ │   │ │ Tailscale │ │   │ │ Tailscale │ │
-│ │  Agent    │ │   │ │  Agent    │ │   │ │  Agent    │ │
-│ └───────────┘ │   │ └───────────┘ │   │ └───────────┘ │
-│ ┌───────────┐ │   │ ┌───────────┐ │   │ ┌───────────┐ │
-│ │  Docker   │ │   │ │  Docker   │ │   │ │  Docker   │ │
-│ │Workloads  │ │   │ │Workloads  │ │   │ │Workloads  │ │
-│ └───────────┘ │   │ └───────────┘ │   │ └───────────┘ │
-└───────────────┘   └───────────────┘   └───────────────┘
+                          PUBLIC INTERNET
+                               |
+                          HTTPS (443)
+                               v
+┌──────────────────────────────────────────────────────────┐
+│                    CLOUD NODE (VPS)                       │
+│                                                          │
+│  ┌────────────────────────────────────────────────────┐  │
+│  │              Traefik (Reverse Proxy + TLS)          │  │
+│  └─────────────────────┬──────────────────────────────┘  │
+│          ┌─────────────┼─────────────┐                   │
+│          v             v             v                   │
+│  ┌──────────┐  ┌──────────┐  ┌──────────────────────┐   │
+│  │ TinyAuth │  │ Coolify  │  │ Grafana / Victoria   │   │
+│  │ (Auth)   │  │ or       │  │ Metrics / Loki       │   │
+│  │          │  │ Dokploy  │  │ (Monitoring Add-On)  │   │
+│  └──────────┘  └──────────┘  └──────────────────────┘   │
+│                      │                                   │
+│              ┌───────┴────────┐                          │
+│              │ CF Tunnel      │                          │
+│              │ or Pangolin    │                          │
+│              └───────┬────────┘                          │
+└──────────────────────┼───────────────────────────────────┘
+                       │
+         ┌─────────────┼─────────────┐
+         v             v             v
+┌──────────────┐ ┌──────────────┐ ┌──────────────┐
+│ LOCAL NODE 1 │ │ LOCAL NODE 2 │ │ LOCAL NODE N │
+│              │ │              │ │              │
+│ Immich       │ │ Jellyfin     │ │ Ollama       │
+│ Home Asst.   │ │ *arr Stack   │ │ Open WebUI   │
+│ Cloudreve    │ │ Game Server  │ │ Gitea        │
+│              │ │              │ │              │
+│ Alloy Agent  │ │ Alloy Agent  │ │ Alloy Agent  │
+└──────────────┘ └──────────────┘ └──────────────┘
 ```
 
-## Comparison: base-homelab vs modern-homelab
+## Key Design Decisions
 
-| Feature | base-homelab (v1.0) | modern-homelab (v1.1 planned) |
-|---------|---------------------|-------------------------------|
-| **Status** | ✅ Functional | ⏳ Planned |
-| Nodes | Single server | Multi-server (cloud + local) |
-| Platform | Docker | Docker |
-| PaaS | Dokploy | **Coolify** |
-| Network | Local only | Public + VPN overlay |
-| Access | LAN/Tailscale | Internet + VPN |
-| DNS | Optional | **Required** (ACME) |
-| Monitoring | Optional | Full PLG stack |
-| Use case | Home network | Hybrid/public services |
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| **Container Runtime** | Docker Compose per node | No Swarm complexity, PaaS coordinates multi-node |
+| **Network Model** | Identity-Aware Proxy | LLDAP + Step-CA + TinyAuth make VPN optional |
+| **PaaS Selection** | Context-driven | Domain + wildcard = Coolify, else = Dokploy |
+| **CGNAT Bypass** | Tunnel (not VPN) | Cloudflare Tunnel (free) or Pangolin (self-hosted) |
+| **Monitoring** | VictoriaMetrics + Grafana | Drop-in Prometheus replacement, lower resource usage |
+| **Log Agent** | Grafana Alloy | Unified telemetry, replaces Promtail |
+| **Secrets** | SOPS + age | Git-native, no external dependencies |
 
-## Planned Core Components
+## PaaS Decision Logic
 
-### Required Services (planned for deployment)
-
-| Service | Role | Deployment |
-|---------|------|------------|
-| **Traefik** | Reverse proxy + TLS | Cloud node |
-| **Headscale** | VPN coordination | Cloud node |
-| **Tailscale Agent** | VPN client | All nodes |
-| **Coolify** | PaaS (container orchestration) | Cloud node |
-
-### Monitoring Stack (planned default variant)
-
-| Service | Role | Deployment |
-|---------|------|------------|
-| **Prometheus** | Metrics collection | Cloud node |
-| **Grafana** | Dashboards | Cloud node |
-| **Loki** | Log aggregation | Cloud node |
-| **Promtail** | Log shipper | All nodes |
-| **Uptime Kuma** | Status page | Cloud node |
-
-## Planned Variants
-
-> ⚠️ These variants are designed but not implemented yet.
-
-### default
-Full monitoring stack with Coolify, Headscale, and PLG (Prometheus/Loki/Grafana).
-
-### minimal
-Just Coolify + Headscale + Uptime Kuma. No heavy monitoring.
-
-### beszel
-Lightweight alternative using Beszel instead of PLG stack.
-
-## Requirements (v1.1)
-
-| Resource | Minimum | Recommended |
-|----------|---------|-------------|
-| Cloud Nodes | 1 | 1-2 |
-| Local Nodes | 1 | 1+ |
-| CPU (cloud) | 2 cores | 4 cores |
-| Memory (cloud) | 4 GB | 8 GB |
-| **Domain** | **Required** | **Required** |
-| **DNS Provider** | **Required** | Cloudflare/Hetzner |
-
-## Example Specification (v1.1)
-
-> ⚠️ This specification format is planned and may change before v1.1 release.
-
-```yaml
-# kombination.yaml
-apiVersion: kombify Stack.io/v1alpha1
-kind: Stack
-metadata:
-  name: my-homelab
-spec:
-  stackKit: modern-homelab
-  variant: default
-  
-  cluster:
-    name: homelab
-    domain: example.com
-    
-    nodes:
-      cloud:
-        - name: vps-1
-          provider:
-            type: hetzner
-            region: fsn1
-            size: cx21
-          network:
-            publicIp: "1.2.3.4"
-      
-      local:
-        - name: homeserver
-          provider:
-            type: bare-metal
-          network:
-            localIp: "192.168.1.100"
-    
-    vpn:
-      serverUrl: "https://hs.example.com"
-      baseDomain: "example.com"
-    
-    tls:
-      provider: letsencrypt
-      email: admin@example.com
 ```
+User has own domain AND can wildcard?
+  YES → Coolify (multi-node, git deploys, full PaaS)
+  NO  → Dokploy (traefik-me + MagicDNS, simpler setup)
+```
+
+## Identity Stack (not VPN)
+
+The identity-aware proxy model eliminates the need for VPN:
+
+| Layer | Service | Purpose |
+|-------|---------|---------|
+| L1 | **LLDAP** | Lightweight LDAP user directory |
+| L1 | **Step-CA** | Internal PKI, auto-renew certs, mTLS |
+| L2 | **TinyAuth** | ForwardAuth proxy for all Traefik routes |
+| L2 | **PocketID** | Optional OIDC provider with passkeys |
+
+VPN (Headscale/Tailscale) is available as the `vpn-overlay` add-on for users who want mesh networking.
+
+## Node Requirements
+
+| Node Type | Role | Minimum | Recommended |
+|-----------|------|---------|-------------|
+| **Cloud** (VPS) | Ingress, management | 2 CPU, 4 GB RAM, 20 GB | 4 CPU, 8 GB RAM, 50 GB |
+| **Local** (On-prem) | Compute, storage | 2 CPU, 4 GB RAM, 50 GB | 4 CPU, 16 GB RAM, 200 GB |
+
+Minimum topology: 1 cloud + 1 local node.
+
+## Add-On Ecosystem
+
+### Infrastructure Add-Ons
+
+| Add-On | Services | Placement | License |
+|--------|----------|-----------|---------|
+| `tunnel` | Cloudflare Tunnel / Pangolin | Cloud | Free / AGPL-3 |
+| `monitoring` | VictoriaMetrics, Grafana, Loki, Alloy | Cloud + Daemonset | Apache-2 / AGPL-3 |
+| `backup` | Restic + scheduler | Daemonset | BSD-2 |
+| `vpn-overlay` | Headscale / Tailscale | Cloud + Daemonset | BSD-3 |
+| `authelia` | Authelia (replaces TinyAuth) | Cloud | Apache-2 |
+
+### Use Case Add-Ons (10 Homelab Scenarios)
+
+| Add-On | Services | Placement | License |
+|--------|----------|-----------|---------|
+| `vault` | Vaultwarden | Cloud | AGPL-3 |
+| `photos` | Immich | Local | AGPL-3 |
+| `media` | Jellyfin + Sonarr + Radarr + Prowlarr | Local | GPL-2 / GPL-3 |
+| `file-sharing` | Cloudreve / OpenCloud / Nextcloud | Local | GPL-3 / Apache-2 |
+| `smart-home` | Home Assistant + Mosquitto + Zigbee2MQTT | Local | Apache-2 |
+| `ai-workloads` | Ollama + Open WebUI | Local (GPU) | MIT / BSD-3 |
+| `calendar` | Radicale + Bloben | Local | GPL-3 / AGPL-3 |
+| `mail` | Stalwart (IMAP/JMAP/SMTP + CalDAV) | Cloud | AGPL-3 |
+| `dev-platform` | Gitea + Woodpecker CI | Local | MIT / Apache-2 |
+| `gameserver` | Generic game server framework | Local | - |
+| `remote-desktop` | Apache Guacamole | Local | Apache-2 |
 
 ## File Structure
 
 ```
 modern-homelab/
-├── stackkit.yaml      # Metadata and variant definitions
-├── stackkit.cue       # Main CUE schema
-├── services.cue       # Service definitions (Docker + Coolify)
-├── defaults.cue       # Default values per variant
-├── README.md          # This file
-├── templates/
-│   └── simple/        # OpenTofu templates (TODO)
-├── tests/
-│   └── *.cue          # CUE validation tests
-└── variants/
-    └── *.cue          # Variant-specific configs
+├── stackkit.yaml          # StackKit metadata and addon ecosystem
+├── stackfile.cue          # Main CUE schema (#ModernHomelabStack)
+├── services.cue           # Core platform service definitions
+├── defaults.cue           # Context-driven default values
+├── README.md              # This file
+├── contexts/
+│   ├── cloud.cue          # Cloud node context defaults
+│   └── local.cue          # Local node context defaults
+└── templates/
+    └── simple/            # OpenTofu templates (TODO)
 ```
 
-## Implementation Status
+## Deployment Modes
 
-> **Target Release: v1.1**
+### Simple (Default)
+- OpenTofu-only Day-1 provisioning
+- Direct state management
+- Simple rollback via state
 
-### Completed (Design Phase)
-- [x] StackKit metadata structure (stackkit.yaml)
-- [x] CUE schema design (stackkit.cue)
-- [x] Service definitions (services.cue)
-- [x] Default values structure (defaults.cue)
-- [x] Architecture documentation
+### Advanced
+- Terramate-orchestrated with drift detection
+- Stack ordering: foundation → platform → tunnel → services
+- Day-2 operations: drift detection, rolling updates, change sets
 
-### Not Started (Implementation)
-- [ ] OpenTofu templates
-- [ ] Coolify integration
-- [ ] Headscale/Tailscale automation
-- [ ] Variant configurations
-- [ ] Integration tests
-- [ ] End-to-end deployment testing
+## Comparison with base-homelab
 
-## Changelog
-
-### v0.1.0-alpha (2025-01) - Design Phase
-- Initial architecture design
-- Docker + Coolify architecture specification
-- Service definitions: Traefik, Headscale, Coolify, PLG monitoring
-- Multi-node hybrid topology design (cloud + local nodes)
-
----
+| Feature | base-homelab | modern-homelab |
+|---------|-------------|----------------|
+| Nodes | Single server | Multi-server (cloud + local) |
+| PaaS | Dokploy (default) | Coolify or Dokploy (context-driven) |
+| Network | Local / LAN | Identity-aware proxy + tunnel |
+| Domain | Optional | Required for Coolify, optional for Dokploy |
+| Monitoring | Uptime Kuma / Beszel | VictoriaMetrics + Grafana + Loki (add-on) |
+| Identity | TinyAuth (optional) | TinyAuth (always on) + PocketID (optional) |
+| Use Cases | Basic services | Full 10-scenario add-on ecosystem |
 
 ## See Also
 
-- [`base-homelab`](../base-homelab/) - **Recommended for v1.0** - Single-node homelab with Dokploy
-- [`ha-homelab`](../ha-homelab/) - High-availability homelab (also v1.1 planned)
+- [`base-homelab`](../base-homelab/) - Single-node homelab with Dokploy
+- [`ha-homelab`](../ha-homelab/) - High-availability homelab (planned)
+- [`addons/`](../addons/) - Composable add-on ecosystem
 
 ## License
 
-MIT
+Apache-2.0

@@ -1,249 +1,344 @@
-// Package modern_homelab - CUE Schema Definition
-// 
-// STATUS: v1.1 PLANNED - Not part of v1.0 release
+// =============================================================================
+// STACKKIT: MODERN-HOMELAB - Hybrid Infrastructure Pattern
+// =============================================================================
 //
-// Modern Homelab = Multi-server Docker setup with hybrid (cloud + local) topology
-// Platform: Docker + Coolify (requires own domain)
-// Network: Public + VPN Overlay (Headscale/Tailscale)
+// Architecture v4: StackKit + Context + Add-Ons
 //
-// KEY DIFFERENCES FROM BASE-HOMELAB:
-//   - Multi-node deployment (cloud + local servers)
-//   - Coolify required (for multi-node management)
-//   - VPN overlay for secure node communication
-//   - Public access is default, not optional
+// Architecture Pattern: Hybrid Infrastructure
+//   Local nodes (compute, storage, data sovereignty) bridged with
+//   cloud nodes (public ingress, management, 24/7 availability)
+//   via identity-aware proxies and tunnels -- VPN is optional.
 //
-// PREREQUISITES:
-//   - Own domain with DNS control
-//   - At least 2 nodes (1 cloud, 1 local)
-//   - Coolify (not Dokploy)
+// Network Model: Identity-Aware Proxy (not VPN-first)
+//   - LLDAP + Step-CA provide auto-certs and mTLS
+//   - TinyAuth provides ForwardAuth for all services
+//   - Cloudflare Tunnel or Pangolin bypasses CGNAT/DS-Lite
+//   - VPN (Headscale/Tailscale) available as optional add-on
+//
+// PaaS Decision (context-driven):
+//   - User has domain + wildcard → Coolify (multi-node, git deploys)
+//   - User has no domain          → Dokploy (traefik-me + MagicDNS)
+//
+// Container Runtime: Docker Compose per node (no Swarm)
+//   Coolify/Dokploy coordinates multi-node deployments via SSH.
+// =============================================================================
 
 package modern_homelab
 
-import "github.com/kombihq/stackkits/base"
+import (
+	"list"
+)
 
 // =============================================================================
-// STACKKIT DEFINITION
+// MAIN SCHEMA: #ModernHomelabStack
 // =============================================================================
 
-// #StackKitDefinition - Main schema for Modern Homelab
-// Extends base.#BaseStackKit with multi-node hybrid topology
-#StackKitDefinition: base.#BaseStackKit & {
-	// Metadata follows base schema
-	metadata: {
-		name:        "modern-homelab"
-		displayName: "Modern Homelab"
-		version:     "0.1.0-alpha"
-		description: "Multi-server hybrid homelab with Docker + Coolify (v1.1 planned)"
-		author:      "KombiStack"
-		license:     "Apache-2.0"
-		tags: ["homelab", "hybrid", "docker", "coolify", "multi-node", "v1.1"]
-	}
-}
-
-// =============================================================================
-// MULTI-NODE TOPOLOGY
-// =============================================================================
-
-// #NodeType defines the role of a node in the cluster
-#NodeType: "cloud" | "local"
-
-// #NodeDefinition - Base for all nodes
-#NodeDefinition: {
-	name:     string
-	type:     #NodeType
-	hostname: string | *name
-	
-	// Provider info (for IaC)
-	provider: {
-		type: "hetzner" | "digitalocean" | "vultr" | "linode" | "proxmox" | "bare-metal" | "local"
-		
-		// Cloud provider specifics (optional)
-		if type != "bare-metal" && type != "local" {
-			region?: string
-			size?:   string
-			image?:  string
-		}
-	}
-	
-	// Network config
-	network: {
-		// Public IP (only for cloud nodes)
-		if type == "cloud" {
-			publicIp: string
-		}
-		
-		// Private/Tailscale IP (all nodes)
-		tailscaleIp?: string
-		
-		// Local network (for local nodes)
-		if type == "local" {
-			localIp: string
-			subnet:  string | *"192.168.1.0/24"
-		}
-	}
-	
-	// Docker configuration
-	docker: {
-		installed: bool | *true
-		version:   string | *"24.0"
-		dataRoot:  string | *"/var/lib/docker"
-	}
-	
-	// SSH access (used by Coolify)
-	ssh: {
-		user: string | *"root"
-		port: int | *22
-		// Key is managed by Coolify
-	}
-	
-	// Node-specific labels for service placement
-	labels: [string]: string
-}
-
-// #CloudNode - Entry point node with public IP
-#CloudNode: #NodeDefinition & {
-	type: "cloud"
-	
-	labels: {
-		"kombistack.io/role": "entry-point"
-		"kombistack.io/public": "true"
-	}
-}
-
-// #LocalNode - On-premises node behind NAT
-#LocalNode: #NodeDefinition & {
-	type: "local"
-	
-	labels: {
-		"kombistack.io/role": "worker"
-		"kombistack.io/public": "false"
-	}
-}
-
-// =============================================================================
-// CLUSTER CONFIGURATION
-// =============================================================================
-
-// #ClusterConfig - Multi-node cluster definition
-#ClusterConfig: {
-	name:   string
-	domain: string  // Public domain for services
-	
-	// Node definitions
-	nodes: {
-		// At least one cloud node required
-		cloud: [#CloudNode, ...#CloudNode]
-		
-		// Local nodes are optional
-		local?: [...#LocalNode]
-	}
-	
-	// VPN overlay configuration
-	vpn: #VpnConfig
-	
-	// TLS configuration
-	tls: {
-		provider:  "letsencrypt" | "letsencrypt-staging" | "custom"
-		email:     string
-		wildcardEnabled: bool | *false
-	}
-	
-	// DNS provider (for automatic DNS)
-	dns?: {
-		provider: "cloudflare" | "route53" | "hetzner" | "manual"
-		if provider != "manual" {
-			apiToken: string
-		}
-	}
-}
-
-// #VpnConfig - Headscale VPN configuration
-#VpnConfig: {
-	enabled:     bool | *true
-	provider:    "headscale"
-	
-	// Headscale settings
-	serverUrl:   string  // https://hs.domain.com
-	baseDomain:  string  // domain.com
-	
-	// DERP (relay) settings
-	derpEnabled: bool | *true
-	derpRegions: [...string] | *["default"]
-	
-	// MagicDNS for internal resolution
-	magicDns:    bool | *true
-	
-	// Pre-auth keys (one per node type)
-	preAuthKeys: {
-		cloud: string
-		local: string
-	}
-	
-	// Advertised routes from local nodes
-	advertisedRoutes: [...string]
-}
-
-// =============================================================================
-// STACK CONFIGURATION (kombination.yaml)
-// =============================================================================
-
-// #ModernHomelabStack - Complete stack configuration
 #ModernHomelabStack: {
-	apiVersion: "kombistack.io/v1alpha1"
-	kind:       "Stack"
-	
-	metadata: {
-		name:      string
-		namespace: string | *"default"
+	// Metadata
+	meta: #StackMeta
+
+	// Deployment Mode
+	deploymentMode: *"simple" | "advanced"
+
+	// PaaS selection (context-driven)
+	paas: *"coolify" | "dokploy"
+
+	// Domain configuration
+	domain: #DomainConfig
+
+	// Drift detection (triggers advanced mode)
+	driftDetection?: {
+		enabled:  bool | *false
+		schedule: string | *"0 */6 * * *"
 	}
-	
-	spec: {
-		stackKit: "modern-homelab"
-		variant:  "default" | "minimal" | "beszel" | *"default"
-		
-		// Cluster definition
-		cluster: #ClusterConfig
-		
-		// Service overrides
-		services?: {
-			[Name=string]: {
-				enabled?: bool
-				config?:  _
+
+	// Node configuration (minimum 2: 1 cloud + 1 local)
+	nodes: [...#HybridNode] & list.MinItems(2)
+
+	// At least one cloud node and one local node
+	_cloudNodes: [for n in nodes if n.type == "cloud" {n}]
+	_localNodes: [for n in nodes if n.type == "local" {n}]
+	_hasCloud: len(_cloudNodes) >= 1
+	_hasLocal: len(_localNodes) >= 1
+
+	// Services (core platform services)
+	services: #CoreServiceSet
+
+	// Add-ons (composable extensions)
+	addons?: #AddonSelection
+
+	// Secrets configuration
+	secrets: #SecretsConfig
+
+	// Deployment config (auto-generated)
+	_deployment: #DeploymentConfig & {
+		if deploymentMode == "simple" {
+			mode: "simple"
+			day1: {
+				engine: "opentofu"
+				actions: ["init", "plan", "apply"]
+			}
+			day2: enabled: false
+		}
+		if deploymentMode == "advanced" {
+			mode: "advanced"
+			day1: {
+				engine: "opentofu"
+				actions: ["init", "plan", "apply"]
+			}
+			day2: {
+				enabled: true
+				engine:  "terramate"
+				actions: ["drift", "update", "destroy"]
+				features: {
+					drift_detection: true
+					change_sets:     true
+					rolling_updates: true
+					stack_ordering:  true
+				}
 			}
 		}
-		
-		// User applications (deployed via Coolify)
-		applications?: [...#ApplicationDefinition]
 	}
 }
 
-// #ApplicationDefinition - User application (deployed via Coolify)
-#ApplicationDefinition: {
-	name:   string
-	type:   "dockerfile" | "docker-compose" | "nixpacks" | "static"
-	source: {
-		type: "git" | "local"
-		if type == "git" {
-			url:    string
-			branch: string | *"main"
+// =============================================================================
+// METADATA
+// =============================================================================
+
+#StackMeta: {
+	name:    string & =~"^[a-z][a-z0-9-]*$"
+	version: string | *"4.0.0"
+}
+
+// =============================================================================
+// DOMAIN CONFIGURATION
+// =============================================================================
+
+#DomainConfig: {
+	// Primary domain (required for Coolify, optional for Dokploy)
+	name?: string
+
+	// Can use wildcard SSL (*.domain.com)
+	wildcard: bool | *false
+
+	// DNS provider for automatic management
+	dnsProvider?: "cloudflare" | "hetzner" | "route53" | "manual"
+
+	// ACME email for Let's Encrypt
+	acmeEmail?: string
+}
+
+// =============================================================================
+// DEPLOYMENT CONFIGURATION
+// =============================================================================
+
+#DeploymentConfig: {
+	mode: "simple" | "advanced"
+
+	day1: {
+		engine: "opentofu"
+		actions: [...string]
+	}
+
+	day2: {
+		enabled: bool
+		engine?: string
+		actions?: [...string]
+		features?: {
+			drift_detection: bool
+			change_sets:     bool
+			rolling_updates: bool
+			stack_ordering:  bool
 		}
 	}
-	
-	// Deployment target
-	placement: {
-		node:   string  // Node name
-		domain: string  // Subdomain
-	}
-	
-	// Environment
-	env?: [string]: string
 }
 
 // =============================================================================
-// VALIDATION RULES
+// NODE DEFINITIONS
 // =============================================================================
 
-// Validation constraints are enforced via schema structure
-// - Cloud nodes: enforced by [...#CloudNode] requiring at least one element
-// - Domain: required field in #ClusterConfig
-// - VPN: optional, validated when local nodes are present
+#HybridNode: {
+	id:   string & =~"^[a-z][a-z0-9-]*$"
+	name: string & =~"^[a-z][a-z0-9-]*$"
+
+	// Node type determines placement and capabilities
+	type: "cloud" | "local"
+
+	// Role in the hybrid architecture
+	role: *"worker" | "main"
+
+	// Host address
+	host: string
+
+	// Compute resources
+	compute: #ComputeResources
+
+	// OS configuration
+	os?: #OSConfig
+
+	// Cloud provider (only for cloud nodes)
+	if type == "cloud" {
+		provider?: #CloudProvider
+	}
+
+	// GPU (only for local nodes typically)
+	gpu?: #GPUSpec
+
+	// Node labels for placement decisions
+	labels?: [string]: string
+
+	enabled: bool | *true
+}
+
+#ComputeResources: {
+	cpuCores:  int & >=1
+	ramGB:     int & >=2
+	storageGB: int & >=20
+}
+
+#OSConfig: {
+	family:  *"debian" | "rhel"
+	distro:  *"ubuntu" | "debian" | "rocky" | "alma"
+	version: string | *"24.04"
+}
+
+#CloudProvider: {
+	name:    "hetzner" | "digitalocean" | "vultr" | "linode"
+	region?: string
+	size?:   string
+	image?:  string
+}
+
+#GPUSpec: {
+	vendor: "nvidia" | "amd" | "intel"
+	model?: string
+	vramGB?: int
+}
+
+// =============================================================================
+// CORE SERVICE SET (Platform Layer)
+// =============================================================================
+
+#CoreServiceSet: {
+	// Always present on cloud node
+	traefik: #ServiceToggle & {enabled: true}
+
+	// PaaS (one of)
+	coolify?: #ServiceToggle
+	dokploy?: #ServiceToggle
+
+	// Identity-aware proxy (default: TinyAuth)
+	tinyauth: #ServiceToggle & {enabled: true}
+
+	// OIDC provider (optional)
+	pocketid?: #ServiceToggle
+
+	// Log viewer
+	dozzle: #ServiceToggle
+
+	// Test service
+	whoami?: #ServiceToggle
+
+	// External uptime monitor (cloud node)
+	uptimeKuma?: #ServiceToggle
+}
+
+#ServiceToggle: {
+	enabled: bool | *false
+}
+
+// =============================================================================
+// ADDON SELECTION
+// =============================================================================
+
+#AddonSelection: {
+	// Infrastructure add-ons
+	tunnel?:      #AddonToggle
+	vpnOverlay?:  #AddonToggle
+	monitoring?:  #AddonToggle
+	backup?:      #AddonToggle
+	authelia?:    #AddonToggle
+
+	// Use case add-ons (the 10 homelab scenarios)
+	vault?:        #AddonToggle  // Password Manager
+	photos?:       #AddonToggle  // Photo Gallery
+	media?:        #AddonToggle  // Media Streaming
+	fileSharing?:  #AddonToggle  // File Sharing
+	smartHome?:    #AddonToggle  // Smart Home
+	aiWorkloads?:  #AddonToggle  // AI/LLM
+	calendar?:     #AddonToggle  // CalDAV/CardDAV
+	mail?:         #AddonToggle  // Mail Server
+	devPlatform?:  #AddonToggle  // Dev Environment
+	gameserver?:   #AddonToggle  // Game Servers
+	remoteDesktop?: #AddonToggle // Virtual PC
+
+	// Constraint: mail add-on includes CalDAV, so calendar is redundant
+	if mail != _|_ if mail.enabled {
+		calendar?: enabled: false
+	}
+}
+
+#AddonToggle: {
+	enabled: bool | *false
+	variant?: string
+}
+
+// =============================================================================
+// SECRETS CONFIGURATION
+// =============================================================================
+
+#SecretsConfig: {
+	// Provider for encrypted secrets
+	provider: *"sops-age" | "sops-gpg"
+
+	// Age key file location
+	ageKeyFile: string | *"/etc/sops/age-key.txt"
+
+	// Encrypted secrets file
+	encryptedSecretsFile: string | *"secrets.enc.yaml"
+}
+
+// =============================================================================
+// PLACEMENT RULES
+// =============================================================================
+// These rules define WHERE services run in the hybrid topology.
+
+#PlacementRules: {
+	// Cloud node: public-facing, management, always-on
+	cloud: [
+		"traefik",
+		"coolify",
+		"dokploy",
+		"tinyauth",
+		"pocketid",
+		"uptime-kuma",
+		"vaultwarden",
+		"grafana",
+		"victoriametrics",
+		"loki",
+		"stalwart",
+	]
+
+	// Local node: compute, storage, data sovereignty
+	local: [
+		"immich",
+		"jellyfin",
+		"ollama",
+		"open-webui",
+		"home-assistant",
+		"cloudreve",
+		"nextcloud",
+		"radicale",
+		"guacamole",
+		"minio",
+		"gitea",
+	]
+
+	// All nodes: agents and telemetry
+	daemonset: [
+		"grafana-alloy",
+		"cadvisor",
+		"node-exporter",
+		"restic-agent",
+	]
+}

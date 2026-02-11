@@ -4,7 +4,7 @@ min_version = "2024.11.1"
 
 [tools]
 go = "1.24.0"
-node = "20"
+node = "22"
 
 [env]
 PROJECT_NAME = "kombify-stackkits"
@@ -103,6 +103,16 @@ run = "bun run build"
 description = "Preview production build"
 dir = "website-v2"
 run = "bun run preview"
+
+[tasks."test:e2e:website"]
+description = "Run website E2E tests"
+dir = "website-v2"
+run = "bunx playwright test"
+
+[tasks."test:visual:website"]
+description = "Run website visual regression tests"
+dir = "website-v2"
+run = "bunx playwright test --config=playwright.visual.config.ts"
 
 [tasks."docker:website"]
 description = "Build and run website Docker container locally"
