@@ -812,9 +812,8 @@ func TestCORSMiddleware(t *testing.T) {
 		srv.Handler().ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusOK, rec.Code)
-		// Non-matching origin still gets the configured origin echoed back
-		// since our CORS middleware does prefix matching on the allow list
-		assert.NotEmpty(t, rec.Header().Get("Access-Control-Allow-Origin"))
+		// Non-matching origins should NOT get Access-Control-Allow-Origin (CORS denied)
+		assert.Empty(t, rec.Header().Get("Access-Control-Allow-Origin"))
 	})
 
 	t.Run("preflight OPTIONS", func(t *testing.T) {

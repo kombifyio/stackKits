@@ -3,6 +3,7 @@ package api
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -195,10 +196,8 @@ func corsMiddleware(origins []string) func(http.Handler) http.Handler {
 				if matched {
 					w.Header().Set("Access-Control-Allow-Origin", reqOrigin)
 					w.Header().Set("Vary", "Origin")
-				} else {
-					w.Header().Set("Access-Control-Allow-Origin", origins[0])
-					w.Header().Set("Vary", "Origin")
 				}
+				// Non-matching origins get NO Access-Control-Allow-Origin header (CORS denied)
 			} else {
 				w.Header().Set("Access-Control-Allow-Origin", allowOrigin)
 			}
@@ -354,7 +353,8 @@ func apiKeyMiddleware(validKey string) func(http.Handler) http.Handler {
 				))
 				return
 			}
-			if key != validKey {
+			// Use constant-time comparison to prevent timing attacks
+			if subtle.ConstantTimeCompare([]byte(key), []byte(validKey)) != 1 {
 				writeStructuredError(w, r, http.StatusForbidden, skerrors.NewAuthError(
 					"invalid_api_key", "invalid API key",
 					skerrors.WithSuggestion("Verify your API key is correct"),

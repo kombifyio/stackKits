@@ -638,7 +638,7 @@ func TestPlanExitCode2(t *testing.T) {
 
 	t.Run("plan exit code 2 means changes detected, not error", func(t *testing.T) {
 		ctx := context.Background()
-		result, err := executor.Plan(ctx, "")
+		result, err := executor.Plan(ctx, "", false)
 		require.NoError(t, err)
 		// Exit code 2 with plan is treated as success (changes detected)
 		assert.True(t, result.Success)

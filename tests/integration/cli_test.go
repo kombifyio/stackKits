@@ -93,11 +93,11 @@ func TestCLIInitCommand(t *testing.T) {
 
 	t.Run("requires stackkit name", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		cmd := exec.Command(binary, "init", "-C", tmpDir)
+		cmd := exec.Command(binary, "init", "--non-interactive", "-C", tmpDir)
 		output, err := cmd.CombinedOutput()
 
 		assert.Error(t, err)
-		assert.Contains(t, string(output), "StackKit name required")
+		assert.Contains(t, string(output), "stackkit name required in non-interactive mode")
 	})
 
 	t.Run("initializes with stackkit", func(t *testing.T) {

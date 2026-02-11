@@ -51,6 +51,11 @@ func WithAutoApprove(autoApprove bool) ExecutorOption {
 	}
 }
 
+// SetAutoApprove sets the auto-approve flag dynamically
+func (e *Executor) SetAutoApprove(autoApprove bool) {
+	e.autoApprove = autoApprove
+}
+
 // NewExecutor creates a new OpenTofu executor
 func NewExecutor(opts ...ExecutorOption) *Executor {
 	e := &Executor{
@@ -81,8 +86,11 @@ func (e *Executor) Init(ctx context.Context) (*Result, error) {
 }
 
 // Plan runs tofu plan
-func (e *Executor) Plan(ctx context.Context, outFile string) (*Result, error) {
+func (e *Executor) Plan(ctx context.Context, outFile string, destroy bool) (*Result, error) {
 	args := []string{"plan", "-input=false", "-detailed-exitcode"}
+	if destroy {
+		args = append(args, "-destroy")
+	}
 	if outFile != "" {
 		args = append(args, fmt.Sprintf("-out=%s", outFile))
 	}

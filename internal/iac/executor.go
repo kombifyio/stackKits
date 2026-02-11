@@ -26,7 +26,7 @@ const (
 type Executor interface {
 	// Core operations
 	Init(ctx context.Context) error
-	Plan(ctx context.Context, outFile string) (*PlanResult, error)
+	Plan(ctx context.Context, outFile string, destroy bool) (*PlanResult, error)
 	Apply(ctx context.Context, autoApprove bool, planFile string) (*ExecResult, error)
 	Destroy(ctx context.Context, autoApprove bool) (*ExecResult, error)
 	Validate(ctx context.Context) (*ExecResult, error)
@@ -170,8 +170,8 @@ func (e *OpenTofuExecutor) Init(ctx context.Context) error {
 	return nil
 }
 
-func (e *OpenTofuExecutor) Plan(ctx context.Context, outFile string) (*PlanResult, error) {
-	result, err := e.executor.Plan(ctx, outFile)
+func (e *OpenTofuExecutor) Plan(ctx context.Context, outFile string, destroy bool) (*PlanResult, error) {
+	result, err := e.executor.Plan(ctx, outFile, destroy)
 	if err != nil {
 		return nil, err
 	}
@@ -188,6 +188,7 @@ func (e *OpenTofuExecutor) Plan(ctx context.Context, outFile string) (*PlanResul
 }
 
 func (e *OpenTofuExecutor) Apply(ctx context.Context, autoApprove bool, planFile string) (*ExecResult, error) {
+	e.executor.SetAutoApprove(autoApprove)
 	result, err := e.executor.Apply(ctx, planFile)
 	if err != nil {
 		return nil, err
@@ -202,6 +203,7 @@ func (e *OpenTofuExecutor) Apply(ctx context.Context, autoApprove bool, planFile
 }
 
 func (e *OpenTofuExecutor) Destroy(ctx context.Context, autoApprove bool) (*ExecResult, error) {
+	e.executor.SetAutoApprove(autoApprove)
 	result, err := e.executor.Destroy(ctx)
 	if err != nil {
 		return nil, err
@@ -261,8 +263,8 @@ func (e *OpenTofuExecutor) DetectDrift(ctx context.Context) (*DriftResult, error
 		return nil, fmt.Errorf("refresh failed: %w", err)
 	}
 
-	// Then plan to see differences
-	planResult, err := e.Plan(ctx, "")
+	// Then plan to see differences (not a destroy plan for drift detection)
+	planResult, err := e.Plan(ctx, "", false)
 	if err != nil {
 		return nil, err
 	}
@@ -340,8 +342,8 @@ func (e *TerramateExecutor) Init(ctx context.Context) error {
 	return nil
 }
 
-func (e *TerramateExecutor) Plan(ctx context.Context, outFile string) (*PlanResult, error) {
-	// Terramate orchestrates tofu plan across stacks; outFile is ignored
+func (e *TerramateExecutor) Plan(ctx context.Context, outFile string, destroy bool) (*PlanResult, error) {
+	// Terramate orchestrates tofu plan across stacks; outFile and destroy are handled by Terramate
 	result, err := e.executor.RunPlan(ctx)
 	if err != nil {
 		return nil, err

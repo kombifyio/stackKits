@@ -84,7 +84,7 @@ func runPlan(cmd *cobra.Command, args []string) error {
 		planFile = filepath.Join(deployDir, "plan.tfplan")
 	}
 
-	planResult, err := executor.Plan(ctx, planFile)
+	planResult, err := executor.Plan(ctx, planFile, planDestroy)
 	if err != nil {
 		return fmt.Errorf("plan error: %w", err)
 	}
