@@ -3,6 +3,11 @@
 > Research findings for the `ha-homelab` StackKit. No Kubernetes.
 > Docker Compose per node with coordination layer for high availability.
 > Date: 2026-02-11
+>
+> **LICENSE UPDATE (2026-02-11)**: All tool recommendations have been re-evaluated
+> from the perspective of kombify as a SaaS vendor. See `docs/license-compliance-saas.md`
+> for the full analysis. Key changes: Valkey replaces Redis, CoreDNS+etcd replaces Consul,
+> Nomad dropped as default orchestration.
 
 ---
 
@@ -19,8 +24,8 @@ This is not just "add more servers." It requires new infrastructure primitives:
 | **Load balancing** | Traefik on one node | HAProxy + Keepalived (VIP) |
 | **Storage** | Local volumes per node | Replicated storage (GlusterFS or DRBD+ZFS) |
 | **Databases** | Single PostgreSQL | Patroni cluster (PostgreSQL HA) |
-| **Cache** | Single Redis | Redis Sentinel (3-node quorum) |
-| **Service discovery** | Static Docker Compose | Consul or DNS-based |
+| **Cache** | Single Redis/Valkey | **Valkey** Sentinel (3-node quorum) |
+| **Service discovery** | Static Docker Compose | **CoreDNS + etcd** (DNS-based) |
 | **Inter-node security** | Optional mTLS | Mandatory mTLS (Step-CA RA mode) |
 | **Secrets** | SOPS+age (static) | SOPS+age + rotation strategy |
 | **Coordination** | PaaS (Coolify/Dokploy) | PaaS + health-based failover scripts |
@@ -35,17 +40,17 @@ HA requires **odd-numbered node counts** (3, 5, 7) for consensus. With 2 nodes, 
 
 **Recommended minimum topology:**
 ```
-Cloud VPS 1  --- entry point, HAProxy+Keepalived MASTER, Consul server
-Cloud VPS 2  --- entry point, HAProxy+Keepalived BACKUP, Consul server
-Local Node 1 --- compute + storage, Consul server, GlusterFS brick
+Cloud VPS 1  --- entry point, HAProxy+Keepalived MASTER, etcd member
+Cloud VPS 2  --- entry point, HAProxy+Keepalived BACKUP, etcd member
+Local Node 1 --- compute + storage, etcd member, GlusterFS brick
 ```
 
 For full local HA (data sovereignty):
 ```
 Cloud VPS 1  --- entry point, HAProxy+Keepalived
-Local Node 1 --- compute + storage, Consul server
-Local Node 2 --- compute + storage, Consul server
-Local Node 3 --- compute + storage, Consul server
+Local Node 1 --- compute + storage, etcd member
+Local Node 2 --- compute + storage, etcd member
+Local Node 3 --- compute + storage, etcd member
 ```
 
 ---
@@ -247,35 +252,51 @@ Many homelab apps use SQLite (Vaultwarden, Radicale, TinyAuth, etc.).
 
 ## 6. Service Discovery
 
-### 6.1 Consul
+> **LICENSE UPDATE**: Consul (BSL-1.1) is **not recommended** for kombify as a SaaS vendor.
+> HashiCorp's BSL restricts "offering the Licensed Work to third parties on a hosted or
+> embedded basis which is competitive with HashiCorp's products." kombify shipping
+> infrastructure configs with Consul is a gray area at best. See `docs/license-compliance-saas.md`.
+
+### 6.1 CoreDNS + etcd (Recommended)
 
 In modern-homelab, services are at known IPs in docker-compose files. In ha-homelab, services can move between nodes. You need service discovery.
 
+**CoreDNS + etcd provides:**
+- **Service registry**: Services register via HTTP PUT to etcd, CoreDNS reads records
+- **DNS interface**: `myservice.ha.local` resolves to healthy instances
+- **KV store**: etcd provides distributed KV (also needed by Patroni)
+- **Health checking**: External health-check script updates etcd entries (removes unhealthy)
+
+**Architecture:**
+- etcd cluster (3 nodes, already needed for Patroni)
+- CoreDNS with etcd plugin, serving DNS-SD records
+- Health-check sidecar per node: periodically checks services, updates etcd
+- Services resolve peers via DNS
+
+**Licenses:** CoreDNS=Apache-2, etcd=Apache-2. Zero risk for SaaS use.
+
+**Trade-off vs Consul:**
+- Consul has built-in health checking; CoreDNS+etcd needs external health scripts
+- Consul has gossip protocol for fast convergence; etcd uses Raft (slightly slower failover detection)
+- etcd is already required by Patroni, so this adds only CoreDNS + health scripts
+
+### 6.2 Consul (Opt-in Add-on, License Warning)
+
+Consul remains the most feature-complete service discovery tool for Docker environments. If a customer has their own HashiCorp license or the BSL is acceptable for their use case, it can be offered as an opt-in add-on.
+
 **Consul provides:**
-- **Service registry**: Services register themselves, others discover via DNS or HTTP API
-- **Health checking**: Built-in TCP/HTTP/script checks
-- **KV store**: Configuration data, feature flags, leader election
-- **DNS interface**: `myservice.service.consul` resolves to healthy instances
-- **Prepared queries**: Failover routing logic
-
-**Docker integration:**
-- `registrator` container (auto-registers Docker containers as Consul services)
-- Or manual registration via service definitions
-
-**Why Consul over alternatives:**
-- Works with Docker Compose (no K8s needed)
+- Service registry, health checking, KV store, DNS interface, prepared queries
+- Docker integration via `registrator`
 - Single binary, low resource usage
-- HashiCorp ecosystem (pairs with Nomad if needed later)
-- etcd is an alternative for KV only, but Consul does service discovery + health checks too
 
-**License:** Consul=BSL-1.1 (was MPL-2, changed 2023). For homelab use this is fine. If BSL is a concern, consider DNS-based discovery as fallback.
+**License:** BSL-1.1. **Not safe for kombify's default StackKit without a commercial license from HashiCorp.** Contact licensing@hashicorp.com if needed.
 
-### 6.2 DNS-Based Discovery (Simpler Alternative)
+### 6.3 Simple DNS (Minimal Alternative)
 
-If Consul feels too heavy:
+For stable clusters where services don't move often:
 - CoreDNS with file plugin, updated by a cron script
-- Or simple `/etc/hosts` + Ansible push
-- Less dynamic, but works for stable clusters
+- Or simple `/etc/hosts` management via deploy scripts
+- Less dynamic, but works for predictable clusters
 
 ---
 
@@ -294,8 +315,8 @@ In modern-homelab, inter-node traffic goes through tunnel (encrypted). In ha-hom
 - All inter-node communication over mTLS
 
 **What needs mTLS:**
-- Consul gossip protocol + RPC
-- etcd peer communication
+- CoreDNS + etcd cluster communication
+- etcd peer communication (Raft consensus)
 - Patroni REST API
 - DRBD replication traffic
 - GlusterFS brick communication
@@ -304,7 +325,7 @@ In modern-homelab, inter-node traffic goes through tunnel (encrypted). In ha-hom
 ### 7.2 Network Segmentation
 
 Even on a flat LAN, use firewall rules:
-- Management traffic (SSH, Consul, etcd): restricted to cluster nodes
+- Management traffic (SSH, etcd, CoreDNS): restricted to cluster nodes
 - Service traffic (HTTP/S): through HAProxy only
 - Storage traffic (GlusterFS, DRBD): dedicated VLAN or subnet if possible
 - VRRP traffic: between load balancer nodes only
@@ -315,7 +336,7 @@ SOPS+age remains the base. Additional concerns:
 - **Secret rotation**: Automated credential rotation for databases, Redis auth
 - **Per-node secrets**: Each node gets only the secrets it needs
 - **etcd encryption at rest**: etcd stores cluster state, must be encrypted
-- **Consul ACLs**: Token-based access control for service registration/discovery
+- **etcd RBAC**: Role-based access control for service registration/discovery
 
 ### 7.4 Hardened Docker
 
@@ -348,15 +369,18 @@ Docker Compose per node doesn't coordinate across nodes. Someone needs to decide
 - **Pro**: Simple, builds on modern-homelab patterns
 - **Con**: No automatic service rescheduling across nodes
 
-**Option B: Nomad (Graduated)**
+**Option B: Nomad (Opt-in, Requires License Negotiation)**
 - HashiCorp Nomad: lightweight job scheduler
 - Supports Docker driver natively
 - Single binary, 3-node server cluster for HA
 - Handles placement, restarts, rolling deploys, service mesh
 - Integrates with Consul (service discovery) and Vault (secrets)
 - **Pro**: Real orchestration without K8s complexity
-- **Con**: New learning curve, BSL license (changed 2023)
-- **License**: BSL-1.1 (non-production use after 1 year becomes MPL-2)
+- **Con**: New learning curve
+- **License**: BSL-1.1 -- **NOT safe for kombify as SaaS vendor without commercial license**.
+  HashiCorp restricts "offering the Licensed Work to third parties on an embedded basis
+  which is competitive with HashiCorp's products." Contact licensing@hashicorp.com.
+  Versions >4 years old convert to MPL-2 (e.g., Nomad 1.6 Aug 2023 -> MPL-2 Aug 2027).
 
 **Option C: Docker Swarm (Limited)**
 - Built into Docker, simple to set up
@@ -367,13 +391,13 @@ Docker Compose per node doesn't coordinate across nodes. Someone needs to decide
 
 ### 8.3 Recommendation
 
-**Start with Option A (PaaS + Scripts)**, design the CUE schema to support Option B (Nomad) as a future upgrade path. The ha-homelab schema should define an `orchestration` field:
+**Option A (PaaS + Scripts) is the only default-safe option** due to Nomad's BSL-1.1 license. The CUE schema should still define an `orchestration` field for future extensibility (if a Nomad commercial license is negotiated):
 
 ```
 orchestration: "compose-manual" | "nomad"
 ```
 
-This keeps the ha-homelab accessible to people who don't want to learn Nomad while allowing graduation.
+Default is `compose-manual`. Nomad requires explicit opt-in with license acknowledgment.
 
 ---
 
@@ -383,7 +407,7 @@ This keeps the ha-homelab accessible to people who don't want to learn Nomad whi
 
 Monitoring a single node is straightforward. Monitoring a cluster requires:
 - **Cluster-wide dashboards**: See all nodes at once
-- **Consensus monitoring**: Is etcd/Consul healthy? Is quorum maintained?
+- **Consensus monitoring**: Is etcd healthy? Is quorum maintained?
 - **Failover event tracking**: When did VIP move? Why?
 - **Replication lag**: Is the database replica falling behind?
 - **Split-brain detection**: Are two nodes claiming to be primary?
@@ -396,18 +420,18 @@ Beyond modern-homelab's monitoring add-on (VictoriaMetrics + Grafana + Loki):
 | Target | Metric | Alert Threshold |
 |--------|--------|-----------------|
 | etcd | leader changes, peer connectivity | >1 leader change/5min |
-| Consul | peer count, service health % | peer count < quorum |
+| CoreDNS | query latency, cache hit rate | query errors > 0 |
 | Keepalived | VIP transitions, state flapping | >2 transitions/5min |
 | HAProxy | backend health, connection errors | any backend down |
 | Patroni | replication lag, timeline changes | lag > 10s |
-| Redis Sentinel | failover events, quorum size | quorum < 2 |
+| Valkey Sentinel | failover events, quorum size | quorum < 2 |
 | GlusterFS | heal info, brick status | any brick offline |
 | DRBD | connection state, sync percentage | state != UpToDate |
 
 ### 9.3 Alertmanager Integration
 
 Modern-homelab monitoring uses VictoriaMetrics + vmalert. For HA:
-- Alert on quorum loss (etcd, Consul, Sentinel)
+- Alert on quorum loss (etcd, Valkey Sentinel)
 - Alert on failover events (Keepalived, Patroni)
 - Alert on replication issues (DRBD, PostgreSQL, GlusterFS)
 - Alert on split-brain scenarios
@@ -421,7 +445,7 @@ Modern-homelab monitoring uses VictoriaMetrics + vmalert. For HA:
 
 modern-homelab's Restic 3-2-1 backup stays, but HA adds:
 - **etcd snapshots**: Regular etcd backup (cluster state)
-- **Consul snapshots**: `consul snapshot save` on schedule
+- **etcd snapshots**: `etcdctl snapshot save` for service discovery state
 - **Database PITR**: PostgreSQL WAL archiving for point-in-time recovery
 - **DRBD metadata backup**: DRBD resource configs + metadata
 
@@ -454,7 +478,7 @@ Fencing ensures that a failed node doesn't come back and corrupt data by accepti
 |-----------|-----|-----|------|-----------|
 | Keepalived | Negligible | ~10 MB | - | On LB nodes |
 | HAProxy | Low | ~50 MB | - | On LB nodes |
-| Consul Server | Low | ~256 MB | 500 MB | On 3+ nodes |
+| CoreDNS | Low | ~50 MB | - | On 3+ nodes |
 | etcd | Low | ~512 MB | 1 GB | On 3+ nodes |
 | Patroni + PG | Medium | ~1 GB+ | Varies | On DB nodes |
 | Redis Sentinel | Negligible | ~50 MB | - | On 3 nodes |
@@ -465,18 +489,18 @@ Fencing ensures that a failed node doesn't come back and corrupt data by accepti
 **3-node local cluster (data sovereignty):**
 ```
 Node 1 (4 CPU, 8 GB RAM, 200 GB SSD):
-  - Consul server, etcd, Patroni (PG primary)
+  - etcd, CoreDNS, Patroni (PG primary)
   - Keepalived MASTER, HAProxy, Traefik
   - GlusterFS brick
 
 Node 2 (4 CPU, 8 GB RAM, 200 GB SSD):
-  - Consul server, etcd, Patroni (PG replica)
+  - etcd, CoreDNS, Patroni (PG replica)
   - Keepalived BACKUP, HAProxy, Traefik
   - GlusterFS brick
 
 Node 3 (4 CPU, 8 GB RAM, 200 GB SSD):
-  - Consul server, etcd, Patroni (PG replica)
-  - Redis Sentinel, application services
+  - etcd, CoreDNS, Patroni (PG replica)
+  - Valkey Sentinel, application services
   - GlusterFS brick
 ```
 
@@ -484,14 +508,14 @@ Node 3 (4 CPU, 8 GB RAM, 200 GB SSD):
 ```
 Cloud 1 (2 CPU, 4 GB):
   - Keepalived MASTER, HAProxy, Traefik
-  - Consul server
+  - etcd member
 
 Cloud 2 (2 CPU, 4 GB):
   - Keepalived BACKUP, HAProxy, Traefik
-  - Consul server
+  - etcd member
 
 Local 1 (4 CPU, 16 GB, 500 GB):
-  - Consul server, etcd, Patroni primary
+  - etcd member, etcd, Patroni primary
   - GlusterFS, application services
 
 Local 2 (4 CPU, 16 GB, 500 GB):
@@ -512,7 +536,7 @@ The ha-homelab CUE schema needs to extend modern-homelab with:
     // Quorum settings
     quorum: {
         minNodes: int & >=3
-        consensusStore: "etcd" | "consul"
+        consensusStore: "etcd"
     }
 
     // VIP failover
@@ -554,13 +578,13 @@ The ha-homelab CUE schema needs to extend modern-homelab with:
 
     // Cache HA
     cache: {
-        provider: "redis-sentinel" | "valkey-sentinel"
+        provider: "valkey-sentinel"
         sentinelCount: int | *3
     }
 
     // Service discovery
     discovery: {
-        provider: "consul" | "dns"
+        provider: "coredns-etcd" | "dns-static"
         servers: int | *3
     }
 
@@ -599,39 +623,43 @@ Each service needs HA metadata:
 
 1. **GlusterFS vs DRBD+ZFS**: Should the default be GlusterFS (simpler, file-level) or DRBD+ZFS (stronger integrity, block-level)? Or tiered as described above?
 
-2. **Consul license (BSL-1.1)**: Acceptable for homelab? If not, what replaces it? Options: CoreDNS + etcd, serf-only gossip, or hand-rolled DNS.
+2. ~~**Consul license (BSL-1.1)**~~ **RESOLVED**: Consul is NOT safe for kombify SaaS use. Default is CoreDNS + etcd. Consul available as opt-in add-on with license warning.
 
-3. **Nomad as future path**: Should the CUE schema be Nomad-ready from day 1, or is compose-manual enough?
+3. ~~**Nomad as future path**~~ **RESOLVED**: Nomad NOT safe for default due to BSL-1.1. Schema supports it as opt-in field. Commercial license negotiation needed before enabling.
 
-4. **Valkey vs Redis**: Redis relicensed to RSALv2+SSPL. Should ha-homelab default to Valkey (BSD-3 fork maintained by Linux Foundation)?
+4. ~~**Valkey vs Redis**~~ **RESOLVED**: Valkey (BSD-3) is the default. Redis 8+ AGPL-3 as conditional alternative. Redis 7.4 RSALv2/SSPLv1 is blocked.
 
-5. **etcd vs Consul for consensus**: Patroni needs etcd OR Consul. If we already run Consul for service discovery, should Patroni use Consul too (fewer components)?
+5. ~~**etcd vs Consul for consensus**~~ **RESOLVED**: etcd is the only consensus store (needed for Patroni, also used by CoreDNS for service discovery). No Consul.
 
 6. **Cloud VIP**: Most cloud providers don't support VRRP. Alternative: DNS failover, Floating IP API (Hetzner has this), or run Keepalived in unicast mode on a private network.
 
-7. **Scope of HA**: Should every add-on service be HA, or only "platform" services (Traefik, DB, Redis, identity)? The pragmatic answer is: HA for platform, single-instance for most add-ons with automatic restart.
+7. **Scope of HA**: Should every add-on service be HA, or only "platform" services (Traefik, DB, Valkey, identity)? The pragmatic answer is: HA for platform, single-instance for most add-ons with automatic restart.
 
 ---
 
-## 14. Tool License Summary
+## 14. Tool License Summary (SaaS-Vendor Perspective)
 
-| Tool | License | Status |
-|------|---------|--------|
-| HAProxy | GPL-2 | Stable, widely used |
-| Keepalived | GPL-2 | Stable, battle-tested |
-| GlusterFS | GPL-3 | Active, Red Hat support ended 2024 |
-| DRBD | GPL-2 | Active (LINBIT) |
-| ZFS (OpenZFS) | CDDL | Active, stable |
-| Patroni | MIT | Active (Zalando) |
-| etcd | Apache-2 | Active (CNCF) |
-| Consul | BSL-1.1 | Active (HashiCorp), license changed 2023 |
-| Nomad | BSL-1.1 | Active (HashiCorp), license changed 2023 |
-| Redis 7.4+ | RSALv2+SSPL | Active, restrictive license |
-| Valkey | BSD-3 | Active (Linux Foundation fork) |
-| Litestream | Apache-2 | Active |
-| LiteFS | Apache-2 | Active (Fly.io) |
-| Step-CA | Apache-2 | Active (Smallstep) |
-| CoreDNS | Apache-2 | Active (CNCF) |
+> See `docs/license-compliance-saas.md` for the full license compliance analysis.
+
+| Tool | License | SaaS-Safe? | Status |
+|------|---------|-----------|--------|
+| HAProxy | GPL-2 | **YES** (config-gen only) | Stable, widely used |
+| Keepalived | GPL-2 | **YES** (config-gen only) | Stable, battle-tested |
+| GlusterFS | GPL-3 | **YES** (config-gen only) | Active, Red Hat support ended 2024 |
+| DRBD | GPL-2 | **YES** (config-gen only) | Active (LINBIT) |
+| ZFS (OpenZFS) | CDDL | **YES** | Active, stable |
+| Patroni | MIT | **YES** | Active (Zalando) |
+| etcd | Apache-2 | **YES** | Active (CNCF) |
+| CoreDNS | Apache-2 | **YES** | Active (CNCF) |
+| Valkey | BSD-3 | **YES** | Active (Linux Foundation fork) |
+| Litestream | Apache-2 | **YES** | Active |
+| LiteFS | Apache-2 | **YES** | Active (Fly.io) |
+| Step-CA | Apache-2 | **YES** | Active (Smallstep) |
+| Traefik | MIT | **YES** | Active |
+| Consul | BSL-1.1 | **HIGH RISK** | Opt-in only, needs commercial license |
+| Nomad | BSL-1.1 | **HIGH RISK** | Opt-in only, needs commercial license |
+| Redis 8+ (AGPL) | AGPL-3 | **CONDITIONAL** | Safe if unmodified, source available |
+| Redis 7.4 | RSALv2/SSPLv1 | **BLOCKED** | Do not use |
 
 ---
 
@@ -640,12 +668,12 @@ Each service needs HA metadata:
 ### New Infrastructure Services
 1. **Keepalived** -- VIP failover (VRRP)
 2. **HAProxy** -- Cross-node load balancing
-3. **Consul** or equivalent -- Service discovery + health checking
-4. **etcd** -- Distributed consensus (for Patroni, possibly Consul)
+3. **CoreDNS + etcd** -- Service discovery + health checking (replaces Consul)
+4. **etcd** -- Distributed consensus (for Patroni + CoreDNS)
 5. **GlusterFS** -- Shared replicated storage
 6. **DRBD+ZFS** -- Block-level replication (optional, for critical data)
 7. **Patroni** -- PostgreSQL HA management
-8. **Redis Sentinel** (or Valkey Sentinel) -- Cache HA
+8. **Valkey Sentinel** -- Cache HA (BSD-3, replaces Redis)
 
 ### New Patterns
 1. Quorum-based decision making (3+ nodes)
