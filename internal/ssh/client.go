@@ -277,8 +277,14 @@ func (c *Client) Run(ctx context.Context, command string) (string, string, error
 	}
 }
 
-// RunWithSudo runs a command with sudo
+// RunWithSudo runs a command with sudo.
+// Multi-line commands are wrapped in sudo bash -c to ensure all lines run with elevated privileges.
 func (c *Client) RunWithSudo(ctx context.Context, command string) (string, string, error) {
+	if strings.Contains(command, "\n") {
+		// Escape single quotes in the command for safe embedding
+		escaped := strings.ReplaceAll(command, "'", "'\"'\"'")
+		return c.Run(ctx, "sudo bash -c '"+escaped+"'")
+	}
 	return c.Run(ctx, "sudo "+command)
 }
 

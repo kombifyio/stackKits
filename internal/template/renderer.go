@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"text/template"
 
@@ -278,9 +279,14 @@ func envMap(env map[string]string) string {
 	if len(env) == 0 {
 		return "{}"
 	}
+	keys := make([]string, 0, len(env))
+	for k := range env {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
 	var lines []string
-	for k, v := range env {
-		lines = append(lines, fmt.Sprintf(`    %s = %q`, k, v))
+	for _, k := range keys {
+		lines = append(lines, fmt.Sprintf(`    %s = %q`, k, env[k]))
 	}
 	return "{\n" + strings.Join(lines, "\n") + "\n  }"
 }
@@ -290,9 +296,14 @@ func labelMap(labels map[string]string) string {
 	if len(labels) == 0 {
 		return "{}"
 	}
+	keys := make([]string, 0, len(labels))
+	for k := range labels {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
 	var lines []string
-	for k, v := range labels {
-		lines = append(lines, fmt.Sprintf(`    "%s" = %q`, k, v))
+	for _, k := range keys {
+		lines = append(lines, fmt.Sprintf(`    "%s" = %q`, k, labels[k]))
 	}
 	return "{\n" + strings.Join(lines, "\n") + "\n  }"
 }

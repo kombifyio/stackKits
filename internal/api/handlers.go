@@ -294,7 +294,7 @@ func (s *Server) handleGetStackKitDefaults(w http.ResponseWriter, r *http.Reques
 	}
 
 	if defaultSpec.Variant == "" && len(sk.Variants) > 0 {
-		// Pick the variant marked as default, or the first one
+		// Pick the variant marked as default, or the first alphabetically
 		for k, v := range sk.Variants {
 			if v.Default {
 				defaultSpec.Variant = k
@@ -302,10 +302,13 @@ func (s *Server) handleGetStackKitDefaults(w http.ResponseWriter, r *http.Reques
 			}
 		}
 		if defaultSpec.Variant == "" {
+			// Sort variant names for deterministic selection
+			variantNames := make([]string, 0, len(sk.Variants))
 			for k := range sk.Variants {
-				defaultSpec.Variant = k
-				break
+				variantNames = append(variantNames, k)
 			}
+			sort.Strings(variantNames)
+			defaultSpec.Variant = variantNames[0]
 		}
 	}
 
