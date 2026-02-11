@@ -254,8 +254,9 @@ func (c *Client) GetStackKitContainers(ctx context.Context) ([]ContainerInfo, er
 
 	output, err := cmd.Output()
 	if err != nil {
-		// Try without filter (might not have labeled containers yet)
-		return c.ListContainers(ctx, true)
+		// Return empty list — do NOT fall back to listing all containers,
+		// which would show non-StackKit containers and confuse users.
+		return []ContainerInfo{}, nil
 	}
 
 	var containers []ContainerInfo

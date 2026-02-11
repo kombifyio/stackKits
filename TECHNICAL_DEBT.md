@@ -192,33 +192,21 @@ Items are categorized by severity and mapped to roadmap milestones.
 
 > Moved to [Resolved](#resolved) on 2026-02-11. Added `--cors-origins` flag / `STACKKITS_CORS_ORIGINS` env with per-request origin matching and `Vary: Origin`.
 
-### TD-41: No Pagination on List Endpoints (N2)
+### ~~TD-41: No Pagination on List Endpoints (N2)~~ → RESOLVED
 
-**Location:** `internal/api/handlers.go` `handleListStackKits`  
-**Problem:** Returns all StackKits in single response. Not an issue at 4 StackKits but won't scale.  
-**Fix:** Add `?limit=` and `?offset=` query params.  
-**Milestone:** M6
-**Task:** StackKits-l3s.15
+> Moved to [Resolved](#resolved) on 2026-02-12. Added `?limit=N&offset=M` query params; response now returns `{"items":[], "total":N, "limit":L, "offset":O}` envelope.
 
 ### ~~TD-42: Deprecated strings.Title Usage (N5)~~ → RESOLVED
 
 > Moved to [Resolved](#resolved) on 2026-02-11. Replaced with `cases.Title(language.English)` from `golang.org/x/text`.
 
-### TD-43: No Shell Completion Command (N6)
+### ~~TD-43: No Shell Completion Command (N6)~~ → RESOLVED
 
-**Location:** `cmd/stackkit/commands/root.go`  
-**Problem:** No `completion` subcommand. Cobra supports `GenBashCompletion`, `GenZshCompletion`, `GenFishCompletion` etc.  
-**Fix:** Add `stackkit completion bash|zsh|fish|powershell` command.  
-**Milestone:** M4
-**Task:** StackKits-l3s.19
+> Moved to [Resolved](#resolved) on 2026-02-12. Added `stackkit completion bash|zsh|fish|powershell` using Cobra built-in generators.
 
-### TD-44: tfvars Format Inconsistency (N7)
+### ~~TD-44: tfvars Format Inconsistency (N7)~~ → RESOLVED
 
-**Location:** CLI `generate` writes HCL `.tfvars`, API writes JSON `.tfvars.json`  
-**Problem:** Two different output formats for the same logical output.  
-**Fix:** Standardize on JSON `.tfvars.json` (OpenTofu supports both) or support both with a flag.  
-**Milestone:** M3
-**Task:** StackKits-l3s.20
+> Moved to [Resolved](#resolved) on 2026-02-12. Standardized on JSON `.tfvars.json` in both CLI generate and API.
 
 ### TD-21: Two Website Projects
 
@@ -301,6 +289,9 @@ Items are categorized by severity and mapped to roadmap milestones.
 | TD-40 | CORS wildcard not configurable | 2026-02-11 | `--cors-origins` flag / `STACKKITS_CORS_ORIGINS` env with per-request matching |
 | TD-31 | iac/terramate packages are dead code | 2026-02-12 | CLI validate/plan/apply/destroy now use `iac.NewExecutorFromSpec`. Expanded `iac.Executor` with `Validate`, `Output`, `ExecResult` |
 | TD-32 | internal/errors package mostly unused | 2026-02-12 | `writeStructuredError` in API, structured errors for auth/rate-limit/validation/not-found. `validateStackKitName` regex. validatePartial expanded to cover email/domain/ssh/compute/nodes |
+| TD-41 | No pagination on list endpoints | 2026-02-12 | Added `?limit=N&offset=M` query params with paginated response envelope `{items, total, limit, offset}` |
+| TD-43 | No shell completion command | 2026-02-12 | Added `stackkit completion bash\|zsh\|fish\|powershell` via Cobra generators |
+| TD-44 | tfvars format inconsistency | 2026-02-12 | Standardized on JSON `.tfvars.json` in both CLI and API |
 
 ---
 

@@ -4,7 +4,7 @@
 BINARY_NAME=stackkit
 VERSION?=dev
 
-.PHONY: all build clean test test-unit test-integration test-cue test-coverage lint fmt deps help
+.PHONY: all build build-server build-all clean test test-unit test-integration test-cue test-coverage lint fmt deps help
 
 # Default target
 all: deps lint test build
@@ -12,7 +12,10 @@ all: deps lint test build
 build: ## Build the CLI binary
 	mise run build
 
-build-all: build-linux build-darwin build-windows ## Build for all platforms
+build-server: ## Build the API server binary
+	go build -ldflags "-X main.Version=$(VERSION)" -o build/stackkit-server ./cmd/stackkit-server
+
+build-all: build build-server build-linux build-darwin build-windows ## Build CLI, server, and all platforms
 
 build-linux: ## Build for Linux
 	GOOS=linux GOARCH=amd64 go build -ldflags "-X main.Version=$(VERSION)" -o build/$(BINARY_NAME)-linux-amd64 ./cmd/stackkit

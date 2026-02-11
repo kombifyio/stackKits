@@ -157,11 +157,18 @@ func TestHandleListStackKits(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 
 	resp := parseResponse(t, rec)
-	var kits []stackKitSummary
-	require.NoError(t, json.Unmarshal(resp["data"], &kits))
-	assert.Len(t, kits, 1)
-	assert.Equal(t, "base-homelab", kits[0].Name)
-	assert.Equal(t, "Base Homelab Kit", kits[0].DisplayName)
+	var page struct {
+		Items  []stackKitSummary `json:"items"`
+		Total  int               `json:"total"`
+		Limit  int               `json:"limit"`
+		Offset int               `json:"offset"`
+	}
+	require.NoError(t, json.Unmarshal(resp["data"], &page))
+	assert.Len(t, page.Items, 1)
+	assert.Equal(t, 1, page.Total)
+	assert.Equal(t, 0, page.Offset)
+	assert.Equal(t, "base-homelab", page.Items[0].Name)
+	assert.Equal(t, "Base Homelab Kit", page.Items[0].DisplayName)
 }
 
 func TestHandleListStackKits_AutoDiscover(t *testing.T) {
@@ -210,9 +217,93 @@ variants:
 	assert.Equal(t, http.StatusOK, rec.Code)
 
 	resp := parseResponse(t, rec)
-	var kits []stackKitSummary
-	require.NoError(t, json.Unmarshal(resp["data"], &kits))
-	assert.Len(t, kits, 2)
+	var page struct {
+		Items  []stackKitSummary `json:"items"`
+		Total  int               `json:"total"`
+		Limit  int               `json:"limit"`
+		Offset int               `json:"offset"`
+	}
+	require.NoError(t, json.Unmarshal(resp["data"], &page))
+	assert.Len(t, page.Items, 2)
+	assert.Equal(t, 2, page.Total)
+}
+
+func TestHandleListStackKits_Pagination(t *testing.T) {
+	srv, tmpDir := testServer(t)
+
+	// Add a second stackkit so we have 2 total
+	extraDir := filepath.Join(tmpDir, "custom-kit")
+	require.NoError(t, os.MkdirAll(extraDir, 0755))
+	extraYAML := `metadata:
+  name: custom-kit
+  version: "1.0.0"
+  displayName: "Custom Kit"
+  description: "A custom StackKit"
+  license: "MIT"
+supportedOS:
+  - ubuntu-22.04
+requirements:
+  minimum:
+    cpu: 1
+    ram: 2
+    disk: 20
+  recommended:
+    cpu: 2
+    ram: 4
+    disk: 40
+modes:
+  simple:
+    name: Simple
+    description: Basic deployment
+    engine: opentofu
+    default: true
+variants:
+  default:
+    name: Default
+    description: Default variant
+    services:
+      - nginx
+    default: true
+`
+	require.NoError(t, os.WriteFile(filepath.Join(extraDir, "stackkit.yaml"), []byte(extraYAML), 0644))
+
+	// Request with limit=1
+	req := httptest.NewRequest("GET", "/api/v1/stackkits?limit=1&offset=0", nil)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	resp := parseResponse(t, rec)
+	var page struct {
+		Items  []stackKitSummary `json:"items"`
+		Total  int               `json:"total"`
+		Limit  int               `json:"limit"`
+		Offset int               `json:"offset"`
+	}
+	require.NoError(t, json.Unmarshal(resp["data"], &page))
+	assert.Len(t, page.Items, 1)
+	assert.Equal(t, 2, page.Total)
+	assert.Equal(t, 1, page.Limit)
+	assert.Equal(t, 0, page.Offset)
+
+	// Request second page
+	req2 := httptest.NewRequest("GET", "/api/v1/stackkits?limit=1&offset=1", nil)
+	rec2 := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec2, req2)
+
+	assert.Equal(t, http.StatusOK, rec2.Code)
+	resp2 := parseResponse(t, rec2)
+	var page2 struct {
+		Items  []stackKitSummary `json:"items"`
+		Total  int               `json:"total"`
+		Limit  int               `json:"limit"`
+		Offset int               `json:"offset"`
+	}
+	require.NoError(t, json.Unmarshal(resp2["data"], &page2))
+	assert.Len(t, page2.Items, 1)
+	assert.Equal(t, 2, page2.Total)
+	assert.Equal(t, 1, page2.Offset)
 }
 
 // ── Get StackKit ──────────────────────────────────────────────────

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/kombihq/stackkits/api/openapi"
@@ -142,7 +143,39 @@ func (s *Server) handleListStackKits(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sort.Slice(kits, func(i, j int) bool { return kits[i].Name < kits[j].Name })
-	writeSuccess(w, r, http.StatusOK, kits)
+
+	// Pagination: ?limit=N&offset=M
+	total := len(kits)
+	limit := total // default: return all
+	offset := 0
+
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if v, err := strconv.Atoi(l); err == nil && v > 0 {
+			limit = v
+		}
+	}
+	if o := r.URL.Query().Get("offset"); o != "" {
+		if v, err := strconv.Atoi(o); err == nil && v >= 0 {
+			offset = v
+		}
+	}
+
+	// Apply pagination
+	if offset > total {
+		offset = total
+	}
+	end := offset + limit
+	if end > total {
+		end = total
+	}
+	paged := kits[offset:end]
+
+	writeSuccess(w, r, http.StatusOK, map[string]interface{}{
+		"items":  paged,
+		"total":  total,
+		"limit":  limit,
+		"offset": offset,
+	})
 }
 
 // ── Catalog: Get StackKit ─────────────────────────────────────────
