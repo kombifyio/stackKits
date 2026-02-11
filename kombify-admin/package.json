@@ -26,7 +26,9 @@
     "version-check": "ts-node scripts/tool-version-check.ts --all",
     "review": "ts-node scripts/tool-review.ts",
     "review:summary": "ts-node scripts/tool-review.ts --summary",
-    "pipeline": "npm run discover && npm run enrich:discovered && npm run review:summary"
+    "pipeline": "npm run discover && npm run enrich:discovered && npm run review:summary",
+    "dashboard": "ts-node scripts/dashboard.ts",
+    "dashboard:dev": "DASHBOARD_PORT=3400 ts-node scripts/dashboard.ts"
   },
   "keywords": [
     "stackkits",
