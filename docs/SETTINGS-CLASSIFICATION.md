@@ -196,4 +196,4 @@ Use this matrix to determine if a setting change is safe:
 ## Related Documentation
 
 - [ARCHITECTURE.md](./ARCHITECTURE.md) - 3-Layer architecture overview
-- [ADR-0003-paas-strategy.md](../ADR/ADR-0003-paas-strategy.md) - PAAS selection rationale
+- [ADR-0003-paas-strategy.md](./ADR/ADR-0003-paas-strategy.md) - PAAS selection rationale

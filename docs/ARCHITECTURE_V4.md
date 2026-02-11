@@ -664,5 +664,5 @@ services:
 - [Evaluation Report 2026-02-07](./EVALUATION_REPORT_2026-02-07.md) — Current state assessment
 - [Architecture v3.0](./architecture.md) — Previous architecture (superseded)
 - [ROADMAP.md](./ROADMAP.md) — Implementation roadmap
-- [ADR-0003: PAAS Strategy](../ADR/ADR-0003-paas-strategy.md) — PAAS selection rationale
+- [ADR-0003: PAAS Strategy](./ADR/ADR-0003-paas-strategy.md) — PAAS selection rationale
 - kombify Stack: [Kombistack-Core.md](https://github.com/kombify/kombistack/docs/concepts/Kombistack-Core.md) — Unifier and control plane architecture

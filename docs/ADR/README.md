@@ -1,15 +1,14 @@
 # Architecture Decision Records
 
-StackKit-specific architecture decisions.
-
-!!! note
-    Some ADRs also exist at the repository root in `ADR/`. New ADRs should be created here.
+StackKits architecture decisions.
 
 ## Index
 
 | ADR | Status | Summary |
 |-----|--------|---------|
-| — | — | See root `ADR/` directory for existing records |
+| [ADR-0001](ADR-0001-documentation-standard.md) | Accepted | Documentation standard |
+| [ADR-0002](ADR-0002-docker-first-v1.md) | Accepted | Docker-first for v1 (no Kubernetes) |
+| [ADR-0003](ADR-0003-paas-strategy.md) | Accepted | PaaS strategy |
 
 ## Template
 

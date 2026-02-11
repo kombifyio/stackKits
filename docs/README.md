@@ -27,8 +27,12 @@ This folder contains the **canonical** project docs for StackKits Architecture v
 
 | Document | Purpose |
 |----------|---------|
+| [DEPLOYMENT.md](DEPLOYMENT.md) | Deployment guide — CI/CD, Azure, local dev |
+| [DEVELOPMENT.md](DEVELOPMENT.md) | Development setup, prerequisites, project structure |
+| [TESTING.md](TESTING.md) | Test types and CI requirements |
 | [Cleanup-Plan.md](Cleanup-Plan.md) | Project cleanup protocol (PSCP) |
 | [AZURE_WEBSITE_DEPLOYMENT.md](AZURE_WEBSITE_DEPLOYMENT.md) | Marketing site deployment |
+| [ADR/](ADR/) | Architecture Decision Records (ADR-0001 – ADR-0003) |
 
 ## Business
 

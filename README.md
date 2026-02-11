@@ -102,8 +102,8 @@ StackKits/
 ├── modern-homelab/             # Modern Homelab Kit
 ├── ha-homelab/                 # High Availability Kit
 │
-├── ADR/                        # Architectural Decisions
 ├── docs/                       # Canonical project docs
+│   └── ADR/                    # Architectural Decision Records
 ├── tests/                      # Testing
 ├── cmd/                        # CLI Source
 ├── internal/                   # Internal Packages
