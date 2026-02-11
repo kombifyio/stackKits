@@ -1,8 +1,8 @@
-# Identity Module (Layer 1 Foundation)
+# Identity Module
 
-This module provides identity and PKI services for StackKits as part of Layer 1 (Foundation).
+This module provides identity and PKI services for StackKits across Layer 1 (Foundation) and Layer 2 (Platform).
 
-## Services
+## Layer 1: Foundation Services (always deployed)
 
 ### LLDAP (Lightweight LDAP)
 
@@ -48,6 +48,42 @@ An internal Certificate Authority based on Smallstep.
 | 8443 | CA API (HTTPS) |
 | 8080 | Health endpoint |
 
+## Layer 2: Platform Identity Services (opt-in)
+
+### TinyAuth (Identity Proxy & ForwardAuth)
+
+Lightweight auth proxy that registers as a Traefik ForwardAuth middleware.
+
+**Features:**
+- Traefik ForwardAuth integration (protect any service with one label)
+- OIDC federation with PocketID or external providers
+- GitHub / Google OAuth support
+- Local user definitions
+
+**Default Configuration:**
+- UI: `https://auth.stack.local`
+- ForwardAuth URL: `http://tinyauth:3000/api/auth/verify`
+- Middleware name: `tinyauth`
+
+**Usage:** Add to any Traefik-routed service:
+```
+traefik.http.routers.myapp.middlewares=tinyauth
+```
+
+### PocketID (OIDC Provider with Passkey Support)
+
+Self-hosted OIDC/OAuth2 provider with WebAuthn/Passkey support.
+
+**Features:**
+- Passkey (WebAuthn/FIDO2) authentication
+- OIDC/OAuth2 provider for SSO
+- LDAP sync with LLDAP for user/group management
+- Issues tokens consumed by TinyAuth, PocketBase, etc.
+
+**Default Configuration:**
+- UI: `https://id.stack.local`
+- OIDC Discovery: `https://id.stack.local/.well-known/openid-configuration`
+
 ## Integration with StackKits
 
 Both services are automatically available to all StackKits through Layer 1 inheritance:
@@ -84,9 +120,9 @@ Both services run on the `identity_net` Docker network:
 
 ## Files
 
-| File | Purpose |
-|------|---------|
-| `lldap.cue` | LLDAP schema and service definition |
-| `step-ca.cue` | Step-CA schema and service definition |
-| `_lldap.tf.tmpl` | Terraform template for LLDAP deployment |
-| `_step-ca.tf.tmpl` | Terraform template for Step-CA deployment |
+| File | Layer | Purpose |
+|------|-------|---------|
+| `_lldap.tf.tmpl` | 1 | Terraform template for LLDAP deployment |
+| `_step-ca.tf.tmpl` | 1 | Terraform template for Step-CA deployment |
+| `_tinyauth.tf.tmpl` | 2 | Terraform template for TinyAuth deployment |
+| `_pocketid.tf.tmpl` | 2 | Terraform template for PocketID deployment |
