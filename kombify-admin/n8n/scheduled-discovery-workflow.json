@@ -1,0 +1,179 @@
+{
+  "name": "StackKits - Scheduled Tool Discovery",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Every 6 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "command": "cd /app/kombify-admin && npx ts-node scripts/scheduled-discover.ts",
+        "options": {
+          "cwd": "/app/kombify-admin"
+        }
+      },
+      "id": "run-discovery",
+      "name": "Run Discovery Script",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [220, 0],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse output from the discovery script\nconst output = $input.all()[0].json.stdout || '';\n\n// Try to extract JSON from output\nconst jsonMatch = output.match(/\\{[\\s\\S]*\"success\"[\\s\\S]*\\}/);\nif (jsonMatch) {\n  try {\n    const result = JSON.parse(jsonMatch[0]);\n    return [{ json: result }];\n  } catch (e) {\n    return [{ json: { success: false, error: 'Failed to parse output', raw: output } }];\n  }\n}\n\nreturn [{ json: { success: false, error: 'No JSON found in output', raw: output } }];"
+      },
+      "id": "parse-output",
+      "name": "Parse Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "success-check",
+              "leftValue": "={{ $json.success }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "check-success",
+      "name": "Success?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [660, 0]
+    },
+    {
+      "parameters": {
+        "channel": "#stackkits-ops",
+        "text": "=:white_check_mark: **Tool Discovery Complete**\n• Sources processed: {{ $json.sourcesProcessed }}\n• New tools: {{ $json.toolsDiscovered }}\n• Skipped (duplicates): {{ $json.toolsSkipped }}\n• Job ID: {{ $json.jobId }}",
+        "otherOptions": {}
+      },
+      "id": "notify-success",
+      "name": "Notify Success",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [880, -100],
+      "credentials": {
+        "slackApi": {
+          "id": "YOUR_SLACK_CREDENTIAL_ID",
+          "name": "Slack"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "#stackkits-ops",
+        "text": "=:x: **Tool Discovery Failed**\n• Errors: {{ $json.errors.join('\\n') }}\n• Job ID: {{ $json.jobId || 'unknown' }}",
+        "otherOptions": {}
+      },
+      "id": "notify-failure",
+      "name": "Notify Failure",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [880, 100],
+      "credentials": {
+        "slackApi": {
+          "id": "YOUR_SLACK_CREDENTIAL_ID",
+          "name": "Slack"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every 6 Hours": {
+      "main": [
+        [
+          {
+            "node": "Run Discovery Script",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Discovery Script": {
+      "main": [
+        [
+          {
+            "node": "Parse Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Output": {
+      "main": [
+        [
+          {
+            "node": "Success?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Success?": {
+      "main": [
+        [
+          {
+            "node": "Notify Success",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "meta": {
+    "instanceId": "kombify-stackkits"
+  },
+  "tags": [
+    {
+      "name": "stackkits"
+    },
+    {
+      "name": "automation"
+    }
+  ]
+}
