@@ -127,13 +127,9 @@ Items are categorized by severity and mapped to roadmap milestones.
 
 > Moved to [Resolved](#resolved) on 2026-02-11. Implemented `runtime.ReadMemStats` + `/proc/meminfo` parsing on Linux, with graceful OS fallback.
 
-### TD-38: Interactive init Is a Stub (I9)
+### ~~TD-38: Interactive init Is a Stub (I9)~~ → RESOLVED
 
-**Location:** `cmd/stackkit/commands/init.go` L78-82  
-**Problem:** Running `stackkit init` without arguments lists available StackKits and errors out. No interactive selection.  
-**Fix:** Add bubbletea or promptui-based interactive wizard for StackKit, domain, email, compute tier.  
-**Milestone:** M4
-**Task:** StackKits-l3s.12
+> Moved to [Resolved](#resolved) on 2026-02-12. Implemented interactive wizard with StackKit discovery, variant/mode/compute-tier selection, and optional domain/email prompts. Zero new dependencies (uses bufio.Scanner).
 
 ### ~~TD-39: Hardcoded stackKitDirs in API Handler (I10)~~ → RESOLVED
 
@@ -292,6 +288,7 @@ Items are categorized by severity and mapped to roadmap milestones.
 | TD-41 | No pagination on list endpoints | 2026-02-12 | Added `?limit=N&offset=M` query params with paginated response envelope `{items, total, limit, offset}` |
 | TD-43 | No shell completion command | 2026-02-12 | Added `stackkit completion bash\|zsh\|fish\|powershell` via Cobra generators |
 | TD-44 | tfvars format inconsistency | 2026-02-12 | Standardized on JSON `.tfvars.json` in both CLI and API |
+| TD-38 | Interactive init is a stub | 2026-02-12 | Interactive wizard with StackKit/variant/mode/compute-tier selection + domain/email prompts (zero new deps) |
 
 ---
 
