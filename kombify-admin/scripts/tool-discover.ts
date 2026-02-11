@@ -37,6 +37,7 @@ import {
   findDuplicates,
   computeDeduplicationFields,
 } from './deduplication';
+import { withRetry, FIRECRAWL_RETRY_OPTIONS } from './retry';
 
 const prisma = new PrismaClient();
 
@@ -78,26 +79,32 @@ async function firecrawlSearch(query: string): Promise<FirecrawlSearchResult[]> 
     return [];
   }
 
-  const response = await fetch(`${FIRECRAWL_BASE_URL}/search`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${FIRECRAWL_API_KEY}`,
-    },
-    body: JSON.stringify({
-      query,
-      limit: MAX_RESULTS_PER_QUERY,
-    }),
-  });
+  try {
+    return await withRetry(async () => {
+      const response = await fetch(`${FIRECRAWL_BASE_URL}/search`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${FIRECRAWL_API_KEY}`,
+        },
+        body: JSON.stringify({
+          query,
+          limit: MAX_RESULTS_PER_QUERY,
+        }),
+      });
 
-  if (!response.ok) {
-    const text = await response.text();
-    console.error(`  [ERROR] Firecrawl search failed: ${response.status} ${text}`);
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`Firecrawl search failed: ${response.status} ${text}`);
+      }
+
+      const data = await response.json();
+      return data.data || [];
+    }, FIRECRAWL_RETRY_OPTIONS);
+  } catch (error) {
+    console.error(`  [ERROR] ${(error as Error).message}`);
     return [];
   }
-
-  const data = await response.json();
-  return data.data || [];
 }
 
 async function firecrawlScrape(url: string): Promise<FirecrawlScrapeResult | null> {
@@ -106,27 +113,33 @@ async function firecrawlScrape(url: string): Promise<FirecrawlScrapeResult | nul
     return null;
   }
 
-  const response = await fetch(`${FIRECRAWL_BASE_URL}/scrape`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${FIRECRAWL_API_KEY}`,
-    },
-    body: JSON.stringify({
-      url,
-      formats: ['markdown'],
-      onlyMainContent: true,
-    }),
-  });
+  try {
+    return await withRetry(async () => {
+      const response = await fetch(`${FIRECRAWL_BASE_URL}/scrape`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${FIRECRAWL_API_KEY}`,
+        },
+        body: JSON.stringify({
+          url,
+          formats: ['markdown'],
+          onlyMainContent: true,
+        }),
+      });
 
-  if (!response.ok) {
-    const text = await response.text();
-    console.error(`  [ERROR] Firecrawl scrape failed for ${url}: ${response.status} ${text}`);
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`Firecrawl scrape failed for ${url}: ${response.status} ${text}`);
+      }
+
+      const data = await response.json();
+      return data.data || null;
+    }, FIRECRAWL_RETRY_OPTIONS);
+  } catch (error) {
+    console.error(`  [ERROR] ${(error as Error).message}`);
     return null;
   }
-
-  const data = await response.json();
-  return data.data || null;
 }
 
 // ---------------------------------------------------------------------------
