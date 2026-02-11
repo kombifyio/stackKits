@@ -33,6 +33,10 @@ import {
   LayerType,
 } from '@prisma/client';
 import * as crypto from 'crypto';
+import {
+  findDuplicates,
+  computeDeduplicationFields,
+} from './deduplication';
 
 const prisma = new PrismaClient();
 
@@ -230,20 +234,13 @@ async function discoverForCategory(
     firecrawlQueries: string[];
   },
   jobId: string
-): Promise<{ discovered: number; updated: number }> {
+): Promise<{ discovered: number; updated: number; skipped: number }> {
   console.log(`\n--- Discovering tools for: ${category.displayName} (${category.slug}) ---`);
   let discovered = 0;
   let updated = 0;
 
-  // Get existing tool names to avoid re-discovering
-  const existingTools = await prisma.tool.findMany({
-    where: { category: category.slug },
-    select: { name: true, homepageUrl: true, sourceUrl: true },
-  });
-  const existingNames = new Set(existingTools.map((t) => t.name));
-  const existingUrls = new Set(
-    existingTools.flatMap((t) => [t.homepageUrl, t.sourceUrl].filter(Boolean))
-  );
+  // Track skipped duplicates for reporting
+  let skipped = 0;
 
   for (const query of category.firecrawlQueries) {
     console.log(`  Searching: "${query}"`);
@@ -252,11 +249,7 @@ async function discoverForCategory(
     console.log(`  Found ${searchResults.length} results`);
 
     for (const result of searchResults) {
-      // Skip already-known URLs
-      if (existingUrls.has(result.url)) {
-        console.log(`  [SKIP] Already known: ${result.url}`);
-        continue;
-      }
+
 
       // Extract basic info from search result
       const extracted = extractToolFromMarkdown(
@@ -270,9 +263,17 @@ async function discoverForCategory(
         continue;
       }
 
-      // Skip if tool already exists by name
-      if (existingNames.has(extracted.name)) {
-        console.log(`  [SKIP] Tool already exists: ${extracted.name}`);
+      // Deduplication check using normalized fields
+      const dedup = await findDuplicates(prisma, {
+        name: extracted.name,
+        githubUrl: extracted.githubUrl,
+        homepageUrl: extracted.homepageUrl,
+        dockerImage: extracted.dockerImage,
+      });
+
+      if (dedup.isDuplicate && dedup.matchedTool) {
+        console.log(`  [SKIP] Duplicate of "${dedup.matchedTool.name}" (${dedup.matchReason})`);
+        skipped++;
         continue;
       }
 
@@ -322,7 +323,13 @@ async function discoverForCategory(
         },
       });
 
-      // Create discovered tool entry
+      // Compute deduplication fields for the new tool
+      const dedupFields = computeDeduplicationFields({
+        name: extracted.name,
+        githubUrl: extracted.githubUrl,
+      });
+
+      // Create discovered tool entry with deduplication fields
       await prisma.tool.create({
         data: {
           name: extracted.name,
@@ -340,17 +347,17 @@ async function discoverForCategory(
           supportsArm: extracted.supportsArm,
           contentHash,
           lastScrapedAt: new Date(),
+          // Deduplication fields
+          normalizedName: dedupFields.normalizedName,
+          canonicalRepoUrl: dedupFields.canonicalRepoUrl,
         },
       });
-
-      existingNames.add(extracted.name);
-      existingUrls.add(result.url);
       discovered++;
       console.log(`  [NEW] Discovered: ${extracted.name} (${extracted.displayName})`);
     }
   }
 
-  return { discovered, updated };
+  return { discovered, updated, skipped };
 }
 
 // ---------------------------------------------------------------------------
@@ -396,12 +403,14 @@ async function main(): Promise<void> {
 
   let totalDiscovered = 0;
   let totalUpdated = 0;
+  let totalSkipped = 0;
 
   for (const category of categories) {
     try {
       const result = await discoverForCategory(category, job.id);
       totalDiscovered += result.discovered;
       totalUpdated += result.updated;
+      totalSkipped += result.skipped;
     } catch (error) {
       console.error(`Error discovering for ${category.slug}:`, error);
     }
@@ -416,6 +425,7 @@ async function main(): Promise<void> {
         completedAt: new Date(),
         toolsDiscovered: totalDiscovered,
         toolsUpdated: totalUpdated,
+        toolsSkipped: totalSkipped,
         durationMs: Date.now() - (job as any).startedAt?.getTime() || 0,
       },
     });
@@ -425,6 +435,7 @@ async function main(): Promise<void> {
   console.log(`Discovery complete!`);
   console.log(`  New tools discovered: ${totalDiscovered}`);
   console.log(`  Existing tools updated: ${totalUpdated}`);
+  console.log(`  Duplicates skipped: ${totalSkipped}`);
   console.log('');
   console.log('Next steps:');
   console.log('  1. Review discovered tools: npx ts-node scripts/tool-review.ts');

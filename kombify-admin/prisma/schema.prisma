@@ -255,6 +255,16 @@ model Tool {
   /// Last successful scrape timestamp
   lastScrapedAt    DateTime?
 
+  // --- Deduplication (from old admin tool-discovery-architecture) ---
+  /// Normalized name for deduplication (lowercase, trimmed, special chars removed)
+  normalizedName   String?
+  /// Normalized repository URL for deduplication
+  canonicalRepoUrl String?
+
+  // --- Evaluation Workflow ---
+  /// History of lifecycle state transitions [{timestamp, from, to, by, notes}]
+  evaluationHistory Json?
+
   // Timestamps
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
@@ -269,6 +279,8 @@ model Tool {
   @@index([lifecycleState])
   @@index([discoverySource])
   @@index([aiQualityScore])
+  @@index([normalizedName])
+  @@index([canonicalRepoUrl])
 }
 
 // =============================================================================
@@ -590,6 +602,67 @@ model ToolEvaluation {
   @@index([evaluatedAt])
 }
 
+// =============================================================================
+// CRAWL SOURCE MANAGEMENT (from old admin tool-discovery-architecture)
+// =============================================================================
+
+/// Scheduled discovery sources — enables automated continuous tool discovery
+model CrawlSource {
+  id                   String    @id @default(uuid())
+  /// Unique source name
+  name                 String    @unique
+  /// Source type: "firecrawl", "github", "docker-hub", "awesome-list"
+  sourceType           String
+  /// Base URL for this source (optional)
+  sourceUrl            String?
+  /// Search query for discovery
+  query                String?
+  /// Target tool category (e.g., "paas", "monitoring")
+  targetCategory       String?
+
+  // --- Scheduling ---
+  /// Schedule type: "manual", "interval", "cron"
+  scheduleType         String    @default("manual")
+  /// Schedule value (e.g., "1d", "6h", "0 0 * * *")
+  scheduleValue        String?
+  /// Next scheduled run time
+  nextRunAt            DateTime?
+  /// Last successful run time
+  lastRunAt            DateTime?
+
+  // --- Filtering ---
+  /// Minimum GitHub stars required
+  minStars             Int?
+  /// Maximum age in days for discovered tools
+  maxAgeDays           Int?
+  /// Include archived repositories?
+  includeArchived      Boolean   @default(false)
+
+  // --- Health & Control ---
+  /// Is this source active?
+  isActive             Boolean   @default(true)
+  /// Is this source paused (manual or auto)?
+  isPaused             Boolean   @default(false)
+  /// Consecutive failure count
+  consecutiveFailures  Int       @default(0)
+  /// Maximum retry attempts per job
+  maxRetries           Int       @default(3)
+  /// Job priority (higher = runs first)
+  priority             Int       @default(0)
+
+  // Timestamps
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  // Relations
+  discoveryJobs        DiscoveryJob[]
+
+  @@index([isActive])
+  @@index([isPaused])
+  @@index([nextRunAt])
+  @@index([sourceType])
+}
+
 /// Discovery jobs — track automated tool discovery runs (like Websearch-UI crawl jobs)
 model DiscoveryJob {
   id              String     @id @default(uuid())
@@ -606,11 +679,18 @@ model DiscoveryJob {
   /// n8n workflow ID
   n8nWorkflowId   String?
 
+  // --- CrawlSource link (if scheduled) ---
+  /// Reference to the CrawlSource that triggered this job
+  crawlSourceId   String?
+  crawlSource     CrawlSource? @relation(fields: [crawlSourceId], references: [id])
+
   // --- Results ---
   /// Number of tools discovered
   toolsDiscovered Int        @default(0)
   /// Number of tools updated
   toolsUpdated    Int        @default(0)
+  /// Number of tools skipped (duplicates)
+  toolsSkipped    Int        @default(0)
   /// Result data (JSON — discovered tools, errors, etc.)
   resultData      Json?
   /// Error message if failed
@@ -625,9 +705,38 @@ model DiscoveryJob {
   // Timestamps
   createdAt       DateTime   @default(now())
 
+  // Relations
+  results         DiscoveryJobResult[]
+
   @@index([status])
   @@index([jobType])
   @@index([createdAt])
+  @@index([crawlSourceId])
+}
+
+/// Per-tool discovery results — granular tracking of each tool outcome
+model DiscoveryJobResult {
+  id                String    @id @default(uuid())
+  /// Parent discovery job
+  jobId             String
+  job               DiscoveryJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  /// Tool ID if matched to existing tool
+  toolId            String?
+  /// Action taken: "created", "updated", "skipped", "failed"
+  action            String
+  /// Discovered tool data (raw)
+  toolData          Json?
+  /// Deduplication key used
+  deduplicationKey  String?
+  /// Error message if action = "failed"
+  errorMessage      String?
+
+  // Timestamps
+  createdAt         DateTime  @default(now())
+
+  @@index([jobId])
+  @@index([action])
+  @@index([toolId])
 }
 
 // =============================================================================
