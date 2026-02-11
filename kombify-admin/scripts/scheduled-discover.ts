@@ -97,7 +97,7 @@ async function firecrawlSearch(query: string): Promise<FirecrawlSearchResult[]> 
         throw new Error(`Firecrawl search failed: ${response.status}`);
       }
 
-      const data = await response.json();
+      const data = await response.json() as { data?: FirecrawlSearchResult[] };
       return data.data || [];
     }, FIRECRAWL_RETRY_OPTIONS);
   } catch {

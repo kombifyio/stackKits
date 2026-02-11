@@ -98,7 +98,7 @@ async function firecrawlSearch(query: string): Promise<FirecrawlSearchResult[]> 
         throw new Error(`Firecrawl search failed: ${response.status} ${text}`);
       }
 
-      const data = await response.json();
+      const data = await response.json() as { data?: FirecrawlSearchResult[] };
       return data.data || [];
     }, FIRECRAWL_RETRY_OPTIONS);
   } catch (error) {
@@ -133,7 +133,7 @@ async function firecrawlScrape(url: string): Promise<FirecrawlScrapeResult | nul
         throw new Error(`Firecrawl scrape failed for ${url}: ${response.status} ${text}`);
       }
 
-      const data = await response.json();
+      const data = await response.json() as { data?: FirecrawlScrapeResult };
       return data.data || null;
     }, FIRECRAWL_RETRY_OPTIONS);
   } catch (error) {

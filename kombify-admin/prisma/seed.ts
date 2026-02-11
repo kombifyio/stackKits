@@ -1363,6 +1363,89 @@ async function main() {
 
   console.log(`Created ${n8nWorkflows.length} n8n workflow entries`);
 
+  // ==========================================================================
+  // CRAWL SOURCES (for scheduled tool discovery)
+  // ==========================================================================
+
+  const crawlSources = await Promise.all([
+    prisma.crawlSource.upsert({
+      where: { name: 'paas-firecrawl' },
+      update: {},
+      create: {
+        name: 'paas-firecrawl',
+        sourceType: 'firecrawl',
+        query: 'self-hosted PaaS platform Docker deploy',
+        targetCategory: 'paas',
+        scheduleType: 'interval',
+        scheduleValue: '1d',
+        minStars: 100,
+        priority: 10,
+        isActive: true,
+      },
+    }),
+    prisma.crawlSource.upsert({
+      where: { name: 'monitoring-firecrawl' },
+      update: {},
+      create: {
+        name: 'monitoring-firecrawl',
+        sourceType: 'firecrawl',
+        query: 'self-hosted monitoring observability Prometheus Grafana alternative',
+        targetCategory: 'monitoring',
+        scheduleType: 'interval',
+        scheduleValue: '1d',
+        minStars: 50,
+        priority: 8,
+        isActive: true,
+      },
+    }),
+    prisma.crawlSource.upsert({
+      where: { name: 'reverse-proxy-firecrawl' },
+      update: {},
+      create: {
+        name: 'reverse-proxy-firecrawl',
+        sourceType: 'firecrawl',
+        query: 'self-hosted reverse proxy load balancer Docker',
+        targetCategory: 'reverse-proxy',
+        scheduleType: 'interval',
+        scheduleValue: '3d',
+        minStars: 200,
+        priority: 5,
+        isActive: true,
+      },
+    }),
+    prisma.crawlSource.upsert({
+      where: { name: 'identity-firecrawl' },
+      update: {},
+      create: {
+        name: 'identity-firecrawl',
+        sourceType: 'firecrawl',
+        query: 'self-hosted identity provider SSO OIDC authentication',
+        targetCategory: 'identity',
+        scheduleType: 'interval',
+        scheduleValue: '7d',
+        minStars: 100,
+        priority: 3,
+        isActive: true,
+      },
+    }),
+    prisma.crawlSource.upsert({
+      where: { name: 'awesome-selfhosted' },
+      update: {},
+      create: {
+        name: 'awesome-selfhosted',
+        sourceType: 'awesome-list',
+        sourceUrl: 'https://github.com/awesome-selfhosted/awesome-selfhosted',
+        query: 'awesome-selfhosted',
+        scheduleType: 'interval',
+        scheduleValue: '7d',
+        priority: 1,
+        isActive: false, // Enable when awesome-list parser is ready
+      },
+    }),
+  ]);
+
+  console.log(`Created ${crawlSources.length} crawl sources`);
+
   console.log('Seeding complete!');
 }
 

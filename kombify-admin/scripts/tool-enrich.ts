@@ -11,6 +11,7 @@
  *   npx ts-node scripts/tool-enrich.ts [tool-name]
  *   npx ts-node scripts/tool-enrich.ts --discovered   # Enrich only DISCOVERED tools
  *   npx ts-node scripts/tool-enrich.ts --all           # Re-enrich all tools
+ *   npx ts-node scripts/tool-enrich.ts --batch --limit=10  # Batch mode for automation
  *
  * Environment:
  *   FIRECRAWL_API_KEY  - Firecrawl API key (for AI extraction)
@@ -78,7 +79,7 @@ async function firecrawlExtract(
     return null;
   }
 
-  const data = await response.json();
+  const data = await response.json() as { data?: any };
   return data.data || null;
 }
 
@@ -115,7 +116,15 @@ async function fetchGitHubStats(repoUrl: string): Promise<GitHubRepoInfo | null>
 
     if (!response.ok) return null;
 
-    const data = await response.json();
+    const data = await response.json() as {
+      stargazers_count: number;
+      forks_count: number;
+      open_issues_count: number;
+      pushed_at: string;
+      license?: { spdx_id?: string };
+      archived: boolean;
+      language: string | null;
+    };
     return {
       stars: data.stargazers_count,
       forks: data.forks_count,
@@ -146,7 +155,7 @@ async function fetchDockerHubPulls(image: string): Promise<number | null> {
     );
     if (!response.ok) return null;
 
-    const data = await response.json();
+    const data = await response.json() as { pull_count?: number };
     return data.pull_count || null;
   } catch {
     return null;
@@ -310,54 +319,107 @@ function calculateQualityScore(extraction: any, updates: any): number {
 // Main
 // ---------------------------------------------------------------------------
 
-async function main(): Promise<void> {
-  const arg = process.argv[2];
+interface EnrichmentResult {
+  success: boolean;
+  enriched: number;
+  errors: number;
+  toolNames: string[];
+}
 
-  console.log('='.repeat(60));
-  console.log('Tool Enrichment - kombify-admin');
-  console.log('='.repeat(60));
+async function main(): Promise<void> {
+  const args = process.argv.slice(2);
+  
+  // Parse flags
+  const flags: Record<string, string | boolean> = {};
+  const positionalArgs: string[] = [];
+  
+  for (const arg of args) {
+    if (arg.startsWith('--')) {
+      const [key, value] = arg.slice(2).split('=');
+      flags[key] = value || true;
+    } else {
+      positionalArgs.push(arg);
+    }
+  }
+  
+  const isBatchMode = flags.batch === true;
+  const limit = typeof flags.limit === 'string' ? parseInt(flags.limit) : undefined;
+
+  if (!isBatchMode) {
+    console.log('='.repeat(60));
+    console.log('Tool Enrichment - kombify-admin');
+    console.log('='.repeat(60));
+  }
 
   let tools;
-  if (arg === '--discovered') {
+  if (flags.discovered) {
     tools = await prisma.tool.findMany({
       where: { lifecycleState: LifecycleState.DISCOVERED },
+      take: limit,
     });
-    console.log(`Enriching ${tools.length} DISCOVERED tools`);
-  } else if (arg === '--all') {
-    tools = await prisma.tool.findMany();
-    console.log(`Enriching all ${tools.length} tools`);
-  } else if (arg && !arg.startsWith('--')) {
+    if (!isBatchMode) console.log(`Enriching ${tools.length} DISCOVERED tools`);
+  } else if (flags.all) {
+    tools = await prisma.tool.findMany({ take: limit });
+    if (!isBatchMode) console.log(`Enriching all ${tools.length} tools`);
+  } else if (positionalArgs[0] && !positionalArgs[0].startsWith('--')) {
     tools = await prisma.tool.findMany({
-      where: { name: arg },
+      where: { name: positionalArgs[0] },
     });
-    console.log(`Enriching tool: ${arg}`);
+    if (!isBatchMode) console.log(`Enriching tool: ${positionalArgs[0]}`);
   } else {
     // Default: enrich tools that haven't been enriched yet
     tools = await prisma.tool.findMany({
       where: { aiEnrichedAt: null },
+      take: limit,
     });
-    console.log(`Enriching ${tools.length} un-enriched tools`);
+    if (!isBatchMode) console.log(`Enriching ${tools.length} un-enriched tools`);
   }
 
   if (tools.length === 0) {
-    console.log('No tools to enrich.');
+    if (isBatchMode) {
+      const result: EnrichmentResult = { success: true, enriched: 0, errors: 0, toolNames: [] };
+      console.log(JSON.stringify(result));
+    } else {
+      console.log('No tools to enrich.');
+    }
     return;
   }
+
+  let enrichedCount = 0;
+  let errorCount = 0;
+  const enrichedNames: string[] = [];
 
   for (const tool of tools) {
     try {
       await enrichTool(tool);
+      enrichedCount++;
+      enrichedNames.push(tool.name);
     } catch (error) {
-      console.error(`Error enriching ${tool.name}:`, error);
+      errorCount++;
+      if (!isBatchMode) {
+        console.error(`Error enriching ${tool.name}:`, error);
+      }
     }
   }
 
-  console.log('\n' + '='.repeat(60));
-  console.log('Enrichment complete!');
-  console.log('');
-  console.log('Next steps:');
-  console.log('  1. Review enriched data: npx prisma studio');
-  console.log('  2. Evaluate tools: npx ts-node scripts/tool-evaluate.ts');
+  if (isBatchMode) {
+    const result: EnrichmentResult = {
+      success: errorCount === 0,
+      enriched: enrichedCount,
+      errors: errorCount,
+      toolNames: enrichedNames,
+    };
+    console.log(JSON.stringify(result));
+  } else {
+    console.log('\n' + '='.repeat(60));
+    console.log('Enrichment complete!');
+    console.log(`  Enriched: ${enrichedCount}`);
+    console.log(`  Errors: ${errorCount}`);
+    console.log('');
+    console.log('Next steps:');
+    console.log('  1. Review enriched data: npx prisma studio');
+    console.log('  2. Evaluate tools: npx ts-node scripts/tool-evaluate.ts');
+  }
 }
 
 main()
