@@ -118,7 +118,9 @@ func runApply(cmd *cobra.Command, args []string) error {
 
 	stateFile := filepath.Join(wd, ".stackkit", "state.yaml")
 	if err := os.MkdirAll(filepath.Dir(stateFile), 0755); err == nil {
-		loader.SaveDeploymentState(state, stateFile)
+		if err := loader.SaveDeploymentState(state, stateFile); err != nil {
+			printWarning("Failed to save deployment state: %v", err)
+		}
 	}
 
 	fmt.Println()

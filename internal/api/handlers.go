@@ -656,7 +656,11 @@ func (s *Server) handleGenerateTFVars(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var tfvars interface{}
-	json.Unmarshal(data, &tfvars)
+	if err := json.Unmarshal(data, &tfvars); err != nil {
+		slog.Error("failed to parse generated tfvars", "error", err)
+		writeError(w, r, http.StatusInternalServerError, "generated tfvars file is invalid")
+		return
+	}
 
 	writeSuccess(w, r, http.StatusOK, map[string]interface{}{
 		"tfvars": tfvars,
@@ -727,7 +731,11 @@ func (s *Server) handleGeneratePreview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var tfvars interface{}
-	json.Unmarshal(data, &tfvars)
+	if err := json.Unmarshal(data, &tfvars); err != nil {
+		slog.Error("failed to parse generated preview tfvars", "error", err)
+		writeError(w, r, http.StatusInternalServerError, "generated preview is invalid")
+		return
+	}
 
 	// Get stackkit info for context
 	sk, _ := loader.LoadStackKit(filepath.Join(dir, "stackkit.yaml"))
