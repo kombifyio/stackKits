@@ -242,7 +242,10 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	// ── Step 6: Check for existing spec ──────────────────────────
-	specPath := filepath.Join(wd, specFile)
+	specPath := specFile
+	if !filepath.IsAbs(specFile) {
+		specPath = filepath.Join(wd, specFile)
+	}
 	if _, err := os.Stat(specPath); err == nil && !initForce {
 		return fmt.Errorf("spec file already exists: %s (use --force to overwrite)", specPath)
 	}

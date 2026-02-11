@@ -50,11 +50,10 @@ func init() {
 func runGenerate(cmd *cobra.Command, args []string) error {
 	wd := getWorkDir()
 
-	// Load spec
-	specPath := filepath.Join(wd, specFile)
+	// Load spec (loader.resolvePath handles absolute vs relative paths)
 	loader := config.NewLoader(wd)
 
-	spec, err := loader.LoadStackSpec(specPath)
+	spec, err := loader.LoadStackSpec(specFile)
 	if err != nil {
 		return fmt.Errorf("failed to load spec file: %w", err)
 	}
