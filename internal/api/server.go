@@ -29,16 +29,29 @@ type ServerConfig struct {
 type Server struct {
 	config ServerConfig
 	mux    *http.ServeMux
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
 // NewServer creates a new API server.
 func NewServer(cfg ServerConfig) *Server {
+	ctx, cancel := context.WithCancel(context.Background())
 	s := &Server{
 		config: cfg,
 		mux:    http.NewServeMux(),
+		ctx:    ctx,
+		cancel: cancel,
 	}
 	s.routes()
 	return s
+}
+
+// Close stops background goroutines (e.g., rate limiter cleanup).
+// Call this when the server is no longer needed to prevent goroutine leaks.
+func (s *Server) Close() {
+	if s.cancel != nil {
+		s.cancel()
+	}
 }
 
 // Handler returns the HTTP handler with middleware applied.
@@ -49,7 +62,7 @@ func (s *Server) Handler() http.Handler {
 		handler = apiKeyMiddleware(s.config.APIKey)(handler)
 	}
 	if s.config.RateLimit > 0 {
-		handler = rateLimitMiddleware(s.config.RateLimit)(handler)
+		handler = rateLimitMiddleware(s.ctx, s.config.RateLimit)(handler)
 	}
 	handler = corsMiddleware(s.config.CORSOrigins)(handler)
 	handler = loggingMiddleware(handler)
@@ -222,23 +235,30 @@ type rateLimitEntry struct {
 
 // rateLimitMiddleware applies a simple per-IP sliding-window rate limit.
 // maxPerMinute is the maximum number of requests allowed per IP per minute.
-// Health endpoints are exempt.
-func rateLimitMiddleware(maxPerMinute int) func(http.Handler) http.Handler {
+// Health endpoints are exempt. The ctx parameter allows graceful shutdown of
+// the cleanup goroutine to prevent leaks.
+func rateLimitMiddleware(ctx context.Context, maxPerMinute int) func(http.Handler) http.Handler {
 	var mu sync.Mutex
 	clients := make(map[string]*rateLimitEntry)
 
-	// Cleanup old entries every 5 minutes
+	// Cleanup old entries every 5 minutes, stops when ctx is cancelled
 	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
 		for {
-			time.Sleep(5 * time.Minute)
-			mu.Lock()
-			now := time.Now()
-			for ip, entry := range clients {
-				if now.Sub(entry.window) > time.Minute {
-					delete(clients, ip)
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				mu.Lock()
+				now := time.Now()
+				for ip, entry := range clients {
+					if now.Sub(entry.window) > time.Minute {
+						delete(clients, ip)
+					}
 				}
+				mu.Unlock()
 			}
-			mu.Unlock()
 		}
 	}()
 

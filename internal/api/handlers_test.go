@@ -82,6 +82,7 @@ import "github.com/kombihq/stackkits/base"
 		BaseDir: tmpDir,
 		Version: "test",
 	})
+	t.Cleanup(srv.Close) // Prevent goroutine leak
 
 	return srv, tmpDir
 }
@@ -709,6 +710,7 @@ func TestAPIKeyMiddleware(t *testing.T) {
 		Version: "test",
 		APIKey:  "test-secret-key",
 	})
+	t.Cleanup(srv.Close)
 	handler := srv.Handler()
 
 	t.Run("valid key", func(t *testing.T) {
@@ -754,6 +756,7 @@ func TestAPIKeyMiddleware(t *testing.T) {
 			Version: "test",
 			APIKey:  "",
 		})
+		t.Cleanup(openSrv.Close)
 		req := httptest.NewRequest("GET", "/api/v1/capabilities", nil)
 		rec := httptest.NewRecorder()
 		openSrv.Handler().ServeHTTP(rec, req)
@@ -773,6 +776,7 @@ func TestCORSMiddleware(t *testing.T) {
 			BaseDir: tmpDir,
 			Version: "test",
 		})
+		t.Cleanup(srv.Close)
 		req := httptest.NewRequest("GET", "/health", nil)
 		req.Header.Set("Origin", "https://example.com")
 		rec := httptest.NewRecorder()
@@ -789,6 +793,7 @@ func TestCORSMiddleware(t *testing.T) {
 			Version:     "test",
 			CORSOrigins: []string{"https://app.kombify.io", "https://localhost:3000"},
 		})
+		t.Cleanup(srv.Close)
 		req := httptest.NewRequest("GET", "/health", nil)
 		req.Header.Set("Origin", "https://app.kombify.io")
 		rec := httptest.NewRecorder()
@@ -806,6 +811,7 @@ func TestCORSMiddleware(t *testing.T) {
 			Version:     "test",
 			CORSOrigins: []string{"https://app.kombify.io"},
 		})
+		t.Cleanup(srv.Close)
 		req := httptest.NewRequest("GET", "/health", nil)
 		req.Header.Set("Origin", "https://evil.example.com")
 		rec := httptest.NewRecorder()
@@ -823,6 +829,7 @@ func TestCORSMiddleware(t *testing.T) {
 			Version:     "test",
 			CORSOrigins: []string{"https://app.kombify.io"},
 		})
+		t.Cleanup(srv.Close)
 		req := httptest.NewRequest("OPTIONS", "/api/v1/validate", nil)
 		req.Header.Set("Origin", "https://app.kombify.io")
 		req.Header.Set("Access-Control-Request-Method", "POST")
@@ -845,6 +852,7 @@ func TestRateLimitMiddleware(t *testing.T) {
 		Version:   "test",
 		RateLimit: 3, // very low limit for testing
 	})
+	t.Cleanup(srv.Close)
 	handler := srv.Handler()
 
 	t.Run("allows requests under limit", func(t *testing.T) {
@@ -896,6 +904,7 @@ func TestRateLimitMiddleware(t *testing.T) {
 			Version:   "test",
 			RateLimit: 0,
 		})
+		t.Cleanup(unlimitedSrv.Close)
 		h := unlimitedSrv.Handler()
 
 		for i := 0; i < 10; i++ {
