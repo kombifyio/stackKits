@@ -332,3 +332,162 @@ func TestGetDeployDir(t *testing.T) {
 		assert.Equal(t, "deploy", dir)
 	})
 }
+
+func TestValidateStackKitName(t *testing.T) {
+	t.Run("rejects empty name", func(t *testing.T) {
+		err := validateStackKitName("")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "cannot be empty")
+	})
+
+	t.Run("rejects path traversal", func(t *testing.T) {
+		err := validateStackKitName("../../../etc/passwd")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "..")
+	})
+
+	t.Run("rejects null bytes", func(t *testing.T) {
+		err := validateStackKitName("test\x00evil")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid characters")
+	})
+
+	t.Run("accepts valid names", func(t *testing.T) {
+		validNames := []string{"base-homelab", "ha-homelab", "modern-homelab", "dev-homelab", "my_stack"}
+		for _, name := range validNames {
+			err := validateStackKitName(name)
+			assert.NoError(t, err, "name %q should be valid", name)
+		}
+	})
+}
+
+func TestValidateStackKit(t *testing.T) {
+	t.Run("rejects missing name", func(t *testing.T) {
+		sk := &models.StackKit{
+			Metadata: models.StackKitMetadata{Version: "1.0.0"},
+			SupportedOS: []string{"ubuntu"},
+		}
+		err := validateStackKit(sk)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "name is required")
+	})
+
+	t.Run("rejects missing version", func(t *testing.T) {
+		sk := &models.StackKit{
+			Metadata: models.StackKitMetadata{Name: "test"},
+			SupportedOS: []string{"ubuntu"},
+		}
+		err := validateStackKit(sk)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "version is required")
+	})
+
+	t.Run("rejects missing supported OS", func(t *testing.T) {
+		sk := &models.StackKit{
+			Metadata: models.StackKitMetadata{Name: "test", Version: "1.0.0"},
+		}
+		err := validateStackKit(sk)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "at least one OS")
+	})
+
+	t.Run("accepts valid stackkit", func(t *testing.T) {
+		sk := &models.StackKit{
+			Metadata: models.StackKitMetadata{Name: "test", Version: "1.0.0"},
+			SupportedOS: []string{"ubuntu", "debian"},
+		}
+		err := validateStackKit(sk)
+		assert.NoError(t, err)
+	})
+}
+
+func TestFindStackKitDirPathTraversal(t *testing.T) {
+	tmpDir := t.TempDir()
+	loader := NewLoader(tmpDir)
+
+	t.Run("rejects path traversal attack", func(t *testing.T) {
+		_, err := loader.FindStackKitDir("../../etc")
+		assert.Error(t, err)
+	})
+
+	t.Run("rejects empty name", func(t *testing.T) {
+		_, err := loader.FindStackKitDir("")
+		assert.Error(t, err)
+	})
+}
+
+func TestSaveStackSpecEdgeCases(t *testing.T) {
+	tmpDir := t.TempDir()
+	loader := NewLoader(tmpDir)
+
+	t.Run("saves and reloads spec", func(t *testing.T) {
+		spec := &models.StackSpec{
+			Name:     "round-trip-test",
+			StackKit: "base-homelab",
+			Variant:  "default",
+			Network: models.NetworkSpec{
+				Mode:   "local",
+				Subnet: "172.20.0.0/16",
+			},
+		}
+
+		specPath := filepath.Join(tmpDir, "test-spec.yaml")
+		err := loader.SaveStackSpec(spec, specPath)
+		require.NoError(t, err)
+
+		loaded, err := loader.LoadStackSpec(specPath)
+		require.NoError(t, err)
+		assert.Equal(t, "round-trip-test", loaded.Name)
+		assert.Equal(t, "base-homelab", loaded.StackKit)
+	})
+
+	t.Run("fails for invalid output path", func(t *testing.T) {
+		// Create a file, then try to use it as a directory component
+		blocker := filepath.Join(tmpDir, "blocker")
+		require.NoError(t, os.WriteFile(blocker, []byte("x"), 0644))
+
+		spec := &models.StackSpec{Name: "test", StackKit: "base-homelab"}
+		err := loader.SaveStackSpec(spec, filepath.Join(blocker, "sub", "spec.yaml"))
+		assert.Error(t, err)
+	})
+}
+
+func TestApplySpecDefaults(t *testing.T) {
+	t.Run("applies all defaults to empty spec", func(t *testing.T) {
+		spec := &models.StackSpec{}
+		applySpecDefaults(spec)
+
+		assert.Equal(t, "default", spec.Variant)
+		assert.Equal(t, "simple", spec.Mode)
+		assert.Equal(t, "local", spec.Network.Mode)
+		assert.Equal(t, "172.20.0.0/16", spec.Network.Subnet)
+		assert.Equal(t, "standard", spec.Compute.Tier)
+		assert.Equal(t, 22, spec.SSH.Port)
+		assert.Equal(t, "root", spec.SSH.User)
+	})
+
+	t.Run("preserves existing values", func(t *testing.T) {
+		spec := &models.StackSpec{
+			Variant: "custom",
+			Network: models.NetworkSpec{
+				Mode:   "public",
+				Subnet: "10.0.0.0/8",
+			},
+			Compute: models.ComputeSpec{
+				Tier: "high",
+			},
+			SSH: models.SSHSpec{
+				Port: 2222,
+				User: "ubuntu",
+			},
+		}
+		applySpecDefaults(spec)
+
+		assert.Equal(t, "custom", spec.Variant)
+		assert.Equal(t, "public", spec.Network.Mode)
+		assert.Equal(t, "10.0.0.0/8", spec.Network.Subnet)
+		assert.Equal(t, "high", spec.Compute.Tier)
+		assert.Equal(t, 2222, spec.SSH.Port)
+		assert.Equal(t, "ubuntu", spec.SSH.User)
+	})
+}

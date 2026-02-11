@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STACKKIT_DIR="$(dirname "$SCRIPT_DIR")"
 ROOT_DIR="$(dirname "$STACKKIT_DIR")"
 
-echo "=== KombiStack CUE Schema Tests ==="
+echo "=== kombify Stack CUE Schema Tests ==="
 echo "StackKit: base-homelab"
 echo "Root: $ROOT_DIR"
 echo ""

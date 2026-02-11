@@ -7,7 +7,7 @@ metadata:
   name: ha-homelab
   version: "1.0.0-alpha"
   description: "Enterprise-grade homelab with Docker Swarm HA and automatic failover"
-  author: "KombiStack Team"
+  author: "kombify Stack Team"
   license: "Apache-2.0"
   repository: "https://github.com/kombihq/stackkits"
   status: scaffolding
@@ -55,7 +55,7 @@ requirements:
 # =============================================================================
 modes:
   simple:
-    description: "OpenTofu-only deployment via KombiStack Core"
+    description: "OpenTofu-only deployment via kombify Stack Core"
     templateDir: "templates/simple"
     engine: "opentofu"
     recommended: false  # Not recommended for HA

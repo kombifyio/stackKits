@@ -171,13 +171,9 @@ Items are categorized by severity and mapped to roadmap milestones.
 **Fix:** Update when org name is finalized. Deferred due to impact on 3+ Go modules.  
 **Milestone:** Deferred
 
-### TD-25: Domain Validation Inconsistency (W10)
+### ~~TD-25: Domain Validation Inconsistency (W10)~~ → RESOLVED
 
-**Location:** `ha-homelab/stackfile.cue` vs `base-homelab/stackfile.cue`  
-**Problem:** HA rejects local domains (`!~"\\.(local|lan)$"`), Base allows them. Unclear if HA requiring public domains is intentional.  
-**Impact:** Confusing user experience.  
-**Fix:** Clarify in ADR: HA can use local or public. If local, Keepalived VIP; if public, cloud LB.  
-**Milestone:** M3
+> Moved to [Resolved](#resolved) on 2026-02-14. HA domain regex changed from TLD blocklist to positive hostname format validation. `step-ca` added as TLS provider for local domains. See ADR-0004.
 
 ### ~~TD-26: Dokploy/Coolify Selection Logic (W12)~~ → RESOLVED
 
@@ -213,6 +209,7 @@ Items are categorized by severity and mapped to roadmap milestones.
 | TD-26 | Dokploy/Coolify selection logic | 2026-02-11 | Source doc archived; ROADMAP M2 clarifies: local→Dokploy, cloud→Coolify |
 | TD-09 | Services format inconsistency (list vs map) | 2026-02-13 | Standardized to map `[string]: #ServiceDefinition` in base/stackkit.cue, base-homelab/services.cue, dev-homelab/stackfile.cue — matches ha/modern-homelab and Go `StackSpec.Services` |
 | TD-14 | OpenTofu validation not executed | 2026-02-13 | `cmd/stackkit/commands/validate.go` now uses `tofu.Executor.Validate()` with JSON error parsing, init-if-needed, and install check |
+| TD-25 | Domain validation inconsistency | 2026-02-14 | HA regex changed to positive hostname format; `step-ca` TLS provider added for local domains. See ADR-0004 |
 
 ---
 

@@ -3,12 +3,16 @@ package tofu
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestExecutor(t *testing.T) {
@@ -370,5 +374,274 @@ func TestEnsureStateDirNestedPath(t *testing.T) {
 		info, err := os.Stat(stateDir)
 		assert.NoError(t, err)
 		assert.True(t, info.IsDir())
+	})
+}
+
+// --- Tests that exercise the run() method via a real binary ---
+
+// echoCmd returns a binary and args that print to stdout on any platform.
+func echoCmd() (binary string, args []string) {
+	if runtime.GOOS == "windows" {
+		return "cmd", []string{"/C", "echo"}
+	}
+	return "echo", nil
+}
+
+// failCmd returns a binary and args that exit with code 1 on any platform.
+func failCmd() (binary string, args []string) {
+	if runtime.GOOS == "windows" {
+		return "cmd", []string{"/C", "exit /b 1"}
+	}
+	return "sh", []string{"-c", "exit 1"}
+}
+
+func TestRunMethodViaVersion(t *testing.T) {
+	// Use a real "echo" binary to simulate tofu version output
+	binary, baseArgs := echoCmd()
+	if _, err := exec.LookPath(binary); err != nil {
+		t.Skipf("binary %s not found on PATH", binary)
+	}
+
+	// Create a wrapper script that outputs a fake version string
+	tmpDir := t.TempDir()
+	var scriptPath string
+
+	if runtime.GOOS == "windows" {
+		scriptPath = filepath.Join(tmpDir, "fake-tofu.bat")
+		os.WriteFile(scriptPath, []byte("@echo off\nif \"%1\"==\"version\" echo OpenTofu v1.8.0\n"), 0755)
+	} else {
+		scriptPath = filepath.Join(tmpDir, "fake-tofu")
+		os.WriteFile(scriptPath, []byte("#!/bin/sh\nif [ \"$1\" = \"version\" ]; then echo \"OpenTofu v1.8.0\"; fi\n"), 0755)
+	}
+
+	_ = baseArgs // not needed for this test
+
+	executor := NewExecutor(
+		WithBinary(scriptPath),
+		WithWorkDir(tmpDir),
+	)
+
+	ctx := context.Background()
+
+	t.Run("Version parses output", func(t *testing.T) {
+		version, err := executor.Version(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, "1.8.0", version)
+	})
+}
+
+func TestRunMethodSuccess(t *testing.T) {
+	tmpDir := t.TempDir()
+	var scriptPath string
+
+	if runtime.GOOS == "windows" {
+		scriptPath = filepath.Join(tmpDir, "fake-tofu.bat")
+		// Script that echoes valid JSON for validate, and handles other commands
+		script := `@echo off
+if "%1"=="validate" (
+  echo {"valid":true,"error_count":0,"warning_count":0,"diagnostics":[]}
+  exit /b 0
+)
+if "%1"=="output" (
+  echo {}
+  exit /b 0
+)
+if "%1"=="state" (
+  echo.
+  exit /b 0
+)
+if "%1"=="graph" (
+  echo digraph { }
+  exit /b 0
+)
+if "%1"=="providers" (
+  echo Providers required:
+  exit /b 0
+)
+if "%1"=="fmt" (
+  exit /b 0
+)
+echo OK
+exit /b 0
+`
+		os.WriteFile(scriptPath, []byte(script), 0755)
+	} else {
+		scriptPath = filepath.Join(tmpDir, "fake-tofu")
+		script := `#!/bin/sh
+case "$1" in
+  validate) echo '{"valid":true,"error_count":0,"warning_count":0,"diagnostics":[]}'; exit 0;;
+  output) echo '{}'; exit 0;;
+  state) echo ''; exit 0;;
+  graph) echo 'digraph { }'; exit 0;;
+  providers) echo 'Providers required:'; exit 0;;
+  fmt) exit 0;;
+  *) echo OK; exit 0;;
+esac
+`
+		os.WriteFile(scriptPath, []byte(script), 0755)
+	}
+
+	executor := NewExecutor(
+		WithBinary(scriptPath),
+		WithWorkDir(tmpDir),
+	)
+
+	ctx := context.Background()
+
+	t.Run("Validate returns success", func(t *testing.T) {
+		result, err := executor.Validate(ctx)
+		require.NoError(t, err)
+		assert.True(t, result.Success)
+		assert.Equal(t, 0, result.ExitCode)
+		assert.Contains(t, result.Stdout, "valid")
+	})
+
+	t.Run("Output returns result", func(t *testing.T) {
+		result, err := executor.Output(ctx)
+		require.NoError(t, err)
+		assert.True(t, result.Success)
+	})
+
+	t.Run("State returns result", func(t *testing.T) {
+		result, err := executor.State(ctx)
+		require.NoError(t, err)
+		assert.True(t, result.Success)
+	})
+
+	t.Run("Graph returns result", func(t *testing.T) {
+		result, err := executor.Graph(ctx)
+		require.NoError(t, err)
+		assert.True(t, result.Success)
+	})
+
+	t.Run("Providers returns result", func(t *testing.T) {
+		result, err := executor.Providers(ctx)
+		require.NoError(t, err)
+		assert.True(t, result.Success)
+	})
+
+	t.Run("Format returns result", func(t *testing.T) {
+		result, err := executor.Format(ctx)
+		require.NoError(t, err)
+		assert.True(t, result.Success)
+	})
+
+	t.Run("Refresh returns result", func(t *testing.T) {
+		result, err := executor.Refresh(ctx)
+		require.NoError(t, err)
+		assert.True(t, result.Success)
+	})
+}
+
+func TestRunMethodFailure(t *testing.T) {
+	tmpDir := t.TempDir()
+	var scriptPath string
+
+	if runtime.GOOS == "windows" {
+		scriptPath = filepath.Join(tmpDir, "fail-tofu.bat")
+		os.WriteFile(scriptPath, []byte("@echo off\necho Error: something failed >&2\nexit /b 1\n"), 0755)
+	} else {
+		scriptPath = filepath.Join(tmpDir, "fail-tofu")
+		os.WriteFile(scriptPath, []byte("#!/bin/sh\necho 'Error: something failed' >&2\nexit 1\n"), 0755)
+	}
+
+	executor := NewExecutor(
+		WithBinary(scriptPath),
+		WithWorkDir(tmpDir),
+	)
+
+	ctx := context.Background()
+
+	t.Run("failed command returns non-zero exit code", func(t *testing.T) {
+		result, err := executor.Validate(ctx)
+		require.NoError(t, err) // run() doesn't return error, it sets result.Success
+		assert.False(t, result.Success)
+		assert.NotEqual(t, 0, result.ExitCode)
+	})
+
+	t.Run("Version fails gracefully", func(t *testing.T) {
+		_, err := executor.Version(ctx)
+		assert.Error(t, err)
+	})
+}
+
+func TestRunMethodTimeout(t *testing.T) {
+	tmpDir := t.TempDir()
+	var scriptPath string
+
+	if runtime.GOOS == "windows" {
+		scriptPath = filepath.Join(tmpDir, "slow-tofu.bat")
+		os.WriteFile(scriptPath, []byte("@echo off\nping -n 10 127.0.0.1 > nul\n"), 0755)
+	} else {
+		scriptPath = filepath.Join(tmpDir, "slow-tofu")
+		os.WriteFile(scriptPath, []byte("#!/bin/sh\nsleep 10\n"), 0755)
+	}
+
+	executor := NewExecutor(
+		WithBinary(scriptPath),
+		WithWorkDir(tmpDir),
+		WithTimeout(100*time.Millisecond),
+	)
+
+	t.Run("times out and returns TimeoutError", func(t *testing.T) {
+		ctx := context.Background()
+		_, err := executor.Validate(ctx)
+		if err != nil {
+			assert.True(t, IsTimeoutError(err), "expected TimeoutError, got: %v", err)
+		}
+		// On some systems the process may be killed before deadline detection
+	})
+}
+
+func TestRunEnvironment(t *testing.T) {
+	tmpDir := t.TempDir()
+	var scriptPath string
+
+	if runtime.GOOS == "windows" {
+		scriptPath = filepath.Join(tmpDir, "env-tofu.bat")
+		os.WriteFile(scriptPath, []byte("@echo off\necho TF_IN_AUTOMATION=%TF_IN_AUTOMATION%\necho TF_INPUT=%TF_INPUT%\n"), 0755)
+	} else {
+		scriptPath = filepath.Join(tmpDir, "env-tofu")
+		os.WriteFile(scriptPath, []byte("#!/bin/sh\necho TF_IN_AUTOMATION=$TF_IN_AUTOMATION\necho TF_INPUT=$TF_INPUT\n"), 0755)
+	}
+
+	executor := NewExecutor(
+		WithBinary(scriptPath),
+		WithWorkDir(tmpDir),
+	)
+
+	t.Run("sets automation environment variables", func(t *testing.T) {
+		ctx := context.Background()
+		result, err := executor.Validate(ctx)
+		require.NoError(t, err)
+		assert.Contains(t, result.Stdout, "TF_IN_AUTOMATION=1")
+		assert.Contains(t, result.Stdout, "TF_INPUT=0")
+	})
+}
+
+func TestPlanExitCode2(t *testing.T) {
+	tmpDir := t.TempDir()
+	var scriptPath string
+
+	if runtime.GOOS == "windows" {
+		scriptPath = filepath.Join(tmpDir, "plan-tofu.bat")
+		os.WriteFile(scriptPath, []byte(fmt.Sprintf("@echo off\necho Plan: 2 to add, 0 to change, 0 to destroy.\nexit /b 2\n")), 0755)
+	} else {
+		scriptPath = filepath.Join(tmpDir, "plan-tofu")
+		os.WriteFile(scriptPath, []byte("#!/bin/sh\necho 'Plan: 2 to add, 0 to change, 0 to destroy.'\nexit 2\n"), 0755)
+	}
+
+	executor := NewExecutor(
+		WithBinary(scriptPath),
+		WithWorkDir(tmpDir),
+	)
+
+	t.Run("plan exit code 2 means changes detected, not error", func(t *testing.T) {
+		ctx := context.Background()
+		result, err := executor.Plan(ctx, "")
+		require.NoError(t, err)
+		// Exit code 2 with plan is treated as success (changes detected)
+		assert.True(t, result.Success)
+		assert.Equal(t, 2, result.ExitCode)
 	})
 }

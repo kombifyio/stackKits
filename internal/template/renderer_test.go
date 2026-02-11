@@ -372,3 +372,138 @@ func TestIfEnabled(t *testing.T) {
 		assert.Nil(t, result)
 	})
 }
+
+func TestIndent(t *testing.T) {
+	t.Run("indents single line", func(t *testing.T) {
+		result := indent(4, "hello")
+		assert.Equal(t, "    hello", result)
+	})
+
+	t.Run("indents multiple lines", func(t *testing.T) {
+		result := indent(2, "line1\nline2\nline3")
+		assert.Equal(t, "  line1\n  line2\n  line3", result)
+	})
+
+	t.Run("preserves empty lines", func(t *testing.T) {
+		result := indent(2, "line1\n\nline3")
+		assert.Equal(t, "  line1\n\n  line3", result)
+	})
+
+	t.Run("zero indent", func(t *testing.T) {
+		result := indent(0, "hello")
+		assert.Equal(t, "hello", result)
+	})
+}
+
+func TestToYaml(t *testing.T) {
+	t.Run("converts map to yaml", func(t *testing.T) {
+		data := map[string]string{"key": "value"}
+		result := toYaml(data)
+		assert.Contains(t, result, "key: value")
+	})
+
+	t.Run("handles nil", func(t *testing.T) {
+		result := toYaml(nil)
+		assert.Equal(t, "", result)
+	})
+
+	t.Run("converts nested struct", func(t *testing.T) {
+		data := map[string]interface{}{
+			"network": map[string]string{
+				"subnet": "10.0.0.0/8",
+			},
+		}
+		result := toYaml(data)
+		assert.Contains(t, result, "network")
+		assert.Contains(t, result, "subnet")
+	})
+}
+
+func TestToJson(t *testing.T) {
+	t.Run("converts map to json", func(t *testing.T) {
+		data := map[string]string{"key": "value"}
+		result := toJson(data)
+		assert.Contains(t, result, `"key":"value"`)
+	})
+
+	t.Run("handles nil", func(t *testing.T) {
+		result := toJson(nil)
+		assert.Equal(t, "null", result)
+	})
+
+	t.Run("converts number", func(t *testing.T) {
+		result := toJson(42)
+		assert.Equal(t, "42", result)
+	})
+}
+
+func TestToJsonPretty(t *testing.T) {
+	t.Run("converts map to pretty json", func(t *testing.T) {
+		data := map[string]string{"key": "value"}
+		result := toJsonPretty(data)
+		assert.Contains(t, result, "  ")
+		assert.Contains(t, result, `"key": "value"`)
+	})
+
+	t.Run("handles nil", func(t *testing.T) {
+		result := toJsonPretty(nil)
+		assert.Equal(t, "null", result)
+	})
+}
+
+func TestDefaultValue(t *testing.T) {
+	t.Run("returns default for nil", func(t *testing.T) {
+		result := defaultValue("fallback", nil)
+		assert.Equal(t, "fallback", result)
+	})
+
+	t.Run("returns default for empty string", func(t *testing.T) {
+		result := defaultValue("fallback", "")
+		assert.Equal(t, "fallback", result)
+	})
+
+	t.Run("returns value when present", func(t *testing.T) {
+		result := defaultValue("fallback", "actual")
+		assert.Equal(t, "actual", result)
+	})
+}
+
+func TestQuote(t *testing.T) {
+	t.Run("wraps in double quotes", func(t *testing.T) {
+		assert.Equal(t, `"hello"`, quote("hello"))
+	})
+
+	t.Run("handles empty string", func(t *testing.T) {
+		assert.Equal(t, `""`, quote(""))
+	})
+}
+
+func TestRenderWithNonexistentTemplateDir(t *testing.T) {
+	renderer := NewRenderer("/nonexistent/templates", t.TempDir())
+	ctx := &RenderContext{
+		Spec: &models.StackSpec{Name: "test", StackKit: "base-homelab"},
+	}
+
+	err := renderer.Render(ctx)
+	assert.Error(t, err)
+}
+
+func TestPortListWithProtocol(t *testing.T) {
+	t.Run("uses specified protocol", func(t *testing.T) {
+		ports := []PortMapping{
+			{Host: 53, Container: 53, Protocol: "udp"},
+		}
+		result := portList(ports)
+		assert.Contains(t, result, `protocol = "udp"`)
+	})
+
+	t.Run("multiple ports with different protocols", func(t *testing.T) {
+		ports := []PortMapping{
+			{Host: 80, Container: 80, Protocol: "tcp"},
+			{Host: 53, Container: 53, Protocol: "udp"},
+		}
+		result := portList(ports)
+		assert.Contains(t, result, `protocol = "tcp"`)
+		assert.Contains(t, result, `protocol = "udp"`)
+	})
+}

@@ -242,8 +242,11 @@ import (
 // =============================================================================
 
 #HANetworkConfig: {
-	// Domain (required for HA, must be public)
-	domain: string & !~"\\.(local|lan|home|internal|test)$"
+	// Domain (required for HA)
+	// Both public domains (example.com) and local domains (.local, .lan) are supported.
+	// Public domains → Let's Encrypt TLS via ACME challenge
+	// Local domains  → self-signed or internal CA (Step-CA), Keepalived VIP for failover
+	domain: string & =~"^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?\\.[a-zA-Z]{2,}$"
 
 	// ACME email for TLS
 	acmeEmail: =~"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
@@ -273,7 +276,11 @@ import (
 
 	// TLS configuration
 	tls: {
-		provider:  "letsencrypt" | "letsencrypt-staging" | "custom" | *"letsencrypt"
+		// letsencrypt: public domains with ACME
+		// letsencrypt-staging: testing ACME
+		// step-ca: internal CA for local domains
+		// custom: user-provided certificates
+		provider:  "letsencrypt" | "letsencrypt-staging" | "step-ca" | "custom" | *"letsencrypt"
 		challenge: "http" | "dns" | *"http"
 	}
 }

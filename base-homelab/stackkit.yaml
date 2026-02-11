@@ -6,7 +6,7 @@ metadata:
   name: base-homelab
   version: "4.0.0"
   description: "Single-environment deployment with Docker, Dokploy and monitoring"
-  author: "KombiStack Team"
+  author: "kombify Stack Team"
   license: "Apache-2.0"
   repository: "https://github.com/kombihq/stackkits"
   tags:
@@ -40,7 +40,7 @@ requirements:
 modes:
   # Simple Mode: OpenTofu-only with Go integration
   simple:
-    description: "OpenTofu-only deployment via KombiStack Core"
+    description: "OpenTofu-only deployment via kombify Stack Core"
     templateDir: "templates/simple"
     engine: "opentofu"
     features:

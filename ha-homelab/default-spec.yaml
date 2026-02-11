@@ -1,6 +1,6 @@
 # ha-homelab Default Spec
 # High-Availability Homelab mit 3 Nodes (1 Main + 2 Worker)
-# Für CLI-Only Nutzung ohne KombiStack UI
+# Für CLI-Only Nutzung ohne kombify Stack UI
 #
 # Verwendung:
 #   1. Kopiere diese Datei: cp default-spec.yaml my-ha-homelab-spec.yaml

@@ -1,6 +1,6 @@
 # modern-homelab Default Spec
 # Modern Homelab mit Kubernetes (K3s) auf 3 Nodes
-# Für CLI-Only Nutzung ohne KombiStack UI
+# Für CLI-Only Nutzung ohne kombify Stack UI
 #
 # Verwendung:
 #   1. Kopiere diese Datei: cp default-spec.yaml my-modern-homelab-spec.yaml
