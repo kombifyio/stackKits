@@ -35,7 +35,7 @@ This roadmap consolidates all planned work into a single milestone-based plan (M
 | Add-On system | 0% | **NEW** — replaces monolithic variants |
 | Context system | 0% | **NEW** — replaces manual compute tier selection |
 | kombify Stack integration | 30% | Unifier pipeline exists, needs v4 alignment |
-| API server | 20% | HTTP scaffold + OpenAPI spec served, no endpoints yet |
+| API server | 85% | All 13 OpenAPI endpoints implemented. Missing: auth, rate limiting, API tests |
 | Documentation | 40% | Many outdated docs referencing old concepts (K8s, variants, old naming) |
 
 ---
@@ -138,6 +138,12 @@ Before implementation, a full audit identified critical inconsistencies across S
 - [ ] `bridge.go` rewrite: CUE export → tfvars.json pipeline
 - [ ] base-homelab end-to-end: `validate → generate → plan → apply`
 - [ ] CI/CD pipeline: `cue vet ./...`, Go tests, lint on every push
+- [ ] **API hardening: Fix filesystem write vulnerability in `handleGenerateTFVars`** (TD-27, P0)
+- [ ] **API hardening: Add authentication middleware** (TD-28, P0)
+- [ ] **API hardening: Fix compute tier enum mismatch in OpenAPI spec** (TD-29, P0)
+- [ ] **API hardening: Add rate limiting middleware** (TD-33, P1)
+- [ ] **API hardening: Add API handler test coverage** (TD-34, P1)
+- [ ] **API hardening: Capture response status in logging middleware** (TD-35, P1)
 - [ ] JSON schema export for IDE support (`cue export --schema`)
 - [ ] Fix `base.#Layer3Applications.services` constraint (Array vs Map — W8)
 - [ ] Port collision detection as CUE constraint
@@ -465,9 +471,14 @@ The **StackKit catalog/admin UI** stores data in `kombify-DB` under `content_sta
 |-----------|--------|
 | HTTP scaffold (Go, port 8082) | ✅ Done |
 | OpenAPI spec at `/api/v1/openapi.yaml` | ✅ Done |
-| Catalog endpoints | ⬜ Not started |
-| Validation endpoint | ⬜ Not started |
-| Generation endpoint | ⬜ Not started |
+| Catalog endpoints (list, get, schema, defaults, variants) | ✅ Done (5 endpoints) |
+| Validation endpoints (full + partial) | ✅ Done (2 endpoints) |
+| Generation endpoints (tfvars + preview) | ✅ Done (2 endpoints) |
+| Utility endpoints (health, capabilities) | ✅ Done (2 endpoints) |
+| Authentication middleware | ⬜ Not started (TD-28) |
+| Rate limiting | ⬜ Not started (TD-33) |
+| API handler tests | ⬜ Not started (TD-34) |
+| Filesystem write fix (outputDir) | ⬜ Not started (TD-27) |
 
 ---
 

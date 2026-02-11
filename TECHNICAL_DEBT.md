@@ -1,6 +1,6 @@
 # StackKits — Technical Debt Register
 
-> **Last Updated:** 2026-02-12  
+> **Last Updated:** 2026-02-16  
 > **Architecture:** v4 (see [ARCHITECTURE_V4.md](docs/ARCHITECTURE_V4.md))  
 > **Roadmap:** [docs/ROADMAP.md](docs/ROADMAP.md)
 
@@ -31,17 +31,32 @@ Items are categorized by severity and mapped to roadmap milestones.
 
 ## P0 — Blockers
 
-### ~~TD-01: CUE Package Declaration Errors~~ → RESOLVED
+### TD-27: API Arbitrary Filesystem Write (C1)
 
-> Moved to [Resolved](#resolved) on 2026-02-12.
+**Location:** `internal/api/handlers.go` L449 (`handleGenerateTFVars`)  
+**Problem:** `outputDir` field in the request body lets a client specify an arbitrary server path. The handler writes files to that path without restriction.  
+**Impact:** Path write vulnerability — any external caller can write to arbitrary server filesystem locations.  
+**Fix:** Remove `outputDir` from API requests (always use temp dir + return content), or restrict to a sandboxed directory.  
+**Milestone:** M1
+**Task:** StackKits-l3s.1
 
-### ~~TD-02: Schema Duplication~~ → RESOLVED
+### TD-28: No API Authentication (C2)
 
-> Moved to [Resolved](#resolved) on 2026-02-12.
+**Location:** `internal/api/server.go` (middleware chain)  
+**Problem:** No API key, JWT, or any auth middleware. CORS headers reference `X-API-Key`, `X-User-ID`, `X-Org-ID` but these are never validated.  
+**Impact:** Anyone can call all API endpoints if the server is exposed beyond localhost.  
+**Fix:** Add API-key or JWT validation middleware. Support `X-API-Key` header validation for Kong Gateway integration.  
+**Milestone:** M1
+**Task:** StackKits-l3s.2
 
-### ~~TD-03: dev-homelab Package Conflict~~ → RESOLVED
+### TD-29: OpenAPI Compute Tier Enum Mismatch (C3)
 
-> Moved to [Resolved](#resolved) on 2026-02-11.
+**Location:** `api/openapi/stackkits-v1.yaml` — `ComputeSpec.tier`  
+**Problem:** OpenAPI spec says `[minimal, standard, performance]` but Go code (fixed in TD-04) validates `[low, standard, high]`. The spec was not updated when TD-04 was resolved.  
+**Impact:** API clients using the OpenAPI spec will send invalid enum values.  
+**Fix:** Update OpenAPI spec to `[low, standard, high]` to match Go code and CUE schemas.  
+**Milestone:** M1
+**Task:** StackKits-l3s.3
 
 ---
 
@@ -83,6 +98,33 @@ Items are categorized by severity and mapped to roadmap milestones.
 **Fix:** Implement proper CUE export → tfvars.json pipeline. OpenTofu modules replace monolithic `main.tf`.  
 **Milestone:** M1
 
+### TD-30: CLI generate Does Not Use Template Renderer (I5)
+
+**Location:** `cmd/stackkit/commands/generate.go` L128  
+**Problem:** `copyOrRenderTemplates` calls `copyFile` instead of using `internal/template/Renderer`. Templates are copied verbatim rather than rendered with variable substitution.  
+**Impact:** Generated output contains template placeholders instead of actual values.  
+**Fix:** Wire the existing `template.Renderer` into the generate command. Related to TD-10.  
+**Milestone:** M1
+**Task:** StackKits-l3s.8
+
+### TD-31: iac and terramate Packages Are Dead Code (I6)
+
+**Location:** `internal/iac/executor.go` (~380 lines), `internal/terramate/executor.go` (~459 lines)  
+**Problem:** CLI commands directly use `internal/tofu/`. The unified `iac.Executor` interface and Terramate wrapper are built and tested (~475 lines of tests) but never used.  
+**Impact:** ~840 lines of production code + tests are dead code. Terramate mode is unreachable from CLI.  
+**Fix:** Wire `iac.Executor` into CLI commands. Support `--engine terramate` flag.  
+**Milestone:** M6
+**Task:** StackKits-l3s.9
+
+### TD-32: internal/errors Package Mostly Unused (I8)
+
+**Location:** `internal/errors/errors.go` (~271 lines)  
+**Problem:** Rich error system with categories, severity, auto-fix suggestions, and structured context — but CLI commands and API handlers use plain `fmt.Errorf` everywhere.  
+**Impact:** Poor error UX. Users get unstructured error messages. Auto-fix suggestions never shown.  
+**Fix:** Adopt `internal/errors` across CLI and API. Replace `fmt.Errorf` with structured errors where user-facing.  
+**Milestone:** M3
+**Task:** StackKits-l3s.11
+
 ### TD-11: Headscale Port Conflict (W9)
 
 **Location:** `modern-homelab/services.cue`  
@@ -94,6 +136,62 @@ Items are categorized by severity and mapped to roadmap milestones.
 ---
 
 ## P2 — Medium Priority
+
+### TD-33: No API Rate Limiting (I1)
+
+**Location:** `internal/api/server.go`  
+**Problem:** No rate limiting middleware. Generation endpoints are computationally expensive.  
+**Fix:** Add configurable rate limiter (per-IP or per-API-key).  
+**Milestone:** M1
+**Task:** StackKits-l3s.4
+
+### TD-34: Zero API Handler Test Coverage (I2)
+
+**Location:** `internal/api/`  
+**Problem:** No unit tests for handlers.go (~580 lines) or server.go (~190 lines). All 13 endpoints untested.  
+**Fix:** Add httptest-based unit tests for every handler.  
+**Milestone:** M1
+**Task:** StackKits-l3s.5
+
+### TD-35: Logging Middleware Missing Response Status (I3)
+
+**Location:** `internal/api/server.go` L160  
+**Problem:** `loggingMiddleware` doesn't wrap `http.ResponseWriter` so cannot capture HTTP status code in logs.  
+**Fix:** Use a `statusResponseWriter` wrapper to capture status code and content length.  
+**Milestone:** M1
+**Task:** StackKits-l3s.6
+
+### TD-36: CLI status --json Flag Not Implemented (I4)
+
+**Location:** `cmd/stackkit/commands/status.go` L37  
+**Problem:** `--json` flag is registered but JSON output path is not implemented.  
+**Fix:** Add JSON output mode using same data as table output.  
+**Milestone:** M3
+**Task:** StackKits-l3s.7
+
+### TD-37: CLI prepare Memory Check Missing (I7)
+
+**Location:** `cmd/stackkit/commands/prepare.go` L262  
+**Problem:** `checkLocalResources` reports "Memory: (check manually)" instead of actually checking available RAM.  
+**Fix:** Use `runtime.MemStats` or read `/proc/meminfo` on Linux, `GlobalMemoryStatusEx` on Windows.  
+**Milestone:** M3
+**Task:** StackKits-l3s.10
+
+### TD-38: Interactive init Is a Stub (I9)
+
+**Location:** `cmd/stackkit/commands/init.go` L78-82  
+**Problem:** Running `stackkit init` without arguments lists available StackKits and errors out. No interactive selection.  
+**Fix:** Add bubbletea or promptui-based interactive wizard for StackKit, domain, email, compute tier.  
+**Milestone:** M4
+**Task:** StackKits-l3s.12
+
+### TD-39: Hardcoded stackKitDirs in API Handler (I10)
+
+**Location:** `internal/api/handlers.go` L81  
+**Problem:** Hardcoded list of StackKit directories. Adding new StackKits requires code change.  
+**Fix:** Auto-discover StackKit directories from filesystem via `stackkit.yaml` presence.  
+**Milestone:** M3
+**Task:** StackKits-l3s.13
 
 ### TD-12: Variants Directory Still Exists
 
@@ -113,11 +211,12 @@ Items are categorized by severity and mapped to roadmap milestones.
 
 ### TD-15: Missing Go Unit Tests
 
-**Location:** `tests/unit/`  
-**Problem:** Test directory is essentially empty. `internal/config`, `internal/cue`, `internal/template` have no tests.  
-**Impact:** No regression safety for core packages.  
-**Fix:** Write unit tests for all `internal/` packages.  
-**Milestone:** M3
+**Location:** `tests/unit/`, `internal/api/`  
+**Problem:** `tests/unit/` is essentially empty. `internal/api/` (handlers.go ~580 lines, server.go ~190 lines) has **zero test coverage** despite implementing all 13 API endpoints. `internal/config`, `internal/cue`, `internal/template` also lack tests.  
+**Impact:** No regression safety for core packages. API regressions are undetectable.  
+**Fix:** Write unit tests for all `internal/` packages, prioritizing `internal/api/` (httptest-based handler tests).  
+**Milestone:** M1 (API tests), M3 (remaining packages)  
+**Task:** StackKits-l3s.5
 
 ### ~~TD-16: Coolify Image Typo~~ → RESOLVED
 
@@ -142,6 +241,46 @@ Items are categorized by severity and mapped to roadmap milestones.
 ---
 
 ## P3 — Low Priority
+
+### TD-40: CORS Wildcard Not Configurable (N1)
+
+**Location:** `internal/api/server.go` CORS middleware  
+**Problem:** CORS origin is hardcoded to `*`. Should be configurable for production.  
+**Fix:** Add `--cors-origins` flag or env var.  
+**Milestone:** M3
+**Task:** StackKits-l3s.14
+
+### TD-41: No Pagination on List Endpoints (N2)
+
+**Location:** `internal/api/handlers.go` `handleListStackKits`  
+**Problem:** Returns all StackKits in single response. Not an issue at 4 StackKits but won't scale.  
+**Fix:** Add `?limit=` and `?offset=` query params.  
+**Milestone:** M6
+**Task:** StackKits-l3s.15
+
+### TD-42: Deprecated strings.Title Usage (N5)
+
+**Location:** `internal/template/renderer.go`  
+**Problem:** Uses `strings.Title()` which is deprecated in Go 1.18+ (doesn't handle Unicode correctly).  
+**Fix:** Replace with `cases.Title(language.English).String()` from `golang.org/x/text`.  
+**Milestone:** M3
+**Task:** StackKits-l3s.18
+
+### TD-43: No Shell Completion Command (N6)
+
+**Location:** `cmd/stackkit/commands/root.go`  
+**Problem:** No `completion` subcommand. Cobra supports `GenBashCompletion`, `GenZshCompletion`, `GenFishCompletion` etc.  
+**Fix:** Add `stackkit completion bash|zsh|fish|powershell` command.  
+**Milestone:** M4
+**Task:** StackKits-l3s.19
+
+### TD-44: tfvars Format Inconsistency (N7)
+
+**Location:** CLI `generate` writes HCL `.tfvars`, API writes JSON `.tfvars.json`  
+**Problem:** Two different output formats for the same logical output.  
+**Fix:** Standardize on JSON `.tfvars.json` (OpenTofu supports both) or support both with a flag.  
+**Milestone:** M3
+**Task:** StackKits-l3s.20
 
 ### TD-21: Two Website Projects
 
