@@ -144,34 +144,15 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// copyOrRenderTemplates copies template files, optionally rendering Go templates
+// copyOrRenderTemplates renders template files using the template.Renderer,
+// falling back to plain copy for non-template files.
 func copyOrRenderTemplates(srcDir, dstDir string, spec *models.StackSpec, stackkit *models.StackKit) error {
-	return filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		// Get relative path
-		relPath, err := filepath.Rel(srcDir, path)
-		if err != nil {
-			return err
-		}
-
-		dstPath := filepath.Join(dstDir, relPath)
-
-		// Handle directories
-		if info.IsDir() {
-			return os.MkdirAll(dstPath, 0755)
-		}
-
-		// Skip example files
-		if filepath.Ext(path) == ".example" {
-			return nil
-		}
-
-		// Copy or render the file
-		return copyFile(path, dstPath)
-	})
+	renderer := template.NewRenderer(srcDir, dstDir)
+	renderCtx := &template.RenderContext{
+		Spec:     spec,
+		StackKit: stackkit,
+	}
+	return renderer.Render(renderCtx)
 }
 
 // copyFile copies a file from src to dst

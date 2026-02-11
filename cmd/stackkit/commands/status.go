@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -95,6 +96,23 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		})
 	}
 
+	overallStatus := determineOverallStatus(services)
+
+	// JSON output mode
+	if statusJson {
+		output := map[string]interface{}{
+			"stackkit":    spec.StackKit,
+			"variant":     spec.Variant,
+			"mode":        spec.Mode,
+			"lastApplied": state.LastApplied.Format("2006-01-02T15:04:05Z"),
+			"status":      string(overallStatus),
+			"services":    services,
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(output)
+	}
+
 	// Display table
 	table := tablewriter.NewWriter(os.Stdout)
 	table.SetHeader([]string{"Service", "Status", "Health", "Container"})
@@ -116,7 +134,6 @@ func runStatus(cmd *cobra.Command, args []string) error {
 
 	// Overall status
 	fmt.Println()
-	overallStatus := determineOverallStatus(services)
 	switch overallStatus {
 	case models.StatusRunning:
 		printSuccess("Deployment is healthy")

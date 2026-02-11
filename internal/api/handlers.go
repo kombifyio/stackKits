@@ -436,8 +436,7 @@ func (s *Server) handleValidatePartial(w http.ResponseWriter, r *http.Request) {
 // ── Generation ────────────────────────────────────────────────────
 
 type generateRequest struct {
-	Spec      models.StackSpec `json:"spec"`
-	OutputDir string           `json:"outputDir,omitempty"`
+	Spec models.StackSpec `json:"spec"`
 }
 
 func (s *Server) handleGenerateTFVars(w http.ResponseWriter, r *http.Request) {
@@ -467,27 +466,23 @@ func (s *Server) handleGenerateTFVars(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Determine output directory
-	outputDir := req.OutputDir
-	if outputDir == "" {
-		outputDir = filepath.Join(s.config.BaseDir, "deploy")
-	}
-
-	// Ensure output directory exists
-	if err := os.MkdirAll(outputDir, 0755); err != nil {
-		writeError(w, r, http.StatusInternalServerError, "failed to create output directory")
+	// Always generate into a temp directory — never accept a client-supplied path.
+	tempDir, err := os.MkdirTemp("", "stackkit-tfvars-*")
+	if err != nil {
+		writeError(w, r, http.StatusInternalServerError, "failed to create temp directory")
 		return
 	}
+	defer os.RemoveAll(tempDir)
 
 	// Use the TerraformBridge to generate tfvars
 	bridge := cuepkg.NewTerraformBridge(dir)
-	if err := bridge.GenerateWithValidation(outputDir); err != nil {
+	if err := bridge.GenerateWithValidation(tempDir); err != nil {
 		writeError(w, r, http.StatusUnprocessableEntity, "generation failed: "+err.Error())
 		return
 	}
 
 	// Read back the generated file to return it
-	tfvarsPath := filepath.Join(outputDir, "terraform.tfvars.json")
+	tfvarsPath := filepath.Join(tempDir, "terraform.tfvars.json")
 	data, err := os.ReadFile(tfvarsPath)
 	if err != nil {
 		writeError(w, r, http.StatusInternalServerError, "generated but failed to read tfvars")
@@ -498,9 +493,8 @@ func (s *Server) handleGenerateTFVars(w http.ResponseWriter, r *http.Request) {
 	json.Unmarshal(data, &tfvars)
 
 	writeSuccess(w, r, http.StatusOK, map[string]interface{}{
-		"tfvars":    tfvars,
-		"outputDir": outputDir,
-		"file":      "terraform.tfvars.json",
+		"tfvars": tfvars,
+		"file":   "terraform.tfvars.json",
 	})
 }
 

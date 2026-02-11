@@ -524,7 +524,7 @@ components:
       properties:
         tier:
           type: string
-          enum: [minimal, standard, performance]
+          enum: [low, standard, high]
 
     SSHSpec:
       type: object

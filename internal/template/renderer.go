@@ -11,6 +11,8 @@ import (
 	"text/template"
 
 	"github.com/kombihq/stackkits/pkg/models"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 	"gopkg.in/yaml.v3"
 )
 
@@ -170,7 +172,7 @@ func (r *Renderer) defaultFuncMap() template.FuncMap {
 	return template.FuncMap{
 		"lower":        strings.ToLower,
 		"upper":        strings.ToUpper,
-		"title":        strings.Title,
+		"title":        cases.Title(language.English).String,
 		"trim":         strings.TrimSpace,
 		"replace":      strings.ReplaceAll,
 		"contains":     strings.Contains,

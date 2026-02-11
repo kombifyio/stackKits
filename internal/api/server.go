@@ -17,6 +17,7 @@ type ServerConfig struct {
 	Port    int
 	BaseDir string
 	Version string
+	APIKey  string // If set, all non-health endpoints require X-API-Key header
 }
 
 // Server is the StackKits HTTP API server.
@@ -39,6 +40,9 @@ func NewServer(cfg ServerConfig) *Server {
 func (s *Server) Handler() http.Handler {
 	var handler http.Handler = s.mux
 	handler = requestIDMiddleware(handler)
+	if s.config.APIKey != "" {
+		handler = apiKeyMiddleware(s.config.APIKey)(handler)
+	}
 	handler = corsMiddleware(handler)
 	handler = loggingMiddleware(handler)
 	handler = recoveryMiddleware(handler)
@@ -94,7 +98,9 @@ type errorResponse struct {
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(data)
+	if err := json.NewEncoder(w).Encode(data); err != nil {
+		slog.Error("failed to encode JSON response", "error", err)
+	}
 }
 
 func writeSuccess(w http.ResponseWriter, r *http.Request, status int, data interface{}) {
@@ -159,17 +165,71 @@ func corsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// statusResponseWriter wraps http.ResponseWriter to capture the status code.
+type statusResponseWriter struct {
+	http.ResponseWriter
+	statusCode int
+	written    bool
+}
+
+func (w *statusResponseWriter) WriteHeader(code int) {
+	if !w.written {
+		w.statusCode = code
+		w.written = true
+	}
+	w.ResponseWriter.WriteHeader(code)
+}
+
+func (w *statusResponseWriter) Write(b []byte) (int, error) {
+	if !w.written {
+		w.statusCode = http.StatusOK
+		w.written = true
+	}
+	return w.ResponseWriter.Write(b)
+}
+
 func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		next.ServeHTTP(w, r)
+		sw := &statusResponseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+		next.ServeHTTP(sw, r)
 		slog.Info("request",
 			"method", r.Method,
 			"path", r.URL.Path,
+			"status", sw.statusCode,
 			"duration_ms", time.Since(start).Milliseconds(),
 			"request_id", r.Header.Get("X-Request-ID"),
 		)
 	})
+}
+
+// apiKeyMiddleware validates the X-API-Key header against the configured key.
+// Health and OpenAPI spec endpoints are exempt from authentication.
+func apiKeyMiddleware(validKey string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Allow health and OpenAPI spec without auth
+			if r.URL.Path == "/health" || r.URL.Path == "/api/v1/health" || r.URL.Path == "/api/v1/openapi.yaml" {
+				next.ServeHTTP(w, r)
+				return
+			}
+			// Allow CORS preflight without auth
+			if r.Method == http.MethodOptions {
+				next.ServeHTTP(w, r)
+				return
+			}
+			key := strings.TrimSpace(r.Header.Get("X-API-Key"))
+			if key == "" {
+				writeError(w, r, http.StatusUnauthorized, "missing X-API-Key header")
+				return
+			}
+			if key != validKey {
+				writeError(w, r, http.StatusForbidden, "invalid API key")
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 func recoveryMiddleware(next http.Handler) http.Handler {

@@ -31,32 +31,17 @@ Items are categorized by severity and mapped to roadmap milestones.
 
 ## P0 — Blockers
 
-### TD-27: API Arbitrary Filesystem Write (C1)
+### ~~TD-27: API Arbitrary Filesystem Write (C1)~~ → RESOLVED
 
-**Location:** `internal/api/handlers.go` L449 (`handleGenerateTFVars`)  
-**Problem:** `outputDir` field in the request body lets a client specify an arbitrary server path. The handler writes files to that path without restriction.  
-**Impact:** Path write vulnerability — any external caller can write to arbitrary server filesystem locations.  
-**Fix:** Remove `outputDir` from API requests (always use temp dir + return content), or restrict to a sandboxed directory.  
-**Milestone:** M1
-**Task:** StackKits-l3s.1
+> Moved to [Resolved](#resolved) on 2026-02-11. Removed `outputDir` from request; handler now always uses temp dir + returns content.
 
-### TD-28: No API Authentication (C2)
+### ~~TD-28: No API Authentication (C2)~~ → RESOLVED
 
-**Location:** `internal/api/server.go` (middleware chain)  
-**Problem:** No API key, JWT, or any auth middleware. CORS headers reference `X-API-Key`, `X-User-ID`, `X-Org-ID` but these are never validated.  
-**Impact:** Anyone can call all API endpoints if the server is exposed beyond localhost.  
-**Fix:** Add API-key or JWT validation middleware. Support `X-API-Key` header validation for Kong Gateway integration.  
-**Milestone:** M1
-**Task:** StackKits-l3s.2
+> Moved to [Resolved](#resolved) on 2026-02-11. Added `apiKeyMiddleware` with `--api-key` flag / `STACKKITS_API_KEY` env var. Health + OpenAPI endpoints exempt.
 
-### TD-29: OpenAPI Compute Tier Enum Mismatch (C3)
+### ~~TD-29: OpenAPI Compute Tier Enum Mismatch (C3)~~ → RESOLVED
 
-**Location:** `api/openapi/stackkits-v1.yaml` — `ComputeSpec.tier`  
-**Problem:** OpenAPI spec says `[minimal, standard, performance]` but Go code (fixed in TD-04) validates `[low, standard, high]`. The spec was not updated when TD-04 was resolved.  
-**Impact:** API clients using the OpenAPI spec will send invalid enum values.  
-**Fix:** Update OpenAPI spec to `[low, standard, high]` to match Go code and CUE schemas.  
-**Milestone:** M1
-**Task:** StackKits-l3s.3
+> Moved to [Resolved](#resolved) on 2026-02-11. Updated OpenAPI spec `ComputeSpec.tier` enum from `[minimal, standard, performance]` to `[low, standard, high]`.
 
 ---
 
@@ -98,14 +83,9 @@ Items are categorized by severity and mapped to roadmap milestones.
 **Fix:** Implement proper CUE export → tfvars.json pipeline. OpenTofu modules replace monolithic `main.tf`.  
 **Milestone:** M1
 
-### TD-30: CLI generate Does Not Use Template Renderer (I5)
+### ~~TD-30: CLI generate Does Not Use Template Renderer (I5)~~ → RESOLVED
 
-**Location:** `cmd/stackkit/commands/generate.go` L128  
-**Problem:** `copyOrRenderTemplates` calls `copyFile` instead of using `internal/template/Renderer`. Templates are copied verbatim rather than rendered with variable substitution.  
-**Impact:** Generated output contains template placeholders instead of actual values.  
-**Fix:** Wire the existing `template.Renderer` into the generate command. Related to TD-10.  
-**Milestone:** M1
-**Task:** StackKits-l3s.8
+> Moved to [Resolved](#resolved) on 2026-02-11. Rewrote `copyOrRenderTemplates` to use `template.Renderer` instead of plain file copy.
 
 ### TD-31: iac and terramate Packages Are Dead Code (I6)
 
@@ -153,21 +133,13 @@ Items are categorized by severity and mapped to roadmap milestones.
 **Milestone:** M1
 **Task:** StackKits-l3s.5
 
-### TD-35: Logging Middleware Missing Response Status (I3)
+### ~~TD-35: Logging Middleware Missing Response Status (I3)~~ → RESOLVED
 
-**Location:** `internal/api/server.go` L160  
-**Problem:** `loggingMiddleware` doesn't wrap `http.ResponseWriter` so cannot capture HTTP status code in logs.  
-**Fix:** Use a `statusResponseWriter` wrapper to capture status code and content length.  
-**Milestone:** M1
-**Task:** StackKits-l3s.6
+> Moved to [Resolved](#resolved) on 2026-02-11. Added `statusResponseWriter` wrapper to capture HTTP status code in logs.
 
-### TD-36: CLI status --json Flag Not Implemented (I4)
+### ~~TD-36: CLI status --json Flag Not Implemented (I4)~~ → RESOLVED
 
-**Location:** `cmd/stackkit/commands/status.go` L37  
-**Problem:** `--json` flag is registered but JSON output path is not implemented.  
-**Fix:** Add JSON output mode using same data as table output.  
-**Milestone:** M3
-**Task:** StackKits-l3s.7
+> Moved to [Resolved](#resolved) on 2026-02-11. Implemented JSON output mode in `runStatus` using same data as table output.
 
 ### TD-37: CLI prepare Memory Check Missing (I7)
 
@@ -258,13 +230,9 @@ Items are categorized by severity and mapped to roadmap milestones.
 **Milestone:** M6
 **Task:** StackKits-l3s.15
 
-### TD-42: Deprecated strings.Title Usage (N5)
+### ~~TD-42: Deprecated strings.Title Usage (N5)~~ → RESOLVED
 
-**Location:** `internal/template/renderer.go`  
-**Problem:** Uses `strings.Title()` which is deprecated in Go 1.18+ (doesn't handle Unicode correctly).  
-**Fix:** Replace with `cases.Title(language.English).String()` from `golang.org/x/text`.  
-**Milestone:** M3
-**Task:** StackKits-l3s.18
+> Moved to [Resolved](#resolved) on 2026-02-11. Replaced with `cases.Title(language.English)` from `golang.org/x/text`.
 
 ### TD-43: No Shell Completion Command (N6)
 
@@ -349,6 +317,13 @@ Items are categorized by severity and mapped to roadmap milestones.
 | TD-09 | Services format inconsistency (list vs map) | 2026-02-13 | Standardized to map `[string]: #ServiceDefinition` in base/stackkit.cue, base-homelab/services.cue, dev-homelab/stackfile.cue — matches ha/modern-homelab and Go `StackSpec.Services` |
 | TD-14 | OpenTofu validation not executed | 2026-02-13 | `cmd/stackkit/commands/validate.go` now uses `tofu.Executor.Validate()` with JSON error parsing, init-if-needed, and install check |
 | TD-25 | Domain validation inconsistency | 2026-02-14 | HA regex changed to positive hostname format; `step-ca` TLS provider added for local domains. See ADR-0004 |
+| TD-27 | API arbitrary filesystem write | 2026-02-11 | Removed `outputDir` from request; `handleGenerateTFVars` uses temp dir + returns content |
+| TD-28 | No API authentication | 2026-02-11 | Added `apiKeyMiddleware` with `--api-key` flag / `STACKKITS_API_KEY` env. Health + OpenAPI exempt |
+| TD-29 | OpenAPI compute tier enum mismatch | 2026-02-11 | Updated `ComputeSpec.tier` from `[minimal, standard, performance]` to `[low, standard, high]` |
+| TD-30 | CLI generate doesn't use template Renderer | 2026-02-11 | Rewrote `copyOrRenderTemplates` to use `template.Renderer` |
+| TD-35 | Logging middleware missing response status | 2026-02-11 | Added `statusResponseWriter` wrapper to capture HTTP status in logs |
+| TD-36 | CLI status `--json` flag not implemented | 2026-02-11 | Implemented JSON output mode in `runStatus` |
+| TD-42 | Deprecated `strings.Title` usage | 2026-02-11 | Replaced with `cases.Title(language.English)` from `golang.org/x/text` |
 
 ---
 

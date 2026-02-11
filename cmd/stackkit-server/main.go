@@ -34,6 +34,7 @@ var Version = "dev"
 func main() {
 	port := flag.Int("port", 8082, "HTTP server port")
 	baseDir := flag.String("base-dir", "", "Base directory for StackKit definitions (default: executable directory)")
+	apiKey := flag.String("api-key", "", "API key for authentication (or set STACKKITS_API_KEY env var)")
 	logLevel := flag.String("log-level", "info", "Log level: debug, info, warn, error")
 	flag.Parse()
 
@@ -69,6 +70,17 @@ func main() {
 		dir = envDir
 	}
 
+	// Resolve API key from flag or environment
+	key := *apiKey
+	if key == "" {
+		key = os.Getenv("STACKKITS_API_KEY")
+	}
+	if key != "" {
+		slog.Info("API key authentication enabled")
+	} else {
+		slog.Warn("no API key configured — all endpoints are unauthenticated")
+	}
+
 	slog.Info("starting kombify StackKits API server",
 		"version", Version,
 		"port", *port,
@@ -79,6 +91,7 @@ func main() {
 		Port:    *port,
 		BaseDir: dir,
 		Version: Version,
+		APIKey:  key,
 	})
 
 	httpServer := &http.Server{
