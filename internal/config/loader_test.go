@@ -364,7 +364,7 @@ func TestValidateStackKitName(t *testing.T) {
 func TestValidateStackKit(t *testing.T) {
 	t.Run("rejects missing name", func(t *testing.T) {
 		sk := &models.StackKit{
-			Metadata: models.StackKitMetadata{Version: "1.0.0"},
+			Metadata:    models.StackKitMetadata{Version: "1.0.0"},
 			SupportedOS: []string{"ubuntu"},
 		}
 		err := validateStackKit(sk)
@@ -374,7 +374,7 @@ func TestValidateStackKit(t *testing.T) {
 
 	t.Run("rejects missing version", func(t *testing.T) {
 		sk := &models.StackKit{
-			Metadata: models.StackKitMetadata{Name: "test"},
+			Metadata:    models.StackKitMetadata{Name: "test"},
 			SupportedOS: []string{"ubuntu"},
 		}
 		err := validateStackKit(sk)
@@ -393,7 +393,7 @@ func TestValidateStackKit(t *testing.T) {
 
 	t.Run("accepts valid stackkit", func(t *testing.T) {
 		sk := &models.StackKit{
-			Metadata: models.StackKitMetadata{Name: "test", Version: "1.0.0"},
+			Metadata:    models.StackKitMetadata{Name: "test", Version: "1.0.0"},
 			SupportedOS: []string{"ubuntu", "debian"},
 		}
 		err := validateStackKit(sk)

@@ -56,10 +56,11 @@ stackkit init base-homelab --compute-tier auto
 Flags:
 
 - `--variant` Service variant to use (default: `default`)
-- `--compute-tier` Compute tier (default: `auto`)
+- `--compute-tier` Compute tier (default: `standard`)
 - `--mode` Deployment mode (default: `simple`)
 - `-o, --output` Output directory for generated files (default: `deploy`)
 - `-f, --force` Overwrite existing files
+- `--non-interactive` Run in non-interactive mode (fail if input required)
 
 ### `stackkit prepare` (alias: `prep`)
 
