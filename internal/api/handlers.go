@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -368,7 +369,8 @@ func (s *Server) handleValidateSpec(w http.ResponseWriter, r *http.Request) {
 
 	var spec models.StackSpec
 	if err := json.Unmarshal(body, &spec); err != nil {
-		writeError(w, r, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		slog.Warn("JSON parse error in validate request", "error", err)
+		writeError(w, r, http.StatusBadRequest, "invalid JSON format")
 		return
 	}
 
@@ -404,7 +406,8 @@ func (s *Server) handleValidatePartial(w http.ResponseWriter, r *http.Request) {
 	// and validates only those fields without requiring a full spec
 	var partial map[string]interface{}
 	if err := json.Unmarshal(body, &partial); err != nil {
-		writeError(w, r, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		slog.Warn("JSON parse error in partial validate request", "error", err)
+		writeError(w, r, http.StatusBadRequest, "invalid JSON format")
 		return
 	}
 
@@ -606,7 +609,8 @@ func (s *Server) handleGenerateTFVars(w http.ResponseWriter, r *http.Request) {
 
 	var req generateRequest
 	if err := json.Unmarshal(body, &req); err != nil {
-		writeError(w, r, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		slog.Warn("JSON parse error in generate request", "error", err)
+		writeError(w, r, http.StatusBadRequest, "invalid JSON format")
 		return
 	}
 
@@ -670,7 +674,8 @@ func (s *Server) handleGeneratePreview(w http.ResponseWriter, r *http.Request) {
 
 	var req generateRequest
 	if err := json.Unmarshal(body, &req); err != nil {
-		writeError(w, r, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		slog.Warn("JSON parse error in preview request", "error", err)
+		writeError(w, r, http.StatusBadRequest, "invalid JSON format")
 		return
 	}
 
