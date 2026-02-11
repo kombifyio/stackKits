@@ -33,7 +33,7 @@ StackKits are **architecture patterns**, not node-count definitions.
 | StackKit | Pattern | Core Idea | Status |
 | --- | --- | --- | --- |
 | **Base Kit** | Single environment | All services in one deployment target — local or cloud VPS. | ✅ Available |
-| **Modern Homelab Kit** | Hybrid infrastructure | Bridges local + cloud. VPN overlay, distributed services. | 🚧 Schema Only |
+| **Modern Homelab Kit** | Hybrid infrastructure | Bridges local + cloud. Zero-trust access via identity stack. | 🚧 Schema Only |
 | **High Availability Kit** | HA cluster | Redundancy, failover, quorum. Cluster-first architecture. | 🚧 Schema Only |
 
 ### Node-Context (Auto-Detected)
@@ -54,7 +54,7 @@ Add-Ons replace the old monolithic variant system. They are stackable and compat
 | --- | --- | --- |
 | `monitoring` | Observability | Prometheus + Grafana + Alertmanager |
 | `backup` | Data | Restic + configurable targets |
-| `vpn-overlay` | Networking | Headscale/Tailscale mesh |
+| `vpn-overlay` | Networking | Optional Headscale/Tailscale mesh |
 | `gpu-workloads` | Compute | NVIDIA/AMD GPU passthrough |
 | `media` | Applications | Jellyfin + *arr stack |
 | `smart-home` | IoT | Home Assistant + MQTT |
@@ -78,7 +78,7 @@ StackKits uses a strict **3-layer architecture** for maximum reusability:
 │  LAYER 3: STACKKITS (stackkits/)                            │
 │  Use-case specific configurations with services             │
 │  • base-homelab: Single-environment Docker + Dokploy        │
-│  • modern-homelab: Hybrid Docker + VPN overlay               │
+│  • modern-homelab: Hybrid Docker + identity stack            │
 │  • ha-homelab: Docker Swarm HA cluster                       │
 ├─────────────────────────────────────────────────────────────┤
 │  LAYER 2: PLATFORMS (platforms/)                            │

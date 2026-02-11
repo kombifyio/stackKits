@@ -1,6 +1,17 @@
-# VPN Overlay Add-On
+# VPN Overlay Add-On (Optional)
+
+> **Note:** This addon is **optional**. The identity stack (LLDAP + Step-CA + PocketID + TinyAuth) 
+> is the **recommended approach** for secure multi-node communication and zero-trust access.
 
 Provides secure VPN mesh networking for multi-node homelab deployments.
+
+## When to Use VPN Overlay
+
+Consider this addon if you:
+- Need direct node-to-node communication without identity proxying
+- Have strict network isolation requirements  
+- Want to connect legacy systems that don't support modern auth
+- Prefer WireGuard-based mesh topology
 
 ## Overview
 

@@ -36,19 +36,19 @@ export const stackkits: StackKit[] = [
 		name: 'Modern Homelab Kit',
 		tagline: 'Hybrid infrastructure pattern',
 		description:
-			'Bridge local and cloud environments with VPN overlay networking. Distributed services across heterogeneous nodes with Coolify management.',
+			'Bridge local and cloud environments with zero-trust identity access. Distributed services across heterogeneous nodes with Coolify management.',
 		icon: 'cloud',
 		status: 'planned',
 		pattern: 'Hybrid',
 		cloud: true,
 		features: [
-			'VPN overlay (Headscale/Tailscale)',
+			'Zero-trust identity (LLDAP+Step-CA+PocketID)',
 			'Local + cloud node bridging',
 			'Coolify deployment platform',
 			'Split DNS (public/private)',
 			'Multi-environment coordination'
 		],
-		services: ['Headscale/Tailscale', 'Coolify', 'Prometheus', 'Grafana']
+		services: ['LLDAP', 'Step-CA', 'PocketID', 'Coolify', 'Prometheus']
 	},
 	{
 		id: 'ha',

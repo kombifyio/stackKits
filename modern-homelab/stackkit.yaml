@@ -75,7 +75,7 @@ modes:
     stacks:
       - name: network
         order: 1
-        description: "VPN overlay, DNS, firewall"
+        description: "DNS, firewall, identity access"
       - name: platform
         order: 2
         after: [network]
@@ -91,7 +91,7 @@ modes:
 features:
   multiNode: true
   cloudProviders: true      # Can include cloud VPS nodes
-  vpnOverlay: true          # Headscale/Tailscale for node communication
+  vpnOverlay: false         # Optional: Headscale/Tailscale (identity stack preferred)
   publicAccess: true        # Services accessible from internet
   remoteAccess: true        # SSH/management from outside
   gpuSupport: false         # Future: GPU scheduling

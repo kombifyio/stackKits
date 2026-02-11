@@ -2,14 +2,14 @@
 // 
 // Modern Homelab = Multi-server Docker setup with:
 // - Coolify (PaaS for multi-node deployments)
-// - Headscale (VPN overlay for node communication)
+// - Identity stack (LLDAP + Step-CA + PocketID + TinyAuth)
 // - Full monitoring stack (Prometheus/Grafana/Loki)
 // - Public/remote access capabilities
 //
 // KEY DIFFERENCE FROM BASE-HOMELAB:
 // - Multi-node Docker (not single-node)
 // - Coolify instead of Dokploy (better multi-node support)
-// - VPN overlay required for hybrid setups
+// - Zero-trust identity access (VPN optional addon)
 // - Public access is default, not optional
 
 package modern_homelab
@@ -56,7 +56,7 @@ import "github.com/kombihq/stackkits/base"
 }
 
 // =============================================================================
-// VPN OVERLAY (Required for hybrid setups)
+// VPN OVERLAY (Optional - use vpn-overlay addon if needed)
 // =============================================================================
 
 // #HeadscaleService - Self-hosted Tailscale control server
@@ -65,11 +65,11 @@ import "github.com/kombihq/stackkits/base"
 	displayName: "Headscale"
 	category:    "network"
 	type:        "vpn"
-	required:    true  // Required for modern-homelab
+	required:    false  // Optional: Identity stack (LLDAP+Step-CA+PocketID) is preferred
 	image:       "headscale/headscale"
 	tag:         "latest"
 	status:      "planned"
-	description: "Self-hosted Tailscale control server for VPN overlay"
+	description: "Optional self-hosted Tailscale control server (enable via vpn-overlay addon)"
 
 	// Deployed on cloud node (coordination server)
 	placement: {
