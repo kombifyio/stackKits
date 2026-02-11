@@ -90,6 +90,15 @@ enum EvaluationVerdict {
   REJECTED           // Tool does not meet criteria
 }
 
+/// Evaluation workflow state
+enum EvaluationState {
+  PENDING           // Awaiting evaluation
+  IN_PROGRESS       // Evaluation underway
+  NEEDS_REVIEW      // Evaluation complete, needs human review
+  NEEDS_REVISION    // Feedback received, needs re-evaluation
+  COMPLETED         // Evaluation finalized
+}
+
 /// Job status for automation pipelines
 enum JobStatus {
   PENDING    // Queued, not started
@@ -556,6 +565,20 @@ model ToolEvaluation {
   /// Version that was evaluated
   evaluatedVersion  String?
 
+  // --- Workflow State (from old admin evaluation_service pattern) ---
+  /// Current state in evaluation workflow
+  state             EvaluationState  @default(PENDING)
+  /// When state last changed
+  stateChangedAt    DateTime?
+  /// Previous state (for history)
+  previousState     EvaluationState?
+  /// n8n execution ID (if triggered via n8n)
+  n8nExecutionId    String?
+  /// Revision count (increments on re-evaluation)
+  revisionNumber    Int              @default(0)
+  /// Reviewer comments/feedback
+  reviewerFeedback  String?
+
   // --- Evaluation Criteria Scores (0-10) ---
   /// Documentation quality
   scoreDocumentation  Int?
@@ -600,6 +623,7 @@ model ToolEvaluation {
   @@index([toolId])
   @@index([verdict])
   @@index([evaluatedAt])
+  @@index([state])
 }
 
 // =============================================================================
