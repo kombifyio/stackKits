@@ -48,6 +48,10 @@ Thumbs.db
 .env
 .env.local
 
+# Research/tool artifacts
+.firecrawl/
+nul
+
 # Build outputs
 dist/
 build/

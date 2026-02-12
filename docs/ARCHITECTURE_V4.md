@@ -80,11 +80,15 @@ base-homelab/variants/
 **New (Add-Ons — composable, stackable):**
 ```
 addons/
+├── ha/                  # Full infrastructure HA (extends ha-homelab StackKit)
+│   └── addon.cue
 ├── monitoring/          # Prometheus + Grafana + Alertmanager
 │   └── addon.cue
 ├── backup/              # Restic + S3/B2/NAS targets
 │   └── addon.cue
 ├── vpn-overlay/         # Headscale/Tailscale mesh
+│   └── addon.cue
+├── tunnel/              # Cloudflare Tunnel / Pangolin (CGNAT bypass)
 │   └── addon.cue
 ├── gpu-workloads/       # NVIDIA/AMD GPU passthrough
 │   └── addon.cue
@@ -150,15 +154,15 @@ The combination of StackKit × Context produces **9 curated base configurations*
         │           │ Dokploy     │ Encrypt,    │ reduced     │
         │           │             │ Coolify     │ services    │
         ├───────────┼─────────────┼─────────────┼─────────────┤
-        │  modern   │ Local +     │ Multi-cloud │ Edge node   │
-        │           │ Tailscale   │ mesh,       │ in hybrid   │
-        │           │ exit node,  │ distributed │ network,    │
-        │           │ hybrid DNS  │ services    │ relay role  │
+        │  modern   │ Local +     │ Cloud entry │ Edge node   │
+        │           │ tunnel      │ point,      │ in hybrid   │
+        │           │ (CF/Pango-  │ identity-   │ network,    │
+        │           │ lin), proxy │ aware proxy │ relay role  │
         ├───────────┼─────────────┼─────────────┼─────────────┤
-        │    ha     │ Swarm       │ Cloud HA    │ N/A         │
-        │           │ cluster,    │ with managed│ (pi context │
-        │           │ Keepalived, │ LB, auto-   │ + HA = not  │
-        │           │ local LB    │ scaling     │ recommended)│
+        │    ha     │ Swarm       │ Swarm +     │ N/A         │
+        │           │ cluster,    │ cloud HA,   │ (pi context │
+        │           │ Keepalived, │ floating-IP │ + HA = not  │
+        │           │ local LB    │ VIP, LB     │ recommended)│
         └───────────┴─────────────┴─────────────┴─────────────┘
 ```
 
@@ -455,7 +459,7 @@ github.com/kombihq/stackkits/
 
 ```
 L3 (User Intent) + StackKit Pattern
-    → L2 (Platform decision: Docker/Swarm/K8s, PAAS, networking)
+    → L2 (Platform decision: Docker Compose, PAAS, networking)
 
 L2 (Platform) + Node-Context (local/cloud/pi)
     → L1 (Foundation: packages, security, identity config)
@@ -494,31 +498,42 @@ The proven 3-layer architecture remains the structural backbone:
 
 ### Modern Homelab Kit (Hybrid Infrastructure Pattern)
 
-**Philosophy:** Bridge multiple environments. Always includes a local component ("homelab") bridged with cloud resources via overlay network.
+**Philosophy:** Bridge multiple environments. Always includes a local component ("homelab") bridged with cloud resources. Identity-aware proxies make VPN optional.
 
 | Aspect | Definition |
 |--------|-----------|
-| **Pattern** | Distributed services across heterogeneous environments |
-| **Container Runtime** | Docker Compose per node, coordinated by Coolify |
-| **PAAS** | Coolify (required for multi-node) |
-| **Networking** | VPN overlay (Headscale/Tailscale), split DNS |
-| **Identity** | LLDAP + Step-CA (L1), Authelia/Authentik (L2) |
-| **Node Count** | 2+ (at least one local, one remote) |
+| **Pattern** | Distributed services across local + cloud environments |
+| **Container Runtime** | Docker Compose per node (no Swarm) |
+| **PAAS** | Coolify (domain + wildcard) or Dokploy (no domain, traefik-me + MagicDNS) |
+| **Networking** | Identity-aware proxy (TinyAuth/ForwardAuth), tunnel (Cloudflare/Pangolin) |
+| **Identity** | LLDAP + Step-CA (L1), TinyAuth (L2 default), PocketID (L2 optional) |
+| **Node Count** | 2+ (at least one local, one cloud) |
 | **Best For** | Hybrid setups, public-facing services, growing homelabs |
 
 ### High Availability Kit (HA Cluster Pattern)
 
-**Philosophy:** No single point of failure. Services survive node failures. Data is replicated.
+**Philosophy:** No single point of failure. Services survive node failures. Data is replicated. Two-tier model: the StackKit provides **service-level HA** (Swarm orchestration, database failover, cache HA, load balancing), and the optional `ha` add-on extends it to **full infrastructure HA** (storage replication, advanced VIP, security hardening).
 
 | Aspect | Definition |
 |--------|-----------|
 | **Pattern** | Clustered services with quorum, failover, and replication |
-| **Container Runtime** | Docker Swarm (or Kubernetes at scale) |
-| **PAAS** | Coolify (cluster-aware) |
-| **Networking** | Swarm overlay + Keepalived VIP |
-| **Identity** | LLDAP cluster + Step-CA HA (L1), Authentik (L2) |
+| **Container Runtime** | Docker Swarm (3+ managers for Raft quorum, encrypted overlay) |
+| **PAAS** | Dokploy (Swarm mode) or Coolify (cluster-aware) |
+| **Networking** | Swarm overlay (encrypted) + Keepalived VIP + HAProxy LB |
+| **Identity** | LLDAP cluster + Step-CA HA (L1), TinyAuth/PocketID (L2) |
+| **Service HA** | Patroni + etcd (PostgreSQL), Valkey Sentinel (cache), CoreDNS + etcd (discovery) |
 | **Node Count** | 3+ (odd number for quorum) recommended |
 | **Best For** | Production workloads, critical services, uptime SLAs, startups |
+
+**HA Add-On (extends HA Kit to full infrastructure HA):**
+
+When the `ha` add-on is activated on top of the HA Kit, it adds:
+- **Storage replication**: GlusterFS (default, file-level) or DRBD + OpenZFS (block-level)
+- **SQLite HA**: Litestream (async backup) or LiteFS (real-time replication)
+- **Advanced VIP**: Three modes auto-detected from context (VRRP for local, floating-IP for cloud, DNS failover as universal fallback)
+- **Security hardening**: mTLS for all cluster communication, etcd encryption, Docker socket protection, network segmentation
+
+All HA components are SaaS-safe: HAProxy (GPL-2), Keepalived (GPL-2), Patroni (MIT), etcd (Apache-2), CoreDNS (Apache-2), Valkey (BSD-3), GlusterFS (GPL-3), DRBD (GPL-2), OpenZFS (CDDL), Litestream (Apache-2), LiteFS (Apache-2). See `docs/license-compliance-saas.md`.
 
 ---
 
@@ -528,9 +543,11 @@ The proven 3-layer architecture remains the structural backbone:
 
 | Add-On | Category | Compatible StackKits | Compatible Contexts | Description |
 |--------|----------|---------------------|--------------------|----|
+| `ha` | Infrastructure | ha | local, cloud | Full HA: GlusterFS/DRBD storage, SQLite HA, advanced VIP, mTLS hardening |
 | `monitoring` | Observability | base, modern, ha | local, cloud | Prometheus + Grafana + Alertmanager |
 | `backup` | Data | base, modern, ha | local, cloud, pi | Restic + configurable targets |
 | `vpn-overlay` | Networking | modern, ha | local, cloud | Headscale/Tailscale mesh |
+| `tunnel` | Networking | modern, ha | local, cloud | Cloudflare Tunnel / Pangolin (CGNAT bypass) |
 | `gpu-workloads` | Compute | base, modern | local, cloud | NVIDIA/AMD GPU passthrough |
 | `ci-cd` | Development | base, modern, ha | local, cloud | Gitea + Drone CI |
 | `media` | Applications | base, modern | local, cloud, pi | Jellyfin + *arr stack |
@@ -546,7 +563,7 @@ Some add-ons are automatically activated based on Node-Context or StackKit patte
 | Any node has `context: cloud` | `cloud-integration` |
 | Any node is ARM architecture | `arm-support` |
 | Any node has < 2GB RAM | `low-memory` |
-| StackKit pattern is `modern` | `vpn-overlay` |
+| StackKit pattern is `modern` | `tunnel` |
 | Node reports GPU capability | `gpu-workloads` |
 | Node count > 1 | `multi-node` |
 

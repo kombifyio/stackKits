@@ -621,7 +621,12 @@ Each service needs HA metadata:
 
 ## 13. Open Questions / Decisions Needed
 
-1. **GlusterFS vs DRBD+ZFS**: Should the default be GlusterFS (simpler, file-level) or DRBD+ZFS (stronger integrity, block-level)? Or tiered as described above?
+1. ~~**GlusterFS vs DRBD+ZFS**~~ **RESOLVED**: GlusterFS is the default shared storage.
+   - kombify prefers simple tools. GlusterFS is one concept: distributed file-level replication.
+   - DRBD+ZFS requires two tools, kernel modules, RAM tuning, and is active/passive only.
+   - Patroni already handles database replication natively, so block-level replication is redundant for the primary use case.
+   - DRBD+ZFS available as optional `storageMode: "block"` for advanced users who need it.
+   - Default: `storageMode: "file"` (GlusterFS).
 
 2. ~~**Consul license (BSL-1.1)**~~ **RESOLVED**: Consul is NOT safe for kombify SaaS use. Default is CoreDNS + etcd. Consul available as opt-in add-on with license warning.
 
@@ -631,9 +636,18 @@ Each service needs HA metadata:
 
 5. ~~**etcd vs Consul for consensus**~~ **RESOLVED**: etcd is the only consensus store (needed for Patroni, also used by CoreDNS for service discovery). No Consul.
 
-6. **Cloud VIP**: Most cloud providers don't support VRRP. Alternative: DNS failover, Floating IP API (Hetzner has this), or run Keepalived in unicast mode on a private network.
+6. ~~**Cloud VIP**~~ **RESOLVED**: Three VIP modes, auto-detected from node context.
+   - `vip.mode: "vrrp"` -- Standard VRRP for local/private networks. Keepalived multicast or unicast.
+   - `vip.mode: "floating-ip"` -- Cloud provider API (Hetzner, DigitalOcean). Keepalived health script calls cloud API to reassign floating IP on failover. Unicast transport.
+   - `vip.mode: "dns-failover"` -- Universal fallback. Low-TTL DNS with health checks. Slower (minutes vs seconds) but works everywhere.
+   - Default: auto-detected. Local nodes → `vrrp`. Cloud nodes → `floating-ip` if supported, else `dns-failover`.
 
-7. **Scope of HA**: Should every add-on service be HA, or only "platform" services (Traefik, DB, Valkey, identity)? The pragmatic answer is: HA for platform, single-instance for most add-ons with automatic restart.
+7. ~~**Scope of HA**~~ **RESOLVED**: Two-tier HA model.
+   - **Platform HA** (always active when HA add-on enabled): Load balancing (HAProxy+Keepalived), database (Patroni+etcd), cache (Valkey Sentinel), service discovery (CoreDNS+etcd), certificates (Step-CA RA mode). These are infrastructure services that ALL other services depend on.
+   - **Application HA** (per-service opt-in): Individual add-on services can declare `ha.replicas > 1` and `ha.failoverMode` in their own schemas. Most add-on services stay single-instance with `restart: unless-stopped` + health checks. The HA add-on provides the infrastructure (shared storage, load balancing, service discovery); each service decides independently whether to use active-active or active-passive patterns.
+   - Rationale: HA for platform services gives you automatic failover for the critical path. Application services that are stateless (Jellyfin, Immich workers) can be replicated easily. Stateful services (Vaultwarden, Home Assistant) are harder and usually single-instance with fast restart is sufficient for homelab.
+
+All questions resolved. HA is implemented as a composable add-on (`addons/ha/addon.cue`), not a separate StackKit.
 
 ---
 

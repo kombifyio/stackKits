@@ -167,6 +167,7 @@ addons:
     - backup              # Always recommended
   optional:
     # Infrastructure
+    - ha                  # High Availability (3+ nodes: HAProxy, Keepalived, Patroni, Valkey, GlusterFS)
     - tunnel              # Cloudflare Tunnel / Pangolin (for CGNAT)
     - vpn-overlay         # Headscale/Tailscale (only if user wants mesh VPN)
     - authelia            # Advanced auth (replaces TinyAuth)
