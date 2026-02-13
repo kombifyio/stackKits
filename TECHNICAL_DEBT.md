@@ -1,6 +1,6 @@
 # StackKits — Technical Debt Register
 
-> **Last Updated:** 2026-02-16  
+> **Last Updated:** 2026-02-14  
 > **Architecture:** v4 (see [ARCHITECTURE_V4.md](docs/ARCHITECTURE_V4.md))  
 > **Roadmap:** [docs/ROADMAP.md](docs/ROADMAP.md)
 
@@ -95,13 +95,12 @@ Items are categorized by severity and mapped to roadmap milestones.
 
 > Moved to [Resolved](#resolved) on 2026-02-12. Adopted `internal/errors` across API handlers and middleware. `writeStructuredError` returns category, code, and suggestions in JSON responses. Auth, rate-limit, validation, generation, and not-found errors now use structured error types. Added `validateStackKitName` with OpenAPI regex enforcement.
 
-### TD-11: Headscale Port Conflict (W9)
+### TD-11: Headscale Port Conflict (W9) → DEFERRED
 
 **Location:** `modern-homelab/services.cue`  
 **Problem:** Headscale binds host port 443, Traefik also binds port 443.  
-**Impact:** Services cannot co-exist on the same node.  
-**Fix:** Headscale uses alternate port or runs behind Traefik as upstream.  
-**Milestone:** M3
+**Status:** Deferred — No Headscale service definition exists in the codebase. Will be addressed when Headscale VPN overlay is actually added to modern-homelab.  
+**Milestone:** Deferred (was M3)
 
 ---
 
@@ -135,13 +134,9 @@ Items are categorized by severity and mapped to roadmap milestones.
 
 > Moved to [Resolved](#resolved) on 2026-02-11. Replaced hardcoded `stackKitDirs` with auto-discovery loop scanning baseDir for `stackkit.yaml`.
 
-### TD-12: Variants Directory Still Exists
+### ~~TD-12: Variants Directory Still Exists~~ → RESOLVED
 
-**Location:** `base-homelab/variants/`  
-**Problem:** Old monolithic variant system (8 files across `os/`, `compute/`, `service/`) still present despite v4 replacing it with Add-Ons + Contexts.  
-**Impact:** Confusion about current architecture. Code references old patterns.  
-**Fix:** Migrate to Add-Ons and Contexts, then delete directory.  
-**Milestone:** M4
+> Moved to [Resolved](#resolved) on 2026-02-14. Deleted `base-homelab/variants/` directory (8 CUE files across `os/`, `compute/`, `service/`). v4 architecture uses Add-Ons + Contexts instead.
 
 ### ~~TD-13: Version Metadata Inconsistency (W11)~~ → RESOLVED
 
@@ -204,13 +199,9 @@ Items are categorized by severity and mapped to roadmap milestones.
 
 > Moved to [Resolved](#resolved) on 2026-02-12. Standardized on JSON `.tfvars.json` in both CLI generate and API.
 
-### TD-21: Two Website Projects
+### ~~TD-21: Two Website Projects~~ → RESOLVED
 
-**Location:** `marketing/` (Vite+React) and `website-v2/` (SvelteKit)  
-**Problem:** Two separate web projects with no clear canonical status.  
-**Impact:** Maintenance burden, unclear which is deployed.  
-**Fix:** Decide canonical site, archive the other.  
-**Milestone:** M9
+> Moved to [Resolved](#resolved) on 2026-02-14. `marketing/` (Vite+React) archived to `docs/_archive/marketing/`. `website-v2/` (SvelteKit) is the canonical site deployed to `stackkits.kombify.io`.
 
 ### ~~TD-22: plans/ and missions/ Directories~~ → RESOLVED
 
@@ -289,6 +280,8 @@ Items are categorized by severity and mapped to roadmap milestones.
 | TD-43 | No shell completion command | 2026-02-12 | Added `stackkit completion bash\|zsh\|fish\|powershell` via Cobra generators |
 | TD-44 | tfvars format inconsistency | 2026-02-12 | Standardized on JSON `.tfvars.json` in both CLI and API |
 | TD-38 | Interactive init is a stub | 2026-02-12 | Interactive wizard with StackKit/variant/mode/compute-tier selection + domain/email prompts (zero new deps) |
+| TD-12 | Variants directory still exists | 2026-02-14 | Deleted `base-homelab/variants/` (8 CUE files). v4 uses Add-Ons + Contexts instead |
+| TD-21 | Two website projects | 2026-02-14 | `marketing/` archived to `docs/_archive/`. `website-v2/` (SvelteKit) is canonical for `stackkits.kombify.io` |
 
 ---
 
