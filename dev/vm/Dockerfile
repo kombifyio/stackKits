@@ -6,9 +6,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   ca-certificates \
   curl \
   gnupg \
+  htop \
   iproute2 \
   iptables \
   openssh-server \
+  procps \
   sudo \
   && rm -rf /var/lib/apt/lists/*
 

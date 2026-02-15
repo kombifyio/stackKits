@@ -20,22 +20,45 @@ description = "Verify Docker Desktop is running"
 run = 'docker info > /dev/null 2>&1 || (echo "ERROR: Docker Desktop is not running!" && exit 1)'
 
 [tasks._build]
-description = "Build CLI binary"
+description = "Build CLI + server binaries"
 depends = ["_docker-check"]
 run = [
   "go mod download",
   "go build -o build/stackkit ./cmd/stackkit",
+  "go build -o build/stackkit-server ./cmd/stackkit-server",
 ]
 
-[tasks._docker-up]
-description = "Start services via Docker Compose"
+[tasks._docker-down]
+description = "Tear down previous VM (fresh state)"
 depends = ["_build"]
-run = "docker compose up -d --build --remove-orphans"
+run = "docker compose down -v --remove-orphans 2>/dev/null || true"
+
+[tasks._docker-up]
+description = "Start fresh Ubuntu VM via Docker Compose"
+depends = ["_docker-down"]
+run = [
+  "docker compose up -d --build vm",
+  "docker compose --profile cli up -d --build --no-deps cli",
+]
 
 [tasks._health]
-description = "Wait for services"
+description = "Wait for VM Docker daemon to be healthy"
 depends = ["_docker-up"]
-run = "sleep 5"
+run = '''
+echo "Waiting for VM Docker daemon..."
+timeout=120
+elapsed=0
+while [ $elapsed -lt $timeout ]; do
+  if docker compose exec -T vm docker info > /dev/null 2>&1; then
+    echo "VM Docker daemon is ready (${elapsed}s)"
+    exit 0
+  fi
+  sleep 2
+  elapsed=$((elapsed+2))
+done
+echo "ERROR: VM Docker daemon not ready after ${timeout}s"
+exit 1
+'''
 
 [tasks._test]
 description = "Run unit + integration + CUE validation tests"
@@ -49,15 +72,21 @@ run = [
   "cue vet ./modern-homelab/...",
 ]
 
+[tasks._test-vm]
+description = "Run comprehensive CLI tests against the VM"
+depends = ["_test"]
+run = "go test -v -race -timeout=15m -tags=vm ./tests/vm/..."
+
 # ── Public Tasks (only these 3) ───────────────────────────────
 
 [tasks.dev]
-description = "Build, start in Docker, run all tests"
-depends = ["_test"]
+description = "Build, start fresh VM, run all tests including VM integration"
+depends = ["_test-vm"]
 run = '''
 echo ""
 echo "kombify StackKits ready!"
-echo "CLI: build/stackkit"
+echo "CLI:    build/stackkit"
+echo "VM SSH: ssh root@localhost -p 2222"
 '''
 
 [tasks.stage]
