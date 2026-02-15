@@ -1,122 +1,71 @@
-# kombify StackKits - mise configuration
-# https://mise.jdx.dev/
+# kombify StackKits — CUE-based infrastructure toolkit
+# Commands: mise run dev | mise run stage | mise run prod
+
 min_version = "2024.11.1"
 
 [tools]
-go = "1.24.0"
-node = "20"
+go = "1.24.1"
+node = "22"
+"ubi:cue-lang/cue" = "latest"
 
 [env]
 PROJECT_NAME = "kombify-stackkits"
-_.file = [".env", ".env.local"]
 GOTOOLCHAIN = "auto"
+_.file = [".env", ".env.local"]
 
-[tasks.setup]
-description = "Install dependencies"
+# ── Internal Tasks ─────────────────────────────────────────────
+
+[tasks._docker-check]
+description = "Verify Docker Desktop is running"
+run = 'docker info > /dev/null 2>&1 || (echo "ERROR: Docker Desktop is not running!" && exit 1)'
+
+[tasks._build]
+description = "Build CLI binary"
+depends = ["_docker-check"]
 run = [
   "go mod download",
-  "go mod tidy",
+  "go build -o build/stackkit ./cmd/stackkit",
 ]
 
-[tasks.build]
-description = "Build CLI binary"
-run = "go build -o build/stackkit ./cmd/stackkit"
+[tasks._docker-up]
+description = "Start services via Docker Compose"
+depends = ["_build"]
+run = "docker compose up -d --build --remove-orphans"
 
-[tasks.dev]
-description = "Run CLI in dev mode"
-run = "go run ./cmd/stackkit"
+[tasks._health]
+description = "Wait for services"
+depends = ["_docker-up"]
+run = "sleep 5"
 
-[tasks.test]
-description = "Run all tests (unit + integration + CUE)"
+[tasks._test]
+description = "Run unit + integration + CUE validation tests"
+depends = ["_health"]
 run = [
   "go test -v -race -short ./pkg/... ./internal/...",
-  "go test -v -race ./tests/integration/..."
-]
-
-[tasks."test:unit"]
-description = "Run Go unit tests"
-run = "go test -v -race -short ./pkg/... ./internal/..."
-
-[tasks."test:cue"]
-description = "Run CUE schema validation"
-run = [
+  "go test -v -race ./tests/integration/...",
   "cue vet ./base/...",
   "cue vet ./base-homelab/...",
   "cue vet ./dev-homelab/...",
-  "cue vet ./modern-homelab/..."
+  "cue vet ./modern-homelab/...",
 ]
 
-[tasks."test:validation"]
-description = "Run 3-layer validation suite"
-run = "./tests/run_validation.sh"
+# ── Public Tasks (only these 3) ───────────────────────────────
 
-[tasks."test:coverage"]
-description = "Run tests with coverage"
-run = [
-  "mkdir -p coverage",
-  "go test -v -race -coverprofile=coverage/coverage.out -covermode=atomic ./pkg/... ./internal/...",
-  "go tool cover -html=coverage/coverage.out -o coverage/coverage.html"
-]
+[tasks.dev]
+description = "Build, start in Docker, run all tests"
+depends = ["_test"]
+run = '''
+echo ""
+echo "kombify StackKits ready!"
+echo "CLI: build/stackkit"
+'''
 
-[tasks.lint]
-description = "Run Go linters"
-run = "golangci-lint run ./..."
+[tasks.stage]
+description = "Deploy to staging (trigger release workflow)"
+depends = ["_test"]
+run = "gh workflow run release.yml"
 
-[tasks.fmt]
-description = "Format code"
-run = "go fmt ./..."
-
-[tasks.deps]
-description = "Download dependencies"
-run = [
-  "go mod download",
-  "go mod tidy"
-]
-
-[tasks.clean]
-description = "Remove build artifacts"
-run = [
-  "rm -rf build/",
-  "rm -rf coverage/"
-]
-
-[tasks.install]
-description = "Install CLI to GOPATH/bin"
-run = [
-  "go build -o build/stackkit ./cmd/stackkit",
-  "cp build/stackkit $(go env GOPATH)/bin/"
-]
-
-# --- Website Tasks ---
-
-[tasks."dev:website"]
-description = "Start website dev server"
-dir = "website-v2"
-run = "bun run dev"
-
-[tasks."build:website"]
-description = "Build website for production"
-dir = "website-v2"
-run = "bun run build"
-
-[tasks."preview:website"]
-description = "Preview production build"
-dir = "website-v2"
-run = "bun run preview"
-
-[tasks."docker:website"]
-description = "Build and run website Docker container locally"
-run = [
-  "docker build -t stackkits-web:local -f website-v2/Dockerfile website-v2",
-  "docker run --rm -p 8081:80 stackkits-web:local"
-]
-
-# --- Docker Tasks ---
-
-[tasks."docker:up"]
-description = "Start services in Docker"
-run = "docker compose up -d --build"
-
-[tasks."docker:down"]
-description = "Stop Docker services"
-run = "docker compose down"
+[tasks.prod]
+description = "Deploy to production (trigger release workflow)"
+depends = ["_test"]
+run = "gh workflow run release.yml -f environment=production"

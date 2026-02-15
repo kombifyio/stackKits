@@ -19,8 +19,32 @@ run = [
 ]
 
 [tasks.build]
-description = "Build CLI binary"
+description = "Build CLI + server, start Docker Compose, run tests"
+run = [
+  "docker info > /dev/null 2>&1 || (echo 'ERROR: Docker Desktop is not running!' && exit 1)",
+  "go build -o build/stackkit ./cmd/stackkit",
+  "go build -o build/stackkit-server ./cmd/stackkit-server",
+  "docker compose up -d --build",
+  "go test -v -race -short ./pkg/... ./internal/...",
+  "cue vet ./base/...",
+  "cue vet ./base-homelab/...",
+  "cue vet ./dev-homelab/...",
+  "cue vet ./modern-homelab/...",
+]
+
+[tasks."build:cli"]
+description = "Build CLI binary only"
 run = "go build -o build/stackkit ./cmd/stackkit"
+
+[tasks."build:website"]
+description = "Build website, start Docker, run tests"
+dir = "website-v2"
+run = [
+  "docker info > /dev/null 2>&1 || (echo 'ERROR: Docker Desktop is not running!' && exit 1)",
+  "bun install",
+  "bun run build",
+  "bun run test",
+]
 
 [tasks.dev]
 description = "Run CLI in dev mode"
@@ -93,11 +117,6 @@ run = [
 description = "Start website dev server"
 dir = "website-v2"
 run = "bun run dev"
-
-[tasks."build:website"]
-description = "Build website for production"
-dir = "website-v2"
-run = "bun run build"
 
 [tasks."preview:website"]
 description = "Preview production build"
