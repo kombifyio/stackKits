@@ -75,12 +75,18 @@ Items are categorized by severity and mapped to roadmap milestones.
 
 > Moved to [Resolved](#resolved) on 2026-02-13.
 
-### TD-10: Missing CUE→Terraform Code Generator
+### TD-10: Missing CUE→Terraform Code Generator → PARTIALLY RESOLVED
 
-**Location:** `internal/template/`, `bridge.go`  
-**Problem:** The core promise — generating OpenTofu configs from CUE — is not implemented. `bridge.go` only generates `tfvars`. `generate.go` copies templates verbatim instead of rendering.  
-**Impact:** Users must manually write/maintain `main.tf`. CUE schemas are decorative, not functional.  
-**Fix:** Implement proper CUE export → tfvars.json pipeline. OpenTofu modules replace monolithic `main.tf`.  
+**Location:** `internal/cue/bridge.go`, `cmd/stackkit/commands/generate.go`
+**Problem:** `bridge.go` only generated basic tfvars. Two separate code paths existed for tfvars generation.
+**Status:** Partially resolved (2026-02-21). `bridge.go` rewritten with:
+- `GenerateTFVarsFromSpec()` — canonical path accepting StackSpec, covers all main.tf variables
+- Full TFVars struct matching all base-homelab/templates/simple/main.tf variables (domain, acme_email, access_mode, ports, etc.)
+- Service port override extraction from spec
+- Derivation logic (domain → proxy mode, email → Let's Encrypt)
+- `generate.go` now uses bridge exclusively (removed duplicate `generateTfvarsJSON`)
+- 8 new tests for spec-based generation
+**Remaining:** OpenTofu modularization (split main.tf into modules) still pending.
 **Milestone:** M1
 
 ### ~~TD-30: CLI generate Does Not Use Template Renderer (I5)~~ → RESOLVED
