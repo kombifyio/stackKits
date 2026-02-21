@@ -25,6 +25,13 @@ package vpnoverlay
 		layer:       "NETWORK"
 	}
 
+	_compatibility: {
+		stackkits: ["modern-homelab", "ha-homelab"]
+		contexts:  ["local", "cloud"]
+		requires:  []
+		conflicts: []
+	}
+
 	// Provider selection
 	provider: *"headscale" | "tailscale" | "netbird" | "zerotier"
 

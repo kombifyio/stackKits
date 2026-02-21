@@ -98,6 +98,9 @@ func (b *TerraformBridge) specToTFVars(spec *models.StackSpec) *TFVars {
 		tfvars.ComputeTier = spec.Compute.Tier
 	}
 
+	// Context-driven defaults (applied BEFORE explicit overrides so user can override)
+	b.applyContextDefaults(spec.Context, tfvars)
+
 	// Node host as advertise_host (use first node's IP if available)
 	if len(spec.Nodes) > 0 && spec.Nodes[0].IP != "" {
 		tfvars.AdvertiseHost = spec.Nodes[0].IP
@@ -114,6 +117,27 @@ func (b *TerraformBridge) specToTFVars(spec *models.StackSpec) *TFVars {
 	}
 
 	return tfvars
+}
+
+// applyContextDefaults applies context-driven defaults to tfvars.
+// These set sensible baseline values that can still be overridden by explicit spec fields.
+// Context mapping mirrors the CUE #ContextDefaults in base/context.cue.
+func (b *TerraformBridge) applyContextDefaults(context string, tfvars *TFVars) {
+	switch context {
+	case "cloud":
+		// Cloud: public IP, Let's Encrypt available, proxy mode preferred
+		if tfvars.AccessMode == "ports" && tfvars.Domain != "" {
+			tfvars.AccessMode = "proxy"
+			tfvars.EnableHTTPS = true
+		}
+	case "pi":
+		// Pi: constrained resources, use low tier unless explicitly set
+		if tfvars.ComputeTier == "standard" {
+			tfvars.ComputeTier = "low"
+		}
+	case "local", "":
+		// Local: defaults are already correct (ports mode, standard tier)
+	}
 }
 
 // extractServicePorts reads port overrides from the spec's services map.
