@@ -89,10 +89,10 @@ default_test:
     - type: service_running
       service: traefik
     - type: http_response
-      url: "http://${TEST_HOST}:3000"
+      url: "http://${TEST_HOST}:4000"
       expected_code: 200
     - type: http_response
-      url: "http://${TEST_HOST}:3001"
+      url: "http://${TEST_HOST}:4001"
       expected_code: 200
 
 # -----------------------------------------------------------------------------
@@ -239,6 +239,6 @@ full_test:
         - type: container_running
           container: uptime-kuma
         - type: health_check
-          url: "http://${TEST_HOST}:3000/health"
+          url: "http://${TEST_HOST}:4000/health"
         - type: health_check
-          url: "http://${TEST_HOST}:3001"
+          url: "http://${TEST_HOST}:4001"

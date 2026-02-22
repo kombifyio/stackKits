@@ -59,7 +59,7 @@ variants:
     default: true
 `
 	configPath := filepath.Join(tmpDir, "stackkit.yaml")
-	err := os.WriteFile(configPath, []byte(configContent), 0644)
+	err := os.WriteFile(configPath, []byte(configContent), 0600)
 	require.NoError(t, err)
 
 	// Test loading
@@ -100,7 +100,7 @@ nodes:
     ip: 192.168.1.100
 `
 	specPath := filepath.Join(tmpDir, "stack-spec.yaml")
-	err := os.WriteFile(specPath, []byte(specContent), 0644)
+	err := os.WriteFile(specPath, []byte(specContent), 0600)
 	require.NoError(t, err)
 
 	loader := config.NewLoader(tmpDir)

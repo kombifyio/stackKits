@@ -22,6 +22,7 @@ func TestCLIBuild(t *testing.T) {
 	projectRoot := getProjectRoot(t)
 
 	t.Run("builds successfully", func(t *testing.T) {
+		//nolint:gosec // G204: test binary paths are controlled
 		cmd := exec.Command("go", "build", "-o", filepath.Join(t.TempDir(), "stackkit"), "./cmd/stackkit")
 		cmd.Dir = projectRoot
 		output, err := cmd.CombinedOutput()
@@ -39,6 +40,7 @@ func TestCLIVersionCommand(t *testing.T) {
 	binary := buildCLI(t)
 
 	t.Run("shows version", func(t *testing.T) {
+		//nolint:gosec // G204: test binary paths are controlled
 		cmd := exec.Command(binary, "version")
 		output, err := cmd.CombinedOutput()
 
@@ -56,6 +58,7 @@ func TestCLIHelpCommand(t *testing.T) {
 	binary := buildCLI(t)
 
 	t.Run("shows help", func(t *testing.T) {
+		//nolint:gosec // G204: test binary paths are controlled
 		cmd := exec.Command(binary, "--help")
 		output, err := cmd.CombinedOutput()
 
@@ -72,6 +75,7 @@ func TestCLIHelpCommand(t *testing.T) {
 
 		for _, cmd := range commands {
 			t.Run(cmd, func(t *testing.T) {
+				//nolint:gosec // G204: test binary paths are controlled
 				c := exec.Command(binary, cmd, "--help")
 				output, err := c.CombinedOutput()
 
@@ -93,6 +97,7 @@ func TestCLIInitCommand(t *testing.T) {
 
 	t.Run("requires stackkit name", func(t *testing.T) {
 		tmpDir := t.TempDir()
+		//nolint:gosec // G204: test binary paths are controlled
 		cmd := exec.Command(binary, "init", "--non-interactive", "-C", tmpDir)
 		output, err := cmd.CombinedOutput()
 
@@ -108,6 +113,7 @@ func TestCLIInitCommand(t *testing.T) {
 		stackkitDst := filepath.Join(tmpDir, "base-homelab")
 		copyDir(t, stackkitSrc, stackkitDst)
 
+		//nolint:gosec // G204: test binary paths are controlled
 		cmd := exec.Command(binary, "init", "base-homelab", "-C", tmpDir)
 		output, err := cmd.CombinedOutput()
 
@@ -139,9 +145,10 @@ network:
   subnet: 172.20.0.0/16
 `
 		specPath := filepath.Join(tmpDir, "stack-spec.yaml")
-		err := os.WriteFile(specPath, []byte(specContent), 0644)
+		err := os.WriteFile(specPath, []byte(specContent), 0600)
 		require.NoError(t, err)
 
+		//nolint:gosec // G204: test binary paths are controlled
 		cmd := exec.Command(binary, "validate", "-C", tmpDir)
 		output, err := cmd.CombinedOutput()
 
@@ -155,9 +162,10 @@ network:
 		// Create an invalid spec file (missing required fields)
 		specContent := `variant: default`
 		specPath := filepath.Join(tmpDir, "stack-spec.yaml")
-		err := os.WriteFile(specPath, []byte(specContent), 0644)
+		err := os.WriteFile(specPath, []byte(specContent), 0600)
 		require.NoError(t, err)
 
+		//nolint:gosec // G204: test binary paths are controlled
 		cmd := exec.Command(binary, "validate", "-C", tmpDir)
 		_, err = cmd.CombinedOutput()
 
@@ -196,6 +204,7 @@ func buildCLI(t *testing.T) string {
 		binary += ".exe"
 	}
 
+	//nolint:gosec // G204: test binary paths are controlled
 	cmd := exec.Command("go", "build", "-o", binary, "./cmd/stackkit")
 	cmd.Dir = projectRoot
 	output, err := cmd.CombinedOutput()

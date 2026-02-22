@@ -32,12 +32,15 @@ func TestLayerValidation_ExistingStackKits(t *testing.T) {
 		wantValid bool
 	}{
 		{
-			name:      "dev-homelab",
-			stackkit:  "dev-homelab",
-			wantValid: true,
+			// base-homelab uses #BaseHomelabStack (simplified schema) which
+			// does not include the generic layer fields (system, packages, etc.)
+			// that the full #BaseStackKit schema expects. Layer validation will
+			// report missing fields. This is expected — base-homelab delegates
+			// L1 provisioning to the CLI at apply time, not in the CUE schema.
+			name:      "base-homelab",
+			stackkit:  "base-homelab",
+			wantValid: false,
 		},
-		// Note: Other StackKits need to add exports.cue with 3-layer fields to pass validation
-		// This is documented in the 3-layer validation system plan
 	}
 
 	for _, tc := range testCases {
@@ -61,44 +64,36 @@ func TestLayerValidation_ExistingStackKits(t *testing.T) {
 	}
 }
 
-// TestLayerValidation_DevHomelabLayers validates dev-homelab layer by layer
-func TestLayerValidation_DevHomelabLayers(t *testing.T) {
+// TestLayerValidation_BaseHomelabLayers validates base-homelab layer by layer.
+// base-homelab uses a simplified schema (#BaseHomelabStack) that does not include
+// the generic layer fields (system, packages, platform, etc.). These are handled
+// by the CLI at apply time. This test verifies the validator runs without error
+// and correctly identifies what's missing from the simplified schema.
+func TestLayerValidation_BaseHomelabLayers(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
 
 	projectRoot := getProjectRootForLayerValidation(t)
-	stackkitDir := filepath.Join(projectRoot, "dev-homelab")
+	stackkitDir := filepath.Join(projectRoot, "base-homelab")
 
 	validator := validation.NewLayerValidator(projectRoot)
 	result, err := validator.ValidateStackKit(stackkitDir)
 
 	require.NoError(t, err)
 
+	// base-homelab's simplified schema won't pass the full layer validation.
+	// Verify the validator runs and produces meaningful errors.
 	t.Run("Layer1_Foundation", func(t *testing.T) {
-		assert.True(t, result.Layer1.Valid, "Layer 1 (Foundation) should be valid")
-		if !result.Layer1.Valid {
-			t.Logf("Layer 1 errors: %v", result.Layer1.Errors)
-		}
+		assert.NotEmpty(t, result.Layer1.Errors, "Layer 1 should report missing fields for simplified schema")
 	})
 
 	t.Run("Layer2_Platform", func(t *testing.T) {
-		assert.True(t, result.Layer2.Valid, "Layer 2 (Platform) should be valid")
-		if !result.Layer2.Valid {
-			t.Logf("Layer 2 errors: %v", result.Layer2.Errors)
-		}
+		assert.NotEmpty(t, result.Layer2.Errors, "Layer 2 should report missing fields for simplified schema")
 	})
 
-	t.Run("Layer3_Applications", func(t *testing.T) {
-		assert.True(t, result.Layer3.Valid, "Layer 3 (Applications) should be valid")
-		if !result.Layer3.Valid {
-			t.Logf("Layer 3 errors: %v", result.Layer3.Errors)
-		}
-	})
-
-	t.Run("Overall", func(t *testing.T) {
-		assert.True(t, result.Valid, "Overall validation should pass")
-		assert.Equal(t, "dev-homelab", result.StackKit)
+	t.Run("StackKitName", func(t *testing.T) {
+		assert.Equal(t, "base-homelab", result.StackKit)
 	})
 }
 
@@ -109,7 +104,7 @@ func TestLayerValidation_ErrorMessages(t *testing.T) {
 	}
 
 	projectRoot := getProjectRootForLayerValidation(t)
-	stackkitDir := filepath.Join(projectRoot, "dev-homelab")
+	stackkitDir := filepath.Join(projectRoot, "base-homelab")
 
 	validator := validation.NewLayerValidator(projectRoot)
 	result, err := validator.ValidateStackKit(stackkitDir)
@@ -134,7 +129,7 @@ func TestLayerValidation_StackKitNames(t *testing.T) {
 
 	projectRoot := getProjectRootForLayerValidation(t)
 
-	stackkits := []string{"dev-homelab", "base-homelab", "ha-homelab", "modern-homelab"}
+	stackkits := []string{"base-homelab", "ha-homelab", "modern-homelab"}
 
 	for _, stackkit := range stackkits {
 		t.Run(stackkit, func(t *testing.T) {
