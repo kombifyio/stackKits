@@ -1,25 +1,17 @@
 package commands
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 
 	"github.com/kombihq/stackkits/internal/config"
+	cuepkg "github.com/kombihq/stackkits/internal/cue"
 	"github.com/kombihq/stackkits/internal/template"
 	"github.com/kombihq/stackkits/pkg/models"
 	"github.com/spf13/cobra"
 )
-
-// getDockerHost returns the Docker host from environment or empty string
-func getDockerHost() string {
-	if host := os.Getenv("DOCKER_HOST"); host != "" {
-		return host
-	}
-	return ""
-}
 
 var (
 	genOutputDir string
@@ -58,8 +50,13 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load spec file: %w", err)
 	}
 
+	// Apply --context flag override if provided
+	if contextFlag != "" {
+		spec.Context = contextFlag
+	}
+
 	printInfo("Generating OpenTofu files for: %s", bold(spec.Name))
-	printInfo("StackKit: %s, Variant: %s, Mode: %s", spec.StackKit, spec.Variant, spec.Mode)
+	printInfo("StackKit: %s, Variant: %s, Mode: %s, Context: %s", spec.StackKit, spec.Variant, spec.Mode, contextOrDefault(spec.Context))
 
 	// Find StackKit directory
 	stackkitDir, err := loader.FindStackKitDir(spec.StackKit)
@@ -121,11 +118,10 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 		printSuccess("Generated: main.tf")
 	}
 
-	// Generate terraform.tfvars.json from spec (JSON format for consistency with API)
-	tfvarsPath := filepath.Join(outputPath, "terraform.tfvars.json")
-	tfvarsData := generateTfvarsJSON(spec)
-	if err := os.WriteFile(tfvarsPath, tfvarsData, 0644); err != nil {
-		return fmt.Errorf("failed to write terraform.tfvars.json: %w", err)
+	// Generate terraform.tfvars.json from spec via CUE bridge
+	bridge := cuepkg.NewTerraformBridge(stackkitDir)
+	if err := bridge.GenerateTFVarsFromSpec(spec, outputPath); err != nil {
+		return fmt.Errorf("failed to generate terraform.tfvars.json: %w", err)
 	}
 	printSuccess("Generated: terraform.tfvars.json")
 
@@ -173,51 +169,8 @@ func copyFile(src, dst string) error {
 	return err
 }
 
-// generateTfvarsJSON generates terraform.tfvars.json content from spec (JSON format).
-// This matches the API's output format for consistency.
-func generateTfvarsJSON(spec *models.StackSpec) []byte {
-	vars := make(map[string]interface{})
-
-	// Docker host from environment (for remote Docker daemon)
-	if dockerHost := getDockerHost(); dockerHost != "" {
-		vars["docker_host"] = dockerHost
-	}
-
-	// Basic settings
-	if spec.Domain != "" {
-		vars["domain"] = spec.Domain
-	} else {
-		vars["domain"] = "example.local"
-	}
-
-	if spec.Email != "" {
-		vars["acme_email"] = spec.Email
-	} else {
-		vars["acme_email"] = "admin@example.com"
-	}
-
-	// Variant
-	if spec.Variant != "" {
-		vars["variant"] = spec.Variant
-	}
-
-	// Compute tier
-	if spec.Compute.Tier != "" && spec.Compute.Tier != "auto" {
-		vars["compute_tier"] = spec.Compute.Tier
-	}
-
-	// Network settings
-	if spec.Network.Mode == "public" {
-		vars["network_mode"] = "public"
-	}
-
-	data, err := json.MarshalIndent(vars, "", "  ")
-	if err != nil {
-		// Should never happen with simple map, but log and fall back
-		return []byte("{}")
-	}
-	return append(data, '\n')
-}
+// Note: generateTfvarsJSON has been replaced by the CUE bridge's
+// GenerateTFVarsFromSpec method for a single canonical code path.
 
 // countFiles counts files in a directory
 func countFiles(dir string) (int, error) {

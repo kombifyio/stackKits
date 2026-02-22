@@ -256,6 +256,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		StackKit: stackkitName,
 		Variant:  initVariant,
 		Mode:     initMode,
+		Context:  contextFlag, // from --context flag (empty = auto-detect at deploy time)
 		Domain:   domain,
 		Email:    email,
 		Network: models.NetworkSpec{
@@ -292,6 +293,11 @@ func runInit(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  %s: %s\n", bold("Variant"), initVariant)
 	fmt.Printf("  %s: %s\n", bold("Mode"), initMode)
 	fmt.Printf("  %s: %s\n", bold("Compute"), initComputeTier)
+	if contextFlag != "" {
+		fmt.Printf("  %s: %s\n", bold("Context"), contextFlag)
+	} else {
+		fmt.Printf("  %s: %s\n", bold("Context"), "auto-detect")
+	}
 	if domain != "" {
 		fmt.Printf("  %s: %s\n", bold("Domain"), domain)
 	}

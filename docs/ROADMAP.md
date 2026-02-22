@@ -1,7 +1,7 @@
 # StackKits Roadmap
 
-> **Last Updated:** 2026-02-11  
-> **Status:** Active Development — Architecture v4 Migration  
+> **Last Updated:** 2026-02-21
+> **Status:** Active Development — Phase 1 (IaC Pipeline)
 > **Current Version:** v1.0.0-beta  
 > **Architecture:** [ARCHITECTURE_V4.md](./ARCHITECTURE_V4.md)  
 > **Evaluation:** [EVALUATION_REPORT_2026-02-07.md](./EVALUATION_REPORT_2026-02-07.md)
@@ -22,21 +22,21 @@ This roadmap consolidates all planned work into a single milestone-based plan (M
 
 ---
 
-## Current State Assessment (2026-02-11)
+## Current State Assessment (2026-02-21)
 
 | Component | Status | Notes |
 |-----------|--------|-------|
-| CUE base schemas | 90% | ~2800 lines, production-quality. Package bugs in `base/platform/` and `base/schema/` |
-| base-homelab | 60% | CUE validates, services defined, needs E2E testing + variant→Add-On migration |
-| dev-homelab | 40% | Package conflicts in `exports.cue`, needs restructuring |
-| modern-homelab | 0% | Entirely K8s/k3s-based — needs **complete rewrite** for Docker multi-node |
+| CUE base schemas | 95% | ~2800 lines, production-quality. `base/platform/` and `base/schema/` deleted (TD-01/02) |
+| base-homelab | 75% | CUE validates, services defined, variants deleted (TD-12). Needs bridge.go rewrite for full E2E |
+| dev-homelab | 60% | Package conflicts fixed (TD-03), schema mismatches fixed. Needs templates |
+| modern-homelab | 0% | Entirely K8s/k3s-based — needs **complete rewrite** for Docker multi-node (TD-08) |
 | ha-homelab | 0% | Schema only, 8 explicit TODOs |
-| stackkit CLI | 80% | 9 commands functional (Go), needs Add-On/Context commands |
-| Add-On system | 0% | **NEW** — replaces monolithic variants |
+| stackkit CLI | 95% | 12 commands functional: init (interactive), generate, validate, plan, apply, destroy, status (--json), prepare (memory), completion, version, prompt, serve |
+| Add-On system | 0% | **NEW** — replaces monolithic variants. 17 CUE schemas exist but no code generation |
 | Context system | 0% | **NEW** — replaces manual compute tier selection |
 | kombify Stack integration | 30% | Unifier pipeline exists, needs v4 alignment |
-| API server | 85% | All 13 OpenAPI endpoints implemented. Missing: auth, rate limiting, API tests |
-| Documentation | 40% | Many outdated docs referencing old concepts (K8s, variants, old naming) |
+| API server | 95% | 13 endpoints, API key auth (TD-28), rate limiting (TD-33), CORS (TD-40), 42 test cases (TD-34), structured errors (TD-32), pagination (TD-41) |
+| Documentation | 50% | v4 docs current, K8s refs removed from active docs. Cross-repo Mintlify docs still outdated |
 
 ---
 
@@ -68,7 +68,7 @@ Before implementation, a full audit identified critical inconsistencies across S
 
 ## Milestones
 
-### M0: Hygiene & v4 Migration (Weeks 1–3) — IN PROGRESS
+### M0: Hygiene & v4 Migration (Weeks 1–3) — MOSTLY COMPLETE
 
 **Goal:** Clean slate. Remove all v3/old-concept artifacts from code and docs. Establish v4 as the only source of truth.
 
@@ -129,25 +129,28 @@ Before implementation, a full audit identified critical inconsistencies across S
 
 ---
 
-### M1: Core IaC Pipeline (Weeks 3–6)
+### M1: Core IaC Pipeline (Weeks 3–6) — IN PROGRESS
 
 **Goal:** CUE schemas produce real, deployable infrastructure. Base Kit end-to-end.
 
+#### IaC Pipeline (Active Work)
 - [ ] CUE-as-SSoT: CUE validates + exports `tfvars.json` (not template rendering)
 - [ ] OpenTofu modularization: split `main.tf` (1130 lines) into modules (traefik, dokploy, monitoring, identity)
-- [ ] `bridge.go` rewrite: CUE export → tfvars.json pipeline
+- [ ] `bridge.go` rewrite: full CUE export → tfvars.json pipeline (currently only extracts ~10 fields)
 - [ ] base-homelab end-to-end: `validate → generate → plan → apply`
-- [ ] CI/CD pipeline: `cue vet ./...`, Go tests, lint on every push
-- [ ] **API hardening: Fix filesystem write vulnerability in `handleGenerateTFVars`** (TD-27, P0)
-- [ ] **API hardening: Add authentication middleware** (TD-28, P0)
-- [ ] **API hardening: Fix compute tier enum mismatch in OpenAPI spec** (TD-29, P0)
-- [ ] **API hardening: Add rate limiting middleware** (TD-33, P1)
-- [ ] **API hardening: Add API handler test coverage** (TD-34, P1)
-- [ ] **API hardening: Capture response status in logging middleware** (TD-35, P1)
 - [ ] JSON schema export for IDE support (`cue export --schema`)
-- [ ] Fix `base.#Layer3Applications.services` constraint (Array vs Map — W8)
 - [ ] Port collision detection as CUE constraint
 - [ ] Service dependency validation (`needs[]` references enabled services)
+
+#### Completed
+- [x] CI/CD pipeline: `cue vet ./...`, Go tests, lint on every push (`.github/workflows/ci.yml`)
+- [x] **API hardening: Fix filesystem write vulnerability in `handleGenerateTFVars`** (TD-27, P0 — resolved 2026-02-11)
+- [x] **API hardening: Add authentication middleware** (TD-28, P0 — resolved 2026-02-11)
+- [x] **API hardening: Fix compute tier enum mismatch in OpenAPI spec** (TD-29, P0 — resolved 2026-02-11)
+- [x] **API hardening: Add rate limiting middleware** (TD-33, P1 — resolved 2026-02-11)
+- [x] **API hardening: Add API handler test coverage** (TD-34, P1 — resolved 2026-02-11, 42 test cases)
+- [x] **API hardening: Capture response status in logging middleware** (TD-35, P1 — resolved 2026-02-11)
+- [x] Fix `base.#Layer3Applications.services` constraint (Array vs Map — TD-09, resolved 2026-02-13)
 
 **Done Criteria:** `stackkit validate && stackkit generate && stackkit plan` works for base-homelab.
 
@@ -184,8 +187,8 @@ Before implementation, a full audit identified critical inconsistencies across S
 
 #### Base Kit Refinement
 
-- [ ] Remove old `variants/` directory (replaced by Add-Ons and Contexts)
-- [ ] Consolidate to single schema (`#BaseHomelabKit` only)
+- [x] Remove old `variants/` directory (replaced by Add-Ons and Contexts) — TD-12, resolved 2026-02-14
+- [x] Consolidate to single schema (`#BaseHomelabStack` only) — TD-07, resolved 2026-02-12
 - [ ] Update spec format to v2 `kombination.yaml`
 - [ ] Context × base matrix tests (local, cloud, pi)
 
@@ -475,10 +478,13 @@ The **StackKit catalog/admin UI** stores data in `kombify-DB` under `content_sta
 | Validation endpoints (full + partial) | ✅ Done (2 endpoints) |
 | Generation endpoints (tfvars + preview) | ✅ Done (2 endpoints) |
 | Utility endpoints (health, capabilities) | ✅ Done (2 endpoints) |
-| Authentication middleware | ⬜ Not started (TD-28) |
-| Rate limiting | ⬜ Not started (TD-33) |
-| API handler tests | ⬜ Not started (TD-34) |
-| Filesystem write fix (outputDir) | ⬜ Not started (TD-27) |
+| Authentication middleware | ✅ Done (TD-28, API key with `--api-key` flag / `STACKKITS_API_KEY` env) |
+| Rate limiting | ✅ Done (TD-33, per-IP sliding window, `--rate-limit` flag, default 60/min) |
+| API handler tests | ✅ Done (TD-34, 42 test cases covering all handlers + middleware) |
+| Filesystem write fix (outputDir) | ✅ Done (TD-27, removed from request, uses temp dir) |
+| CORS configuration | ✅ Done (TD-40, `--cors-origins` flag with per-request matching) |
+| Pagination | ✅ Done (TD-41, `?limit=N&offset=M` with envelope response) |
+| Structured errors | ✅ Done (TD-32, category/code/suggestions in JSON responses) |
 
 ---
 
@@ -495,4 +501,4 @@ Key concepts:
 
 ---
 
-*This document is updated at each milestone completion. Next review: after M0.*
+*This document is updated at each milestone completion. Next review: after M1.*

@@ -33,6 +33,13 @@ package monitoring
 		description: "VictoriaMetrics + Grafana + Loki + Alloy"
 	}
 
+	_compatibility: {
+		stackkits: ["base-homelab", "dev-homelab", "modern-homelab", "ha-homelab"]
+		contexts:  ["local", "cloud"]
+		requires:  []
+		conflicts: []
+	}
+
 	enabled: bool | *true
 
 	// VictoriaMetrics configuration
