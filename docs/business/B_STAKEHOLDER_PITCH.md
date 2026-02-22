@@ -105,7 +105,6 @@ StackKits introduces a validation layer between user intent and infrastructure d
 
 ### In Development
 
-- **dev-homelab** – Development and testing environment
 - **CLI tooling** – User-friendly command-line interface
 
 ### Planned

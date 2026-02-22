@@ -28,7 +28,6 @@ This roadmap consolidates all planned work into a single milestone-based plan (M
 |-----------|--------|-------|
 | CUE base schemas | 90% | ~2800 lines, production-quality. Package bugs in `base/platform/` and `base/schema/` |
 | base-homelab | 60% | CUE validates, services defined, needs E2E testing + variant→Add-On migration |
-| dev-homelab | 40% | Package conflicts in `exports.cue`, needs restructuring |
 | modern-homelab | 0% | Entirely K8s/k3s-based — needs **complete rewrite** for Docker multi-node |
 | ha-homelab | 0% | Schema only, 8 explicit TODOs |
 | stackkit CLI | 80% | 9 commands functional (Go), needs Add-On/Context commands |
@@ -101,12 +100,10 @@ Before implementation, a full audit identified critical inconsistencies across S
 
 #### CUE/Schema Consistency
 
-- [x] Package naming: `devhomelab` → `dev_homelab`
 - [x] File naming: `modern-homelab/stackkit.cue` → `stackfile.cue`
 - [x] Remove duplicate schema definitions (`base/layers.cue` vs `base/platform/identity.cue`)
 - [x] Fix package declarations in `base/platform/*.cue` (declares `package base` in subdirectory)
 - [x] Fix package declarations in `base/schema/*.cue` (same issue)
-- [x] Fix `dev-homelab/exports.cue` package conflict
 - [x] Compute tier naming: Go `minimal/standard/performance` → CUE `low/standard/high` (align to CUE)
 - [x] Platform type: remove `kubernetes` from Go validator (ADR-0002)
 - [x] Fix Layer 3 PAAS validation logic (currently inverted in Go)
@@ -210,13 +207,7 @@ Current state: entirely K8s/k3s-based. Must be rewritten as **hybrid Docker mult
 - [ ] Implement `ha × local` and `ha × cloud` contexts
 - [ ] Mark `ha × pi` as not recommended (resource validation)
 
-#### dev-homelab
-
-- [ ] Fix import problem with `platforms/docker`
-- [ ] Write schema tests (analog to base-homelab)
-- [ ] Create templates (Docker Compose + OpenTofu)
-
-**Done Criteria:** All 8 StackKit × Context combinations validate (`ha × pi` excluded). Each StackKit has ≥1 deployable configuration.
+**Done Criteria:** All StackKit x Context combinations validate (`ha × pi` excluded). Each StackKit has ≥1 deployable configuration.
 
 ---
 

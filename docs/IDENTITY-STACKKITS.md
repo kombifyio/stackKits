@@ -80,7 +80,7 @@ Both Dokploy and Coolify deploy Traefik as their built-in reverse proxy. The ide
 
 Traefik is the natural foundation for the identity stack because:
 
-1. **It's already there.** Every StackKit (base-homelab, dev-homelab, modern-homelab, ha-homelab) includes Traefik via the PaaS tool (Dokploy or Coolify).
+1. **It's already there.** Every StackKit (base-homelab, modern-homelab, ha-homelab) includes Traefik via the PaaS tool (Dokploy or Coolify).
 2. **ForwardAuth middleware.** TinyAuth registers as a Traefik `forwardauth` middleware. Any service can be protected by adding a single label: `traefik.http.routers.myapp.middlewares=tinyauth`.
 3. **PaaS-agnostic.** Whether the user chooses Dokploy, Coolify, Dockge, or Portainer — Traefik is the common denominator. Identity works the same regardless of PaaS choice.
 
@@ -340,9 +340,9 @@ StackKits offer guided migrations:
 
 | Component | CUE Schema | Terraform Template | Seed Data | Active in Stacks |
 |-----------|-----------|-------------------|-----------|-----------------|
-| LLDAP | ✅ `base/identity.cue` | ✅ `base/identity/_lldap.tf.tmpl` | ✅ | dev-homelab |
-| Step-CA | ✅ `base/identity.cue` | ✅ `base/identity/_step-ca.tf.tmpl` | ✅ | dev-homelab (disabled) |
-| TinyAuth | ✅ `base/layers.cue` | ❌ Missing | ✅ | dev-homelab |
+| LLDAP | ✅ `base/identity.cue` | ✅ `base/identity/_lldap.tf.tmpl` | ✅ | base-homelab |
+| Step-CA | ✅ `base/identity.cue` | ✅ `base/identity/_step-ca.tf.tmpl` | ✅ | base-homelab (disabled) |
+| TinyAuth | ✅ `base/layers.cue` | ✅ `templates/simple/main.tf` | ✅ | base-homelab |
 | PocketID | ✅ `base/layers.cue` | ❌ Missing | ✅ | Disabled everywhere |
 | Traefik | ✅ via PaaS config | ✅ via Dokploy/Coolify | ✅ | All stacks |
 | PocketBase OIDC→PocketID | ❌ Not yet | N/A (kombify Stack code) | N/A | Not implemented |
@@ -353,4 +353,4 @@ StackKits offer guided migrations:
 2. **PocketID Terraform template** — needed to deploy PocketID via StackKit engine.
 3. **PocketBase→PocketID OIDC** — kombify Stack needs OIDC client config for PocketID (self-hosted mode).
 4. **Enable PocketID by default** — if passkeys are the recommended auth, the passkey IdP must be on.
-5. **Identity config in modern-homelab and ha-homelab** — currently only dev-homelab has identity blocks.
+5. **Identity config in modern-homelab and ha-homelab** — currently only base-homelab has identity blocks.

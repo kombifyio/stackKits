@@ -1,5 +1,15 @@
 # Development — kombify StackKits
 
+## Fundamental Rule
+
+**CUE defines the StackKit. Everything else is generated output.**
+
+- Edit `.cue` files to change anything about a StackKit
+- Run `stackkit generate` to produce artifacts (never edit them)
+- Run `stackkit apply` to deploy (fully automated — zero manual steps)
+- Never write or edit Terraform/OpenTofu files, Docker Compose output, or deployment scripts
+- Never manually run commands on target servers
+
 ## Prerequisites
 
 - [Go](https://go.dev/) 1.24+
@@ -33,7 +43,6 @@ internal/             # Go internal packages (cue, docker, validation, ...)
 pkg/models/           # Public Go models
 base/                 # Core CUE schemas (imported by all kits)
 base-homelab/         # Single Environment Kit
-dev-homelab/          # Developer Kit
 ha-homelab/           # High-Availability Kit
 modern-homelab/       # Multi-Node Kit (planned)
 docs/                 # Documentation

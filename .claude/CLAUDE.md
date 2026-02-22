@@ -1,27 +1,85 @@
 # StackKits Project Configuration
 
+---
+
+## !! STOP — READ THIS BEFORE ANYTHING ELSE !!
+
+**CUE IS THE ONLY SOURCE OF TRUTH FOR A STACKKIT. THIS IS NON-NEGOTIABLE.**
+
+A StackKit is defined entirely by its `.cue` files. Everything else is generated.
+
+### What this means in practice:
+
+| Situation | Correct action |
+|-----------|----------------|
+| Need to add a service | Edit the `.cue` definition |
+| Service is misconfigured | Edit the `.cue` definition |
+| Want to change Traefik config | Edit the `.cue` definition |
+| main.tf looks wrong | Edit the `.cue` definition — NEVER edit main.tf |
+| docker-compose.yml is wrong | Edit the `.cue` definition — NEVER edit compose files |
+| Server needs a change | Edit the `.cue` definition, then `stackkit apply` |
+
+### Absolute prohibitions — do these and the work is WRONG:
+
+- **NEVER write or edit Terraform/OpenTofu files** (`*.tf`, `*.tfvars`) — these are generated output
+- **NEVER write or edit Docker Compose files** that are output artifacts
+- **NEVER manually run commands on target servers** (`docker run`, `docker compose up`, `apt install`, etc.)
+- **NEVER do incremental rollout** — all changes go through `stackkit generate` + `stackkit apply` from scratch
+- **NEVER suggest Terraform/OpenTofu as a tool for the user** — it is an internal engine only
+
+### The only valid workflow:
+
+```
+1. Edit .cue files
+2. stackkit generate   ← produces artifacts (do not touch them)
+3. stackkit apply      ← deploys everything, fully automated
+```
+
+**Test principle:** The ONLY valid test is `fresh server + stackkit apply = fully working stack`. Any step requiring human intervention on the server means the CUE definition is broken.
+
+---
+
 ## About StackKits
 
-StackKits is a modular homelab infrastructure management toolkit that uses CUE schemas for configuration validation and service orchestration.
-
-### Project Goals
-- Provide reusable, composable infrastructure components
-- Enforce configuration validation through CUE schemas
-- Enable declarative homelab management
-- Support multiple deployment targets (Docker, Podman, Kubernetes)
-
-### Current State
-- **Branch**: dev0.1
-- **Focus**: CUE schema improvements and validation framework
-- **Recent Work**: Consolidating schema definitions, improving validation
-- **Project Path**: `C:\Users\mako1\OneDrive\Dokumente\GitHub\StackKits`
+StackKits is a modular homelab infrastructure management toolkit. **CUE schemas define everything** — they are the configuration, validation, and source of deployment truth.
 
 ### Key Principles
+- **CUE-first**: If it's not in CUE, it doesn't exist as a StackKit concept
 - Schema-first development
 - Backwards compatibility in schema changes
-- Documentation-driven design
 - Architecture Decision Records (ADRs) for major changes
 - Modular, composable architecture
+
+### Critical Rules
+
+#### A StackKit IS its CUE definitions (FUNDAMENTAL — READ THIS FIRST)
+A StackKit is defined entirely by its CUE schemas and service definitions. Everything else — OpenTofu/Terraform, Docker Compose files, deployment scripts — is GENERATED OUTPUT that must never be authored or edited directly.
+
+**The only way to change a StackKit is to change its CUE definitions.**
+
+- `stackkit generate` produces all deployment artifacts from CUE
+- `stackkit apply` deploys ALL layers (L1 Foundation, L2 Platform, L3 Applications) to a fresh server — fully automated, zero manual steps
+- Generated files (`main.tf`, `.kuma-compose.yaml`, etc.) are disposable build artifacts
+- NEVER edit generated terraform, compose files, or any deployment output
+- NEVER manually run commands on the target server/VM (docker run, docker compose up, etc.)
+- NEVER do incremental patches — every change requires tearing down and redeploying from scratch
+- A StackKit is not production-ready until `stackkit apply` on a clean server produces ALL services running with zero manual intervention
+
+**Testing principle:** The ONLY valid test is: fresh server + `stackkit apply` = fully working stack. If any step requires human intervention on the server, the StackKit is broken.
+
+#### NEVER use localhost addresses for users
+All service URLs shown to users, generated in configs, or used in outputs MUST use proper domain names (e.g. `whoami.stack.local`, `dokploy.stack.local`), NEVER `localhost:PORT`. This applies everywhere:
+- OpenTofu outputs and deployment summaries
+- CLI output messages and status commands
+- Documentation, examples, and README files
+- E2E test verification URLs shown to users
+- Any user-facing URL references
+- docker-compose.yml aliases and DNS entries
+
+The architecture uses Traefik reverse proxy with domain-based routing. Services are accessed via `<service>.<domain>`, not via raw ports on localhost. Even in dev/test environments, use `.stack.local` domains with DNS resolution (dnsmasq or /etc/hosts).
+
+#### NEVER use ports 3000 or 3001 as external/host ports
+These ports conflict with common dev tools (Next.js, React dev servers, Grafana, etc.). Use 4000/4001 instead. Internal container ports (what the app listens on inside the container) are exempt from this rule. Enforced by pre-commit hook.
 
 ---
 
@@ -57,8 +115,7 @@ StackKits is a modular homelab infrastructure management toolkit that uses CUE s
 
 ### AI Enhancement Tools
 - **Obra's Superpowers**: TDD, debugging, planning, autonomous execution workflows
-- **VoltAgent Subagents**: Domain-specific infrastructure specialists (DevOps, Terraform, K8s, Security)
-- **Anthropic Document Skills**: Production-grade document manipulation (PDF, DOCX, PPTX, XLSX)
+- **Note**: AI agents working on StackKits work ONLY in CUE. Terraform/K8s specialists are not applicable — OpenTofu is an internal engine, not a user-facing tool.
 
 ---
 
@@ -66,32 +123,37 @@ StackKits is a modular homelab infrastructure management toolkit that uses CUE s
 
 ```
 StackKits/
-├── schemas/              # CUE schema definitions (CORE)
-│   ├── base/            # Base schema types and primitives
-│   ├── services/        # Service-specific schemas
-│   └── validation/      # Validation rules and constraints
+├── base/                 # Layer 1 CORE: CUE schemas imported by all kits
+│   ├── stackkit.cue      # Base type definitions
+│   ├── layers.cue        # Layer model
+│   └── ...               # network, identity, security, observability
 │
-├── stacks/              # Service stack configurations
-│   ├── base-homelab/    # Core homelab services (required)
-│   ├── monitoring/      # Monitoring and observability stack
-│   ├── media/           # Media server stack
-│   └── [other-stacks]/  # Additional service stacks
+├── base-homelab/         # Base Kit — single environment
+│   ├── stackfile.cue     # Main CUE definition (THE definition)
+│   ├── services.cue      # Service definitions in CUE
+│   ├── defaults.cue      # Default values in CUE
+│   └── default-spec.yaml # Input spec example
 │
-├── docs/                # Architecture and development guides
-│   ├── ARCHITECTURE.md  # Overall system design
-│   └── creating-stackkits.md  # Developer guide for new stacks
+├── modern-homelab/       # Modern Homelab Kit — hybrid (local + cloud)
+├── ha-homelab/           # High-Availability Kit
 │
-├── ADR/                 # Architecture Decision Records
-│   └── [numbered-adrs]/ # Decision history with rationale
+├── addons/               # Composable add-ons (each is CUE)
+│   ├── monitoring/addon.cue
+│   ├── vpn-overlay/addon.cue
+│   └── ...
 │
-├── scripts/             # Utility scripts
-│   ├── validate/        # Validation scripts
-│   └── deploy/          # Deployment automation
+├── platforms/            # Platform CUE definitions (Docker, etc.)
 │
-└── tests/               # Test suites
-    ├── schema-tests/    # CUE schema validation tests
-    └── integration/     # Integration testing
+├── cmd/stackkit/         # CLI Go source — reads CUE, generates+applies
+├── internal/             # Go packages (cue bridge, template renderer, etc.)
+│
+├── docs/                 # Documentation
+│   └── ADR/              # Architecture Decision Records
+│
+└── tests/                # Test suites
 ```
+
+**The `.cue` files ARE the StackKit. Everything in `deploy/`, `*.tf`, and compose files is GENERATED — never edit it.**
 
 ### File Naming Conventions
 - **CUE files**: `snake_case.cue`
@@ -234,14 +296,15 @@ done
 ### Stack Operations
 
 ```bash
-# Deploy a stack (example)
-./scripts/deploy-stack.sh base-homelab
+# The ONLY way to deploy — never run anything else
+stackkit generate       # Produce artifacts from CUE (never edit output)
+stackkit apply          # Deploy everything, fully automated
 
-# Validate stack configuration
-cue vet ./schemas/... ./stacks/monitoring/
+# Validate CUE before generating
+cue vet ./...
 
-# Generate stack documentation
-./scripts/generate-stack-docs.sh monitoring
+# Evaluate a specific kit
+cue eval ./base-homelab/
 ```
 
 ### Git Workflow
@@ -331,95 +394,82 @@ prometheus: #MonitoringService & {
 
 ## Workflow Examples
 
-### Adding a New Service Stack
+### Adding a New Service or Changing a StackKit
 
-1. **Define Schema** (if new service type):
+**All changes happen in CUE. No exceptions.**
+
+1. **Define in CUE**:
 ```bash
-# Create service schema
-nvim schemas/services/new-service.cue
+# Edit the relevant stackfile or services.cue
+# e.g. for base-homelab:
+# base-homelab/services.cue   ← add the service definition here
 
-# Define structure using CUE
-#NewService: #Service & {
-    // Service-specific fields
-}
+# Example CUE service definition:
+# myService: base.#ServiceDefinition & {
+#     image: "myimage:tag"
+#     placement: {nodeType: "local", strategy: "single"}
+# }
 ```
 
-2. **Validate Schema**:
+2. **Validate CUE**:
 ```bash
-cue vet ./schemas/...
+cue vet ./...
+cue eval ./base-homelab/    # check the resolved output
 ```
 
-3. **Create Stack Directory**:
+3. **Generate artifacts** (do not edit the output):
 ```bash
-mkdir -p stacks/new-service
+stackkit generate
 ```
 
-4. **Create Stack Configuration**:
+4. **Test the full apply**:
 ```bash
-# Create config that implements the schema
-nvim stacks/new-service/config.cue
+stackkit apply   # must produce a fully working stack with zero manual steps
 ```
 
-5. **Validate Stack**:
+5. **Commit**:
 ```bash
-cue vet ./schemas/... ./stacks/new-service/
-```
-
-6. **Document**:
-```bash
-# Create stack README
-nvim stacks/new-service/README.md
-```
-
-7. **Test & Commit**:
-```bash
-./scripts/test-integration.sh new-service
-git add schemas/services/new-service.cue stacks/new-service/
-git commit -m "Add new service stack"
+git add base-homelab/services.cue
+git commit -m "Add myService to base-homelab"
 ```
 
 ### Modifying Existing Schemas
 
-1. **Read Current Schema**:
+1. **Read Current CUE**:
 ```bash
-# Understand existing structure
-cat schemas/services/monitoring.cue
+# Read the relevant .cue files — use Read tool, not cat
+# e.g. base-homelab/services.cue, base/stackkit.cue
 ```
 
 2. **Check Existing Usage**:
 ```bash
-# Find all places using this schema
-grep -r "MonitoringService" stacks/
+# Find all places using a definition
+cue vet ./...    # will fail if anything is broken
 ```
 
 3. **Plan Changes** (ensure backwards compatibility):
 - Add optional fields or fields with defaults
-- Never remove or rename fields
+- Never remove or rename fields without a migration
 - Don't add required fields without defaults
 
-4. **Implement Changes**:
+4. **Implement Changes in CUE**:
 ```bash
-nvim schemas/services/monitoring.cue
+# Edit the relevant .cue file
+# Then validate immediately:
+cue vet ./...
 ```
 
-5. **Validate Against Existing Stacks**:
+5. **Validate All Kits**:
 ```bash
-# Ensure existing stacks still validate
-for stack in stacks/*/; do
-    cue vet ./schemas/... "$stack" || echo "Failed: $stack"
-done
+cue vet ./base-homelab/...
+cue vet ./modern-homelab/...
+cue vet ./ha-homelab/...
 ```
 
-6. **Update Documentation**:
-```bash
-# Update relevant docs
-nvim docs/ARCHITECTURE.md
-```
-
-7. **Consider ADR** (if significant change):
+6. **Consider ADR** (if significant change):
 ```bash
 # Document decision
-nvim ADR/XXX-why-we-changed-monitoring-schema.md
+# docs/ADR/NNN-why-we-changed-X.md
 ```
 
 ### Creating Architecture Decision Records
@@ -582,25 +632,23 @@ port: 8080    // int
 ## Project-Specific Workflows
 
 ### Daily Development Cycle
-1. Pull latest changes: `git pull origin dev0.1`
-2. Make schema or config changes
-3. Validate continuously: `cue vet ./schemas/...`
-4. Format code: `cue fmt ./schemas/...`
-5. Test against stacks: `./scripts/validate-stack.sh [stack-name]`
-6. Commit with validation passing
+1. Pull latest changes: `git pull origin main`
+2. Make changes **in `.cue` files only**
+3. Validate continuously: `cue vet ./...`
+4. Format code: `cue fmt ./...`
+5. `stackkit generate` to check artifact output (do not edit artifacts)
+6. Commit with CUE validation passing
 7. Push and create PR if ready
 
 ### Before Every Commit
 ```bash
-# Required checks
-cue vet ./schemas/...      # Must pass
-cue fmt ./schemas/...      # Format code
-git diff                    # Review changes
+# Required checks — all against CUE only
+cue vet ./...           # Must pass
+cue fmt ./...           # Format code
+git diff                # Review changes — should only be .cue files
 
-# Validate against existing stacks
-for stack in stacks/*/; do
-    cue vet ./schemas/... "$stack"
-done
+# NEVER commit generated files (*.tf, docker-compose output) as changes
+# Those are build artifacts — if they changed, only the .cue change matters
 ```
 
 ### Release Process

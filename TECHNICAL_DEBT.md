@@ -241,25 +241,24 @@ Items are categorized by severity and mapped to roadmap milestones.
 | TD-02 | Schema duplication (PAASConfig etc.) | 2026-02-12 | Canonical source is `base/layers.cue`; deleted `base/platform/` duplicates |
 | TD-07 | Dual schemas in base-homelab | 2026-02-12 | Deleted `#BaseHomelabKit` (unused); `#BaseHomelabStack` is canonical (all tests use it) |
 | TD-13 | Version metadata inconsistency | 2026-02-12 | Aligned to `4.0.0` in both `stackkit.yaml` and `stackfile.cue` |
-| TD-18 | HealthCheck snake_case vs camelCase | 2026-02-12 | Fixed `start_period` → `startPeriod` in `dev-homelab/services.cue` |
-| TD-03 | dev-homelab package conflict (`devhomelab` → `dev_homelab`) | 2026-02-11 | Unified package name across all 4 CUE files + templates |
+| TD-18 | HealthCheck snake_case vs camelCase | 2026-02-12 | Fixed `start_period` → `startPeriod` in CUE service definitions |
 | TD-16 | Coolify image typo (`coolabsio` → `coollabsio`) | 2026-02-11 | Fixed in `base/platform/paas.cue` |
-| TD-17 | Whoami service missing host port | 2026-02-11 | Host port added in `dev-homelab/exports.cue` |
+| TD-17 | Whoami service missing host port | 2026-02-11 | Host port added in exports.cue |
 | TD-19 | Committed binary (`stackkit.exe`) | 2026-02-11 | Deleted from repo, `.gitignore` covers `*.exe` |
 | TD-20 | Junk file (`{{range`) at root | 2026-02-11 | Deleted |
 | — | License inconsistency (K2) | 2026-02-10 | Apache 2.0 unified in LICENSE + README |
 | — | `modern-homelab/stackkit.cue` naming | 2026-02-11 | Renamed to `stackfile.cue` for consistency |
 | — | `stack-spec.yaml` deprecated fields | 2026-02-11 | Removed `variant`/`mode`, added `context`, fixed tier naming |
 | — | ha-homelab `object-storage` missing from ServiceType | 2026-02-12 | Added to `#ServiceType` enum in `base/stackkit.cue` |
-| — | dev-homelab import alias shadowing | 2026-02-12 | Changed import to `dockerplatform "..."` |
-| — | dev-homelab schema mismatches (14 errors) | 2026-02-12 | Fixed base schemas (middlewares, tinyauth, category, driver) + dev-homelab values (maxFile, retention struct, paths) |
+| — | CUE import alias shadowing | 2026-02-12 | Changed import to `dockerplatform "..."` |
+| — | CUE schema mismatches (14 errors) | 2026-02-12 | Fixed base schemas (middlewares, tinyauth, category, driver) + service values (maxFile, retention struct, paths) |
 | TD-04 | Compute tier naming (`minimal/performance` → `low/high`) | 2026-02-12 | Aligned Go models, validator, tests, and CLI to CUE naming (`low/standard/high`) |
 | TD-05 | Platform type mismatch (`kubernetes` in Go validator) | 2026-02-12 | Removed `kubernetes`, added `bare-metal` in Go validator per ADR-0002 |
 | TD-06 | Layer 3 PAAS validation inverted | 2026-02-12 | Rewrote `validateLayer3`: warns if PAAS found (PAAS belongs in Layer 2), no longer requires it |
 | — | K8s refs in docs (stack-spec-reference, TARGET_STATE) | 2026-02-12 | Removed K8s schema sections, examples, and references from active docs |
 | TD-22 | plans/ and missions/ directories | 2026-02-11 | Archived to `docs/_archive/plans/` and `docs/_archive/missions/` |
 | TD-26 | Dokploy/Coolify selection logic | 2026-02-11 | Source doc archived; ROADMAP M2 clarifies: local→Dokploy, cloud→Coolify |
-| TD-09 | Services format inconsistency (list vs map) | 2026-02-13 | Standardized to map `[string]: #ServiceDefinition` in base/stackkit.cue, base-homelab/services.cue, dev-homelab/stackfile.cue — matches ha/modern-homelab and Go `StackSpec.Services` |
+| TD-09 | Services format inconsistency (list vs map) | 2026-02-13 | Standardized to map `[string]: #ServiceDefinition` in base/stackkit.cue, base-homelab/services.cue — matches ha/modern-homelab and Go `StackSpec.Services` |
 | TD-14 | OpenTofu validation not executed | 2026-02-13 | `cmd/stackkit/commands/validate.go` now uses `tofu.Executor.Validate()` with JSON error parsing, init-if-needed, and install check |
 | TD-25 | Domain validation inconsistency | 2026-02-14 | HA regex changed to positive hostname format; `step-ca` TLS provider added for local domains. See ADR-0004 |
 | TD-27 | API arbitrary filesystem write | 2026-02-11 | Removed `outputDir` from request; `handleGenerateTFVars` uses temp dir + returns content |

@@ -8,7 +8,6 @@
 
 | StackKit | Identity | Auth Default | External Access |
 |----------|----------|--------------|-----------------|
-| dev-homelab | minimal | password OK | local-only |
 | base-homelab | standard | passkey | local-only |
 | modern-homelab | full | passkey + mTLS | tunnel/vpn |
 | ha-homelab | full + audit | passkey + mTLS | tunnel + vpn |
@@ -17,7 +16,7 @@
 
 ## 2. Profiles
 
-### 2.1 dev-homelab
+### 2.1 base-homelab (minimal profile)
 
 Minimal setup for development:
 

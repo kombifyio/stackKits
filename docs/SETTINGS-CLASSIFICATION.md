@@ -152,7 +152,7 @@ terramate run -- tofu apply
 1. **Backup all data** before attempting changes
 2. **Plan migration path** for dependent services
 3. **Schedule maintenance window** for service disruption
-4. **Test in dev-homelab** before production changes
+4. **Test in base-homelab** before production changes
 
 #### Example: Changing LLDAP Base DN
 

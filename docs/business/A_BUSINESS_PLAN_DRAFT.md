@@ -78,7 +78,6 @@ These three technologies form the core of StackKits. Everything else (Docker, Tr
 | StackKit | Description | Status |
 |----------|-------------|--------|
 | **base-homelab** | Single-server deployment with Docker platform | Available |
-| **dev-homelab** | Development environment for testing | In Progress |
 | **modern-homelab** | Multi-node hybrid topology | Planned (v1.1) |
 | **ha-homelab** | High-availability Docker Swarm cluster | Planned (v1.1) |
 

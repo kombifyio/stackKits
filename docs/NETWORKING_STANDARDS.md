@@ -14,11 +14,11 @@ The goal is strict:
 Every StackKit must provide links/outputs for these access methods:
 
 1. **Direct IP + port** (most universal)
-   - Example: `http://192.168.1.10:3000`
+   - Example: `http://192.168.1.10:4000`
    - Works on any LAN, regardless of DNS/mDNS.
 
 2. **mDNS host identity**: `HOSTNAME.local` + port (zero-config convenience)
-   - Example: `http://homelab.local:3000`
+   - Example: `http://homelab.local:4000`
    - This is a convenience, not a dependency. Clients may need mDNS enabled.
 
 3. **Optional domain-based hostnames** (only when the user provides a real domain)
@@ -62,8 +62,8 @@ Base Homelab must always output:
 ### Recommended default port allocations (stable)
 These defaults should be stable across releases (changing them is a breaking UX change):
 - Traefik dashboard: `8080`
-- Dokploy: `3000`
-- Uptime Kuma: `3001`
+- Dokploy: `4000`
+- Uptime Kuma: `4001`
 - Beszel: `8090`
 - Dozzle: `8888`
 - Whoami: `9080`
@@ -95,6 +95,14 @@ If users want clean hostnames without public domains:
 - DNS: public
 - TLS: Let’s Encrypt
 - Still keep direct ports available for “always works”
+
+## Banned External Ports
+
+The following ports MUST NEVER be used as external/host port defaults:
+- **3000** - Conflicts with common dev tools (Next.js, React, Grafana, etc.)
+- **3001** - Same conflict range
+
+These ports are enforced by a pre-commit hook that will reject any attempt to use them as external port defaults. Internal container ports (what the app listens on inside the container) are unaffected by this rule.
 
 ## What “Robust” Means for StackKits
 

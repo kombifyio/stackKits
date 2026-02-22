@@ -1,20 +1,21 @@
 # kombify StackKits (StackKits) - Guided Infrastructure Blueprints
 
-> **Pre-validated infrastructure blueprints with guided UI setup, CUE validation, and OpenTofu execution under the hood**
+> **Declarative infrastructure blueprints defined entirely in CUE — validated, generated, and deployed by `stackkit apply`**
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![CUE](https://img.shields.io/badge/CUE-v0.9-blue)](https://cuelang.org/)
-[![OpenTofu](https://img.shields.io/badge/OpenTofu-v1.6-green)](https://opentofu.org/)
 
 ## 🎯 Overview
 
-**StackKits** are declarative infrastructure blueprints for homelab and self-hosted deployments. They combine the power of **CUE** for validation with **OpenTofu** for provisioning, delivering safe and reproducible infrastructure.
+**StackKits** are declarative infrastructure blueprints for homelab and self-hosted deployments. They are defined entirely in **CUE** — CUE schemas are the single source of truth. The CLI generates all deployment artifacts internally and applies them with zero manual steps.
+
+> **Developers and AI agents:** A StackKit lives in its `.cue` files. Terraform/OpenTofu and Docker Compose are **generated output** — they are never authored or edited directly. See [CLAUDE.md](CLAUDE.md).
 
 ### Key Features
 
-- **Validated Configuration** - CUE schemas catch errors before deployment
-- **Professional Engine Under the Hood** - OpenTofu as execution engine, CUE for validation -- users interact through UI or CLI
-- **Multi-OS Support** - Ubuntu, Debian, and more via variants
+- **CUE-defined** - All services, configuration, and constraints live in CUE schemas
+- **Fully automated apply** - `stackkit apply` deploys ALL layers to a clean server with zero manual steps
+- **No manual rollout** - There is no "manual deploy" step. If it requires manual intervention, the CUE definition is incomplete.
 - **Standalone or Integrated** - Use via CLI or with kombify Stack Web UI
 
 ### Prerequisites
@@ -22,9 +23,10 @@
 | Tool         | Version | Purpose                     |
 | ------------ | ------- | --------------------------- |
 | **Docker**   | 24.0+   | Container runtime           |
-| **OpenTofu** | 1.6+    | Infrastructure provisioning |
 
-Optional: Terramate (0.6+) for multi-node orchestration, CUE (0.9+) for development
+**For development only:** CUE CLI 0.9+ (schema validation), Go 1.24+ (build CLI)
+
+> OpenTofu and Terramate are used **internally by the CLI** as execution engines — they are not user-installed prerequisites and are never run directly by users or agents.
 
 ## 📦 Available StackKits
 
@@ -115,7 +117,7 @@ StackKits/
 
 ### Development/Testing with VM (Recommended for Local Dev)
 
-Deploy the **dev-homelab** StackKit inside an Ubuntu VM for isolated testing:
+Deploy the **base-homelab** StackKit inside an Ubuntu VM for isolated testing:
 
 ```bash
 # 1) Start ONLY the VM (no services on host)
@@ -123,7 +125,7 @@ docker compose up -d vm
 
 # 2) Deploy all services INSIDE the VM via StackKit CLI
 docker compose run --rm -e DOCKER_HOST=tcp://vm:2375 cli \
-  ./stackkit init dev-homelab --non-interactive
+  ./stackkit init base-homelab --non-interactive
 docker compose run --rm -e DOCKER_HOST=tcp://vm:2375 cli \
   ./stackkit apply --auto-approve
 
@@ -141,7 +143,7 @@ docker compose exec vm docker ps    # VM: should show ALL services
 - **TinyAuth**: http://auth.stack.local → `admin` / `admin123`
 - **Dokploy**: http://dokploy.stack.local (via TinyAuth SSO)
 
-See [dev-homelab/README.md](dev-homelab/README.md) for complete documentation.
+See [base-homelab/README.md](base-homelab/README.md) for complete documentation.
 
 ### CLI-Only (Standalone)
 
@@ -281,29 +283,23 @@ make test-integration
 
 ```
 ┌───────────────────────────────────────────────────────────┐
-│  User Intent (kombination.yaml)                           │
-│  StackKit: base | modern | ha                             │
-│  Context: local | cloud | pi  (auto-detected)            │
-│  Add-Ons: monitoring, backup, vpn-overlay, ...            │
+│  CUE Definitions (THE source of truth)                   │
+│  StackKit × Context × Add-Ons → Resolved Config          │
+│  All services, constraints, defaults defined here         │
 └───────────────────────┬───────────────────────────────────┘
-                        │
+                        │  stackkit generate (internal)
                         ▼
 ┌───────────────────────────────────────────────────────────┐
-│  CUE Validation + Resolution                             │
-│  StackKit × Context → Smart Defaults                     │
-│  + Add-On merging → Resolved Configuration               │
+│  Generated Artifacts (never edit these)                  │
+│  • HCL/OpenTofu  • Docker Compose  • Bootstrap scripts   │
+│  These are build output — disposable, regenerated always  │
 └───────────────────────┬───────────────────────────────────┘
-                        │
+                        │  stackkit apply (fully automated)
                         ▼
 ┌───────────────────────────────────────────────────────────┐
-│  IaC Generation (OpenTofu + Terramate)                   │
-│  • HCL templates  • Docker Compose  • Bootstrap scripts  │
-└───────────────────────┬───────────────────────────────────┘
-                        │
-                        ▼
-┌───────────────────────────────────────────────────────────┐
-│  Execution (Level 0: CLI | Level 2+: Agent)              │
-│  • Docker containers  • Networks  • Volumes              │
+│  Running Stack (Level 0: CLI | Level 2+: Agent)          │
+│  • Docker containers  • Networks  • Volumes               │
+│  Zero manual steps — if manual steps needed, fix the CUE  │
 └───────────────────────────────────────────────────────────┘
 ```
 

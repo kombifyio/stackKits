@@ -83,12 +83,6 @@ A single-server deployment providing:
 
 **Status:** Available
 
-### dev-homelab
-
-A development and testing environment for StackKits iteration.
-
-**Status:** In Development
-
 ### modern-homelab (Planned)
 
 Multi-node deployment for hybrid topologies (local + cloud servers).
@@ -172,7 +166,7 @@ For testing without affecting production infrastructure:
 docker compose up -d vm
 
 # Deploy inside the VM
-docker compose run --rm cli ./stackkit init dev-homelab
+docker compose run --rm cli ./stackkit init base-homelab
 docker compose run --rm cli ./stackkit apply
 ```
 

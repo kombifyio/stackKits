@@ -32,7 +32,6 @@
 │  │              CUE Schema Repository                    │  │
 │  │  base/          - Core service definitions           │  │
 │  │  base-homelab/  - Single Environment Kit             │  │
-│  │  dev-homelab/   - Developer Kit                      │  │
 │  │  ha-homelab/    - High-Availability Kit              │  │
 │  └──────────────────────────────────────────────────────┘  │
 │                          │                                  │
