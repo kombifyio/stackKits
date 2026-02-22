@@ -7,7 +7,7 @@
 #
 # CORRECT DEPLOYMENT FLOW:
 #   1. docker compose up -d vm        # Start VM only
-#   2. docker compose run --rm -e DOCKER_HOST=tcp://vm:2375 cli stackkit init dev-homelab --non-interactive
+#   2. docker compose run --rm -e DOCKER_HOST=tcp://vm:2375 cli stackkit init base-homelab --non-interactive
 #   3. docker compose run --rm -e DOCKER_HOST=tcp://vm:2375 cli stackkit apply --auto-approve
 #
 # VERIFICATION:
@@ -31,6 +31,7 @@ services:
       context: ./dev/vm
       dockerfile: Dockerfile
     container_name: stackkits-vm
+    restart: unless-stopped
     privileged: true
     environment:
       DOCKER_TLS_CERTDIR: ""
@@ -43,10 +44,10 @@ services:
       - "${VM_HTTP_PORT:-80}:80"        # HTTP
       - "${VM_HTTPS_PORT:-443}:443"     # HTTPS
       - "${VM_TRAEFIK_PORT:-8080}:8080" # Traefik dashboard
-      # Layer 3: Dev-homelab services (running inside VM)
+      # Layer 3: Base-homelab services (running inside VM)
       - "${VM_WHOAMI_PORT:-9080}:9080"   # Whoami service
-      - "${VM_KUMA_PORT:-3001}:3001"     # Uptime Kuma
-      - "${VM_DOKPLOY_PORT:-3000}:3000"  # Dokploy
+      - "${VM_KUMA_PORT:-4001}:4001"     # Uptime Kuma
+      - "${VM_DOKPLOY_PORT:-4000}:4000"  # Dokploy
     volumes:
       # VM Docker data - persistent container storage
       - vm_docker:/var/lib/docker
@@ -137,7 +138,8 @@ services:
           - auth.stack.local
           - traefik.stack.local
     dns:
-      - 172.30.0.53
+      - 8.8.8.8
+      - 8.8.4.4
     dns_search:
       - stack.local
     profiles:
@@ -167,7 +169,7 @@ services:
     volumes:
       - .:/workspace:rw
     working_dir: /workspace
-    command: ["./dev-homelab/tests/e2e_test.sh"]
+    command: ["./base-homelab/tests/e2e_test.sh"]
     depends_on:
       vm:
         condition: service_healthy

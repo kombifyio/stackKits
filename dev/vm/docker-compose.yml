@@ -8,19 +8,11 @@ services:
     environment:
       DOCKER_TLS_CERTDIR: ""
     ports:
-      - "2222:22"
-      - "2375:2375"
-      - "80:80"
-      - "443:443"
-      - "8080:8080"
-      - "8888:8888"
-      - "3000:3000"
-      - "3001:3001"
-      - "8090:8090"
-      - "5001:5001"
-      - "9000:9000"
-      - "19999:19999"
-      - "9080:9080"
+      - "2222:22"       # SSH
+      - "2375:2375"     # Docker API
+      - "80:80"         # Traefik HTTP
+      - "443:443"       # Traefik HTTPS
+      - "8080:8080"     # Traefik dashboard
     volumes:
       - vm_docker:/var/lib/docker
       - ./authorized_keys:/authorized_keys:ro

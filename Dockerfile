@@ -77,7 +77,6 @@ ENV STACKKITS_BASE_DIR=/workspace
 # Copy StackKit directories
 COPY base/ /workspace/base/
 COPY base-homelab/ /workspace/base-homelab/
-COPY dev-homelab/ /workspace/dev-homelab/
 COPY modern-homelab/ /workspace/modern-homelab/
 COPY ha-homelab/ /workspace/ha-homelab/
 

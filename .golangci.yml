@@ -1,0 +1,56 @@
+# kombify Platform — Shared golangci-lint Configuration
+# Source of truth: kombify Core/standards/golangci.yml
+#
+# Usage in each Go repo:
+#   Copy or symlink this file to .golangci.yml in the repo root.
+#   In CI, reference directly: golangci-lint run --config ../kombify\ Core/standards/golangci.yml
+#
+# Last updated: 2026-02-20
+
+linters:
+  enable:
+    - govet
+    - errcheck
+    - staticcheck
+    - unused
+    - gosimple
+    - ineffassign
+    - typecheck
+    - misspell
+    - gocyclo
+    - dupl
+    - goconst
+    - gosec
+
+linters-settings:
+  errcheck:
+    check-blank: false
+    exclude-functions:
+      - (*database/sql.Tx).Rollback
+      - (*database/sql.DB).Close
+      - (io.Closer).Close
+  govet:
+    enable:
+      - shadow
+  gocyclo:
+    min-complexity: 15
+  dupl:
+    threshold: 100
+  goconst:
+    min-len: 3
+    min-occurrences: 3
+  gosec:
+    excludes:
+      - G304 # File path from taint input — expected in config/cert loading
+      - G115 # Integer overflow conversion — false positives in time conversion
+  misspell:
+    locale: US
+
+issues:
+  exclude-use-default: false
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+run:
+  timeout: 5m
+  tests: true

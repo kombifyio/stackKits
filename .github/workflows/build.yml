@@ -1,0 +1,31 @@
+name: Build and Push
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-server:
+    name: Build StackKit Server
+    uses: KombiverseLabs/.github/.github/workflows/build-and-push.yml@main
+    with:
+      image-name: kombify-stackkits
+      dockerfile: Dockerfile
+      context: "."
+
+  build-website:
+    name: Build StackKits Website
+    uses: KombiverseLabs/.github/.github/workflows/build-and-push.yml@main
+    with:
+      image-name: kombify-stackkits-website
+      dockerfile: website-v2/Dockerfile
+      context: "./website-v2"

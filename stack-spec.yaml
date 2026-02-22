@@ -1,12 +1,13 @@
 name: workspace
-stackkit: dev-homelab
-context: local              # auto-detected: local | cloud | pi
-# addons: []                # composable extensions (v4)
+stackkit: base-homelab
+variant: default
+mode: simple
+domain: stack.local
 network:
     mode: local
     subnet: 172.20.0.0/16
 compute:
-    tier: low               # low | standard | high (auto-detected from hardware)
+    tier: standard
 ssh:
     user: root
     port: 22

@@ -3,8 +3,10 @@
 min_version = "2024.11.1"
 
 [tools]
-go = "1.24.0"
+go = "1.24.1"
 node = "22"
+dagger = "latest"
+opentofu = "latest"
 
 [env]
 PROJECT_NAME = "kombify-stackkits"
@@ -12,10 +14,11 @@ _.file = [".env", ".env.local"]
 GOTOOLCHAIN = "auto"
 
 [tasks.setup]
-description = "Install dependencies"
+description = "Install dependencies and configure git hooks"
 run = [
   "go mod download",
   "go mod tidy",
+  "git config core.hooksPath .githooks",
 ]
 
 [tasks.build]
@@ -28,7 +31,6 @@ run = [
   "go test -v -race -short ./pkg/... ./internal/...",
   "cue vet ./base/...",
   "cue vet ./base-homelab/...",
-  "cue vet ./dev-homelab/...",
   "cue vet ./modern-homelab/...",
 ]
 
@@ -66,7 +68,6 @@ description = "Run CUE schema validation"
 run = [
   "cue vet ./base/...",
   "cue vet ./base-homelab/...",
-  "cue vet ./dev-homelab/...",
   "cue vet ./modern-homelab/..."
 ]
 
@@ -149,3 +150,29 @@ run = "docker compose up -d --build"
 [tasks."docker:down"]
 description = "Stop Docker services"
 run = "docker compose down"
+
+# --- CI/CD Tasks (Dagger) ---
+
+[tasks."ci:build"]
+description = "Build Go binaries via Dagger"
+run = "dagger call build --src=."
+
+[tasks."ci:test"]
+description = "Run tests via Dagger"
+run = "dagger call test --src=."
+
+[tasks."ci:lint"]
+description = "Run linter via Dagger"
+run = "dagger call lint --src=."
+
+[tasks."ci:validate"]
+description = "Validate CUE schemas via Dagger"
+run = "dagger call validate --src=."
+
+[tasks."ci:publish"]
+description = "Build and publish Docker image via Dagger"
+run = "dagger call publish --src=."
+
+[tasks."ci:all"]
+description = "Run full CI pipeline via Dagger"
+run = "dagger call build --src=. && dagger call test --src=. && dagger call lint --src=. && dagger call validate --src=."

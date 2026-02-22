@@ -281,7 +281,7 @@ components:
       name: name
       in: path
       required: true
-      description: StackKit name (e.g., base-homelab, dev-homelab)
+      description: StackKit name (e.g., base-homelab, ha-homelab)
       schema:
         type: string
         pattern: "^[a-z0-9][a-z0-9-]*[a-z0-9]$"
