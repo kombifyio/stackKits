@@ -51,7 +51,7 @@ func runPlan(cmd *cobra.Command, args []string) error {
 
 	// Determine deploy directory
 	deployDir := filepath.Join(wd, config.GetDeployDir())
-	if _, err := os.Stat(deployDir); os.IsNotExist(err) {
+	if _, statErr := os.Stat(deployDir); os.IsNotExist(statErr) {
 		return fmt.Errorf("deploy directory not found: %s\nRun 'stackkit init' first", deployDir)
 	}
 
@@ -68,10 +68,10 @@ func runPlan(cmd *cobra.Command, args []string) error {
 
 	// Initialize if needed
 	tfStatePath := filepath.Join(deployDir, ".terraform")
-	if _, err := os.Stat(tfStatePath); os.IsNotExist(err) {
+	if _, statErr := os.Stat(tfStatePath); os.IsNotExist(statErr) {
 		printInfo("Initializing %s...", executor.Mode())
-		if err := executor.Init(ctx); err != nil {
-			return fmt.Errorf("init error: %w", err)
+		if initErr := executor.Init(ctx); initErr != nil {
+			return fmt.Errorf("init error: %w", initErr)
 		}
 		printSuccess("Initialized successfully")
 	}

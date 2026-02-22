@@ -72,7 +72,7 @@ type VolumeMapping struct {
 // Render renders all templates to the output directory
 func (r *Renderer) Render(ctx *RenderContext) error {
 	// Ensure output directory exists
-	if err := os.MkdirAll(r.outputDir, 0755); err != nil {
+	if err := os.MkdirAll(r.outputDir, 0750); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
@@ -156,7 +156,7 @@ func (r *Renderer) renderTemplate(tmplPath string, ctx *RenderContext) error {
 	outPath = strings.TrimSuffix(outPath, ".tmpl")
 
 	// Ensure output directory exists
-	if err := os.MkdirAll(filepath.Dir(outPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(outPath), 0750); err != nil {
 		return err
 	}
 
@@ -165,7 +165,7 @@ func (r *Renderer) renderTemplate(tmplPath string, ctx *RenderContext) error {
 		return err
 	}
 
-	return os.WriteFile(outPath, buf.Bytes(), 0644)
+	return os.WriteFile(outPath, buf.Bytes(), 0600)
 }
 
 // defaultFuncMap returns the default template functions

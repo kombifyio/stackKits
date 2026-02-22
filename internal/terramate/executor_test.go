@@ -186,7 +186,7 @@ func TestExecutorWithMockWorkDir(t *testing.T) {
 	// Create a temporary directory for testing
 	tmpDir, err := os.MkdirTemp("", "terramate-test-*")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	e := NewExecutor(
 		WithWorkDir(tmpDir),

@@ -73,11 +73,11 @@ func (l *Loader) SaveStackSpec(spec *models.StackSpec, path string) error {
 
 	// Ensure directory exists
 	dir := filepath.Dir(fullPath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0750); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	if err := os.WriteFile(fullPath, data, 0644); err != nil {
+	if err := os.WriteFile(fullPath, data, 0600); err != nil {
 		return fmt.Errorf("failed to write stack-spec.yaml: %w", err)
 	}
 
@@ -113,7 +113,7 @@ func (l *Loader) SaveDeploymentState(state *models.DeploymentState, path string)
 		return fmt.Errorf("failed to marshal deployment state: %w", err)
 	}
 
-	if err := os.WriteFile(fullPath, data, 0644); err != nil {
+	if err := os.WriteFile(fullPath, data, 0600); err != nil {
 		return fmt.Errorf("failed to write deployment state: %w", err)
 	}
 

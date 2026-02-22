@@ -15,7 +15,7 @@ func TestLayerValidator_ValidateStackKit_Complete(t *testing.T) {
 	// Create temporary test StackKit
 	tmpDir := t.TempDir()
 	stackkitDir := filepath.Join(tmpDir, "test-stackkit")
-	require.NoError(t, os.MkdirAll(stackkitDir, 0755))
+	require.NoError(t, os.MkdirAll(stackkitDir, 0750))
 
 	// Write complete CUE file with all 3 layers
 	cueContent := `
@@ -71,7 +71,7 @@ services: {
 }
 `
 	cuePath := filepath.Join(stackkitDir, "test.cue")
-	require.NoError(t, os.WriteFile(cuePath, []byte(cueContent), 0644))
+	require.NoError(t, os.WriteFile(cuePath, []byte(cueContent), 0600))
 
 	validator := NewLayerValidator(tmpDir)
 	result, err := validator.ValidateStackKit(stackkitDir)
@@ -87,7 +87,7 @@ services: {
 func TestLayerValidator_ValidateStackKit_MissingLayer1(t *testing.T) {
 	tmpDir := t.TempDir()
 	stackkitDir := filepath.Join(tmpDir, "test-stackkit")
-	require.NoError(t, os.MkdirAll(stackkitDir, 0755))
+	require.NoError(t, os.MkdirAll(stackkitDir, 0750))
 
 	// Missing system configuration
 	cueContent := `
@@ -117,7 +117,7 @@ services: {
 }
 `
 	cuePath := filepath.Join(stackkitDir, "test.cue")
-	require.NoError(t, os.WriteFile(cuePath, []byte(cueContent), 0644))
+	require.NoError(t, os.WriteFile(cuePath, []byte(cueContent), 0600))
 
 	validator := NewLayerValidator(tmpDir)
 	result, err := validator.ValidateStackKit(stackkitDir)
@@ -143,7 +143,7 @@ services: {
 func TestLayerValidator_ValidateStackKit_MissingLayer2(t *testing.T) {
 	tmpDir := t.TempDir()
 	stackkitDir := filepath.Join(tmpDir, "test-stackkit")
-	require.NoError(t, os.MkdirAll(stackkitDir, 0755))
+	require.NoError(t, os.MkdirAll(stackkitDir, 0750))
 
 	// Missing platform declaration
 	cueContent := `
@@ -190,7 +190,7 @@ services: {
 }
 `
 	cuePath := filepath.Join(stackkitDir, "test.cue")
-	require.NoError(t, os.WriteFile(cuePath, []byte(cueContent), 0644))
+	require.NoError(t, os.WriteFile(cuePath, []byte(cueContent), 0600))
 
 	validator := NewLayerValidator(tmpDir)
 	result, err := validator.ValidateStackKit(stackkitDir)
@@ -215,7 +215,7 @@ services: {
 func TestLayerValidator_ValidateStackKit_Layer3WithoutPAAS(t *testing.T) {
 	tmpDir := t.TempDir()
 	stackkitDir := filepath.Join(tmpDir, "test-stackkit")
-	require.NoError(t, os.MkdirAll(stackkitDir, 0755))
+	require.NoError(t, os.MkdirAll(stackkitDir, 0750))
 
 	// Services without PAAS — this is correct for Layer 3
 	cueContent := `
@@ -263,7 +263,7 @@ services: {
 }
 `
 	cuePath := filepath.Join(stackkitDir, "test.cue")
-	require.NoError(t, os.WriteFile(cuePath, []byte(cueContent), 0644))
+	require.NoError(t, os.WriteFile(cuePath, []byte(cueContent), 0600))
 
 	validator := NewLayerValidator(tmpDir)
 	result, err := validator.ValidateStackKit(stackkitDir)
@@ -281,7 +281,7 @@ services: {
 func TestLayerValidator_ValidateStackKit_InvalidPlatform(t *testing.T) {
 	tmpDir := t.TempDir()
 	stackkitDir := filepath.Join(tmpDir, "test-stackkit")
-	require.NoError(t, os.MkdirAll(stackkitDir, 0755))
+	require.NoError(t, os.MkdirAll(stackkitDir, 0750))
 
 	cueContent := `
 package test
@@ -311,7 +311,7 @@ services: {
 }
 `
 	cuePath := filepath.Join(stackkitDir, "test.cue")
-	require.NoError(t, os.WriteFile(cuePath, []byte(cueContent), 0644))
+	require.NoError(t, os.WriteFile(cuePath, []byte(cueContent), 0600))
 
 	validator := NewLayerValidator(tmpDir)
 	result, err := validator.ValidateStackKit(stackkitDir)
@@ -333,7 +333,7 @@ services: {
 func TestLayerValidator_ValidateStackKit_PAASByName(t *testing.T) {
 	tmpDir := t.TempDir()
 	stackkitDir := filepath.Join(tmpDir, "test-stackkit")
-	require.NoError(t, os.MkdirAll(stackkitDir, 0755))
+	require.NoError(t, os.MkdirAll(stackkitDir, 0750))
 
 	// PAAS detected by name (not type)
 	cueContent := `
@@ -368,7 +368,7 @@ services: {
 }
 `
 	cuePath := filepath.Join(stackkitDir, "test.cue")
-	require.NoError(t, os.WriteFile(cuePath, []byte(cueContent), 0644))
+	require.NoError(t, os.WriteFile(cuePath, []byte(cueContent), 0600))
 
 	validator := NewLayerValidator(tmpDir)
 	result, err := validator.ValidateStackKit(stackkitDir)
@@ -378,13 +378,40 @@ services: {
 	assert.True(t, result.Layer3.Valid, "Layer 3 should be valid - dokploy name detected")
 }
 
-// TestLayerValidator_ValidateStackKit_MissingPackages tests missing packages field
-func TestLayerValidator_ValidateStackKit_MissingPackages(t *testing.T) {
+// testMissingComponent is a helper that validates a StackKit with specific CUE content
+// is invalid and produces the expected error code in the given layer's errors.
+func testMissingComponent(t *testing.T, cueContent string, layerErrors func(*StackKitValidationResult) []LayerError, expectedErrorCode string) {
+	t.Helper()
+
 	tmpDir := t.TempDir()
 	stackkitDir := filepath.Join(tmpDir, "test-stackkit")
-	require.NoError(t, os.MkdirAll(stackkitDir, 0755))
+	require.NoError(t, os.MkdirAll(stackkitDir, 0750))
 
-	cueContent := `
+	cuePath := filepath.Join(stackkitDir, "test.cue")
+	require.NoError(t, os.WriteFile(cuePath, []byte(cueContent), 0600))
+
+	validator := NewLayerValidator(tmpDir)
+	result, err := validator.ValidateStackKit(stackkitDir)
+
+	require.NoError(t, err)
+	assert.False(t, result.Valid)
+
+	found := false
+	for _, e := range layerErrors(result) {
+		if e.Code == expectedErrorCode {
+			found = true
+			break
+		}
+	}
+	assert.True(t, found, "Should have %s error", expectedErrorCode)
+}
+
+func layer1Errors(r *StackKitValidationResult) []LayerError { return r.Layer1.Errors }
+func layer2Errors(r *StackKitValidationResult) []LayerError { return r.Layer2.Errors }
+func layer3Errors(r *StackKitValidationResult) []LayerError { return r.Layer3.Errors }
+
+func TestLayerValidator_ValidateStackKit_MissingPackages(t *testing.T) {
+	testMissingComponent(t, `
 package test
 
 // Layer 1: Foundation (missing packages)
@@ -401,40 +428,17 @@ network: { defaults: { subnet: "172.20.0.0/16" } }
 
 // Layer 3: Applications
 services: { dokploy: { type: "paas", enabled: true } }
-`
-	cuePath := filepath.Join(stackkitDir, "test.cue")
-	require.NoError(t, os.WriteFile(cuePath, []byte(cueContent), 0644))
-
-	validator := NewLayerValidator(tmpDir)
-	result, err := validator.ValidateStackKit(stackkitDir)
-
-	require.NoError(t, err)
-	assert.False(t, result.Valid)
-
-	found := false
-	for _, e := range result.Layer1.Errors {
-		if e.Code == "L1_MISSING_PACKAGES" {
-			found = true
-			break
-		}
-	}
-	assert.True(t, found, "Should have L1_MISSING_PACKAGES error")
+`, layer1Errors, "L1_MISSING_PACKAGES")
 }
 
-// TestLayerValidator_ValidateStackKit_MissingSSH tests missing SSH configuration
 func TestLayerValidator_ValidateStackKit_MissingSSH(t *testing.T) {
-	tmpDir := t.TempDir()
-	stackkitDir := filepath.Join(tmpDir, "test-stackkit")
-	require.NoError(t, os.MkdirAll(stackkitDir, 0755))
-
-	cueContent := `
+	testMissingComponent(t, `
 package test
 
 // Layer 1: Foundation (missing SSH)
 system: { timezone: "UTC" }
 packages: { base: ["curl"] }
 security: {
-	// SSH missing
 	firewall: { enabled: true }
 }
 
@@ -445,33 +449,11 @@ network: { defaults: { subnet: "172.20.0.0/16" } }
 
 // Layer 3: Applications
 services: { dokploy: { type: "paas", enabled: true } }
-`
-	cuePath := filepath.Join(stackkitDir, "test.cue")
-	require.NoError(t, os.WriteFile(cuePath, []byte(cueContent), 0644))
-
-	validator := NewLayerValidator(tmpDir)
-	result, err := validator.ValidateStackKit(stackkitDir)
-
-	require.NoError(t, err)
-	assert.False(t, result.Valid)
-
-	found := false
-	for _, e := range result.Layer1.Errors {
-		if e.Code == "L1_MISSING_SSH" {
-			found = true
-			break
-		}
-	}
-	assert.True(t, found, "Should have L1_MISSING_SSH error")
+`, layer1Errors, "L1_MISSING_SSH")
 }
 
-// TestLayerValidator_ValidateStackKit_MissingFirewall tests missing firewall configuration
 func TestLayerValidator_ValidateStackKit_MissingFirewall(t *testing.T) {
-	tmpDir := t.TempDir()
-	stackkitDir := filepath.Join(tmpDir, "test-stackkit")
-	require.NoError(t, os.MkdirAll(stackkitDir, 0755))
-
-	cueContent := `
+	testMissingComponent(t, `
 package test
 
 // Layer 1: Foundation (missing firewall)
@@ -479,7 +461,6 @@ system: { timezone: "UTC" }
 packages: { base: ["curl"] }
 security: {
 	ssh: { port: 22 }
-	// Firewall missing
 }
 
 // Layer 2: Platform
@@ -489,33 +470,11 @@ network: { defaults: { subnet: "172.20.0.0/16" } }
 
 // Layer 3: Applications
 services: { dokploy: { type: "paas", enabled: true } }
-`
-	cuePath := filepath.Join(stackkitDir, "test.cue")
-	require.NoError(t, os.WriteFile(cuePath, []byte(cueContent), 0644))
-
-	validator := NewLayerValidator(tmpDir)
-	result, err := validator.ValidateStackKit(stackkitDir)
-
-	require.NoError(t, err)
-	assert.False(t, result.Valid)
-
-	found := false
-	for _, e := range result.Layer1.Errors {
-		if e.Code == "L1_MISSING_FIREWALL" {
-			found = true
-			break
-		}
-	}
-	assert.True(t, found, "Should have L1_MISSING_FIREWALL error")
+`, layer1Errors, "L1_MISSING_FIREWALL")
 }
 
-// TestLayerValidator_ValidateStackKit_MissingContainer tests missing container configuration
 func TestLayerValidator_ValidateStackKit_MissingContainer(t *testing.T) {
-	tmpDir := t.TempDir()
-	stackkitDir := filepath.Join(tmpDir, "test-stackkit")
-	require.NoError(t, os.MkdirAll(stackkitDir, 0755))
-
-	cueContent := `
+	testMissingComponent(t, `
 package test
 
 // Layer 1: Foundation
@@ -528,38 +487,15 @@ security: {
 
 // Layer 2: Platform (missing container)
 platform: "docker"
-// Container missing
 network: { defaults: { subnet: "172.20.0.0/16" } }
 
 // Layer 3: Applications
 services: { dokploy: { type: "paas", enabled: true } }
-`
-	cuePath := filepath.Join(stackkitDir, "test.cue")
-	require.NoError(t, os.WriteFile(cuePath, []byte(cueContent), 0644))
-
-	validator := NewLayerValidator(tmpDir)
-	result, err := validator.ValidateStackKit(stackkitDir)
-
-	require.NoError(t, err)
-	assert.False(t, result.Valid)
-
-	found := false
-	for _, e := range result.Layer2.Errors {
-		if e.Code == "L2_MISSING_CONTAINER" {
-			found = true
-			break
-		}
-	}
-	assert.True(t, found, "Should have L2_MISSING_CONTAINER error")
+`, layer2Errors, "L2_MISSING_CONTAINER")
 }
 
-// TestLayerValidator_ValidateStackKit_MissingNetworkDefaults tests missing network defaults
 func TestLayerValidator_ValidateStackKit_MissingNetworkDefaults(t *testing.T) {
-	tmpDir := t.TempDir()
-	stackkitDir := filepath.Join(tmpDir, "test-stackkit")
-	require.NoError(t, os.MkdirAll(stackkitDir, 0755))
-
-	cueContent := `
+	testMissingComponent(t, `
 package test
 
 // Layer 1: Foundation
@@ -573,28 +509,10 @@ security: {
 // Layer 2: Platform (missing network.defaults)
 platform: "docker"
 container: { engine: "docker" }
-// network.defaults missing
 
 // Layer 3: Applications
 services: { dokploy: { type: "paas", enabled: true } }
-`
-	cuePath := filepath.Join(stackkitDir, "test.cue")
-	require.NoError(t, os.WriteFile(cuePath, []byte(cueContent), 0644))
-
-	validator := NewLayerValidator(tmpDir)
-	result, err := validator.ValidateStackKit(stackkitDir)
-
-	require.NoError(t, err)
-	assert.False(t, result.Valid)
-
-	found := false
-	for _, e := range result.Layer2.Errors {
-		if e.Code == "L2_MISSING_NETWORK" {
-			found = true
-			break
-		}
-	}
-	assert.True(t, found, "Should have L2_MISSING_NETWORK error")
+`, layer2Errors, "L2_MISSING_NETWORK")
 }
 
 // TestLayerValidator_ValidateStackKit_AllPlatformTypes tests all valid platform types
@@ -605,7 +523,7 @@ func TestLayerValidator_ValidateStackKit_AllPlatformTypes(t *testing.T) {
 		t.Run(platform, func(t *testing.T) {
 			tmpDir := t.TempDir()
 			stackkitDir := filepath.Join(tmpDir, "test-stackkit")
-			require.NoError(t, os.MkdirAll(stackkitDir, 0755))
+			require.NoError(t, os.MkdirAll(stackkitDir, 0750))
 
 			cueContent := fmt.Sprintf(`
 package test
@@ -625,7 +543,7 @@ services: { dokploy: { type: "paas", enabled: true } }
 `, platform)
 
 			cuePath := filepath.Join(stackkitDir, "test.cue")
-			require.NoError(t, os.WriteFile(cuePath, []byte(cueContent), 0644))
+			require.NoError(t, os.WriteFile(cuePath, []byte(cueContent), 0600))
 
 			validator := NewLayerValidator(tmpDir)
 			result, err := validator.ValidateStackKit(stackkitDir)
@@ -636,13 +554,8 @@ services: { dokploy: { type: "paas", enabled: true } }
 	}
 }
 
-// TestLayerValidator_ValidateStackKit_MissingServices tests missing services entirely
 func TestLayerValidator_ValidateStackKit_MissingServices(t *testing.T) {
-	tmpDir := t.TempDir()
-	stackkitDir := filepath.Join(tmpDir, "test-stackkit")
-	require.NoError(t, os.MkdirAll(stackkitDir, 0755))
-
-	cueContent := `
+	testMissingComponent(t, `
 package test
 
 // Layer 1: Foundation
@@ -659,24 +572,7 @@ container: { engine: "docker" }
 network: { defaults: { subnet: "172.20.0.0/16" } }
 
 // Layer 3: Applications - NO SERVICES DEFINED
-`
-	cuePath := filepath.Join(stackkitDir, "test.cue")
-	require.NoError(t, os.WriteFile(cuePath, []byte(cueContent), 0644))
-
-	validator := NewLayerValidator(tmpDir)
-	result, err := validator.ValidateStackKit(stackkitDir)
-
-	require.NoError(t, err)
-	assert.False(t, result.Valid)
-
-	found := false
-	for _, e := range result.Layer3.Errors {
-		if e.Code == "L3_MISSING_SERVICES" {
-			found = true
-			break
-		}
-	}
-	assert.True(t, found, "Should have L3_MISSING_SERVICES error")
+`, layer3Errors, "L3_MISSING_SERVICES")
 }
 
 // TestLayerValidator_LayerString tests the Layer String() method

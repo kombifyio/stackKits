@@ -168,7 +168,7 @@ func (b *TerraformBridge) extractFromStack(stack cue.Value, tfvars *TFVars) {
 // writeTFVars writes terraform.tfvars.json to the output directory
 func (b *TerraformBridge) writeTFVars(tfvars *TFVars, outputDir string) error {
 	// Ensure output directory exists
-	if err := os.MkdirAll(outputDir, 0755); err != nil {
+	if err := os.MkdirAll(outputDir, 0750); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
@@ -179,7 +179,7 @@ func (b *TerraformBridge) writeTFVars(tfvars *TFVars, outputDir string) error {
 		return fmt.Errorf("failed to marshal tfvars: %w", err)
 	}
 
-	if err := os.WriteFile(outputPath, data, 0644); err != nil {
+	if err := os.WriteFile(outputPath, data, 0600); err != nil {
 		return fmt.Errorf("failed to write terraform.tfvars.json: %w", err)
 	}
 

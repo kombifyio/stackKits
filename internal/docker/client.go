@@ -121,7 +121,7 @@ func (c *Client) Version(ctx context.Context) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, c.binary, "version", "--format", "{{.Server.Version}}")
+	cmd := exec.CommandContext(ctx, c.binary, "version", "--format", "{{.Server.Version}}") // #nosec G204 -- binary path is set at construction, not from user input
 	output, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("failed to get Docker version: %w", err)
@@ -135,7 +135,7 @@ func (c *Client) IsRunning(ctx context.Context) bool {
 	ctx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, c.binary, "info")
+	cmd := exec.CommandContext(ctx, c.binary, "info") // #nosec G204 -- binary path is set at construction, not from user input
 	return cmd.Run() == nil
 }
 
@@ -149,7 +149,7 @@ func (c *Client) ListContainers(ctx context.Context, all bool) ([]ContainerInfo,
 		args = []string{"ps", "-a", "--format", "{{json .}}"}
 	}
 
-	cmd := exec.CommandContext(ctx, c.binary, args...)
+	cmd := exec.CommandContext(ctx, c.binary, args...) // #nosec G204 -- binary path is set at construction, not from user input
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("failed to list containers: %w", err)
@@ -196,7 +196,7 @@ func (c *Client) InspectContainer(ctx context.Context, nameOrID string) (*Contai
 	ctx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, c.binary, "inspect", nameOrID)
+	cmd := exec.CommandContext(ctx, c.binary, "inspect", nameOrID) // #nosec G204 -- binary path is set at construction, not from user input
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("failed to inspect container: %w", err)
@@ -248,6 +248,7 @@ func (c *Client) GetStackKitContainers(ctx context.Context) ([]ContainerInfo, er
 	defer cancel()
 
 	// Filter by StackKit label
+	// #nosec G204 -- binary path is set at construction, not from user input
 	cmd := exec.CommandContext(ctx, c.binary, "ps", "-a",
 		"--filter", "label=managed-by=stackkit",
 		"--format", "{{json .}}")
@@ -299,7 +300,7 @@ func (c *Client) NetworkExists(ctx context.Context, name string) bool {
 	ctx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, c.binary, "network", "inspect", name)
+	cmd := exec.CommandContext(ctx, c.binary, "network", "inspect", name) // #nosec G204 -- binary path is set at construction, not from user input
 	return cmd.Run() == nil
 }
 
@@ -313,7 +314,7 @@ func (c *Client) VolumeExists(ctx context.Context, name string) bool {
 	ctx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, c.binary, "volume", "inspect", name)
+	cmd := exec.CommandContext(ctx, c.binary, "volume", "inspect", name) // #nosec G204 -- binary path is set at construction, not from user input
 	return cmd.Run() == nil
 }
 
@@ -328,7 +329,7 @@ func (c *Client) Exec(ctx context.Context, container string, command []string) (
 	defer cancel()
 
 	args := append([]string{"exec", container}, command...)
-	cmd := exec.CommandContext(ctx, c.binary, args...)
+	cmd := exec.CommandContext(ctx, c.binary, args...) // #nosec G204 -- binary path is set at construction, not from user input
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -356,7 +357,7 @@ func (c *Client) Logs(ctx context.Context, container string, tail int) (string, 
 		args = append(args, "--tail", fmt.Sprintf("%d", tail))
 	}
 
-	cmd := exec.CommandContext(ctx, c.binary, args...)
+	cmd := exec.CommandContext(ctx, c.binary, args...) // #nosec G204 -- binary path is set at construction, not from user input
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("failed to get logs: %w", err)
@@ -392,7 +393,7 @@ func (c *Client) Pull(ctx context.Context, image string) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, c.binary, "pull", image)
+	cmd := exec.CommandContext(ctx, c.binary, "pull", image) // #nosec G204 -- binary path is set at construction, not from user input
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to pull image %s: %w", image, err)
 	}

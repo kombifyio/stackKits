@@ -57,7 +57,7 @@ func (p *prompter) selectOne(heading string, choices []choice) (string, error) {
 	fmt.Printf("\n  Choose%s: ", defaultHint)
 
 	if !p.scanner.Scan() {
-		return "", fmt.Errorf("input cancelled")
+		return "", fmt.Errorf("input canceled")
 	}
 
 	input := strings.TrimSpace(p.scanner.Text())
@@ -94,7 +94,7 @@ func (p *prompter) inputString(label, defaultVal string) (string, error) {
 	fmt.Printf("  %s%s: ", label, hint)
 
 	if !p.scanner.Scan() {
-		return "", fmt.Errorf("input cancelled")
+		return "", fmt.Errorf("input canceled")
 	}
 
 	input := strings.TrimSpace(p.scanner.Text())

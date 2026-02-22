@@ -287,7 +287,7 @@ func (e *Executor) checkStackDrift(ctx context.Context, stack Stack) (StackDrift
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, e.tofuBinary, "plan", "-input=false", "-detailed-exitcode", "-no-color")
+	cmd := exec.CommandContext(ctx, e.tofuBinary, "plan", "-input=false", "-detailed-exitcode", "-no-color") // #nosec G204 -- binary path is set at construction, not from user input
 	cmd.Dir = stackDir
 
 	var stdout, stderr bytes.Buffer
@@ -366,7 +366,7 @@ func (e *Executor) run(ctx context.Context, args ...string) (*Result, error) {
 	ctx, cancel := context.WithTimeout(ctx, e.timeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, e.binary, args...)
+	cmd := exec.CommandContext(ctx, e.binary, args...) // #nosec G204 -- binary path is set at construction, not from user input
 	cmd.Dir = e.workDir
 
 	// Set environment

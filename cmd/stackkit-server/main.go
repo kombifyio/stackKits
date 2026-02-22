@@ -42,9 +42,32 @@ func main() {
 	logLevel := flag.String("log-level", "info", "Log level: debug, info, warn, error")
 	flag.Parse()
 
-	// Configure structured logging
+	setupLogging(*logLevel)
+
+	cfg := resolveConfig(*port, *baseDir, *apiKey, *corsOrigins, *rateLimit)
+
+	slog.Info("starting kombify StackKits API server",
+		"version", Version,
+		"port", cfg.Port,
+		"base_dir", cfg.BaseDir,
+	)
+
+	srv := api.NewServer(cfg)
+
+	httpServer := &http.Server{
+		Addr:         fmt.Sprintf(":%d", cfg.Port),
+		Handler:      srv.Handler(),
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  120 * time.Second,
+	}
+
+	runServer(httpServer)
+}
+
+func setupLogging(logLevel string) {
 	var level slog.Level
-	switch *logLevel {
+	switch logLevel {
 	case "debug":
 		level = slog.LevelDebug
 	case "warn":
@@ -56,11 +79,27 @@ func main() {
 	}
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: level}))
 	slog.SetDefault(logger)
+}
 
-	// Resolve base directory
-	dir := *baseDir
+func resolveConfig(port int, baseDir, apiKey, corsOrigins string, rateLimit int) api.ServerConfig {
+	dir := resolveBaseDir(baseDir)
+	key := resolveAPIKey(apiKey)
+	origins := resolveCORSOrigins(corsOrigins)
+	rl := resolveRateLimit(rateLimit)
+
+	return api.ServerConfig{
+		Port:        port,
+		BaseDir:     dir,
+		Version:     Version,
+		APIKey:      key,
+		CORSOrigins: origins,
+		RateLimit:   rl,
+	}
+}
+
+func resolveBaseDir(flagVal string) string {
+	dir := flagVal
 	if dir == "" {
-		// Default: directory containing the executable
 		exe, err := os.Executable()
 		if err != nil {
 			slog.Error("failed to get executable path", "error", err)
@@ -68,14 +107,14 @@ func main() {
 		}
 		dir = filepath.Dir(exe)
 	}
-
-	// Also check environment variable
 	if envDir := os.Getenv("STACKKITS_BASE_DIR"); envDir != "" {
 		dir = envDir
 	}
+	return dir
+}
 
-	// Resolve API key from flag or environment
-	key := *apiKey
+func resolveAPIKey(flagVal string) string {
+	key := flagVal
 	if key == "" {
 		key = os.Getenv("STACKKITS_API_KEY")
 	}
@@ -84,24 +123,29 @@ func main() {
 	} else {
 		slog.Warn("no API key configured — all endpoints are unauthenticated")
 	}
+	return key
+}
 
-	// Resolve CORS origins
-	var origins []string
-	corsStr := *corsOrigins
+func resolveCORSOrigins(flagVal string) []string {
+	corsStr := flagVal
 	if corsStr == "" {
 		corsStr = os.Getenv("STACKKITS_CORS_ORIGINS")
 	}
-	if corsStr != "" {
-		for _, o := range strings.Split(corsStr, ",") {
-			if trimmed := strings.TrimSpace(o); trimmed != "" {
-				origins = append(origins, trimmed)
-			}
-		}
-		slog.Info("CORS restricted", "origins", origins)
+	if corsStr == "" {
+		return nil
 	}
+	var origins []string
+	for _, o := range strings.Split(corsStr, ",") {
+		if trimmed := strings.TrimSpace(o); trimmed != "" {
+			origins = append(origins, trimmed)
+		}
+	}
+	slog.Info("CORS restricted", "origins", origins)
+	return origins
+}
 
-	// Resolve rate limit
-	rl := *rateLimit
+func resolveRateLimit(flagVal int) int {
+	rl := flagVal
 	if envRL := os.Getenv("STACKKITS_RATE_LIMIT"); envRL != "" {
 		if v, err := strconv.Atoi(envRL); err == nil {
 			rl = v
@@ -110,31 +154,10 @@ func main() {
 	if rl > 0 {
 		slog.Info("rate limiting enabled", "max_per_minute", rl)
 	}
+	return rl
+}
 
-	slog.Info("starting kombify StackKits API server",
-		"version", Version,
-		"port", *port,
-		"base_dir", dir,
-	)
-
-	srv := api.NewServer(api.ServerConfig{
-		Port:        *port,
-		BaseDir:     dir,
-		Version:     Version,
-		APIKey:      key,
-		CORSOrigins: origins,
-		RateLimit:   rl,
-	})
-
-	httpServer := &http.Server{
-		Addr:         fmt.Sprintf(":%d", *port),
-		Handler:      srv.Handler(),
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 30 * time.Second,
-		IdleTimeout:  120 * time.Second,
-	}
-
-	// Graceful shutdown
+func runServer(httpServer *http.Server) {
 	done := make(chan os.Signal, 1)
 	signal.Notify(done, os.Interrupt, syscall.SIGTERM)
 

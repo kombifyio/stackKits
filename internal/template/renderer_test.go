@@ -75,19 +75,19 @@ func TestServiceContext(t *testing.T) {
 func TestRenderSingle(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "template-test-*")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	templateDir := filepath.Join(tmpDir, "templates")
 	outputDir := filepath.Join(tmpDir, "output")
-	os.MkdirAll(templateDir, 0755)
-	os.MkdirAll(outputDir, 0755)
+	require.NoError(t, os.MkdirAll(templateDir, 0750))
+	require.NoError(t, os.MkdirAll(outputDir, 0750))
 
 	t.Run("renders simple template", func(t *testing.T) {
 		tmplContent := `# Generated for {{.Spec.Name}}
 domain = "{{.Spec.Domain}}"
 `
 		tmplPath := filepath.Join(templateDir, "test.tf.tmpl")
-		err := os.WriteFile(tmplPath, []byte(tmplContent), 0644)
+		err := os.WriteFile(tmplPath, []byte(tmplContent), 0600)
 		require.NoError(t, err)
 
 		renderer := NewRenderer(templateDir, outputDir)
@@ -117,7 +117,7 @@ domain = "{{.Spec.Domain}}"
 	t.Run("returns error for invalid template syntax", func(t *testing.T) {
 		tmplContent := `{{.Invalid.Field.Missing}`
 		tmplPath := filepath.Join(templateDir, "invalid.tmpl")
-		err := os.WriteFile(tmplPath, []byte(tmplContent), 0644)
+		err := os.WriteFile(tmplPath, []byte(tmplContent), 0600)
 		require.NoError(t, err)
 
 		renderer := NewRenderer(templateDir, outputDir)
@@ -132,19 +132,19 @@ domain = "{{.Spec.Domain}}"
 func TestRender(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "template-test-*")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	templateDir := filepath.Join(tmpDir, "templates")
 	outputDir := filepath.Join(tmpDir, "output")
-	os.MkdirAll(templateDir, 0755)
+	require.NoError(t, os.MkdirAll(templateDir, 0750))
 
 	t.Run("renders all templates", func(t *testing.T) {
 		// Create template files
 		tmpl1 := `# Main config for {{.Spec.Name}}`
 		tmpl2 := `# Variables for {{.Spec.StackKit}}`
 
-		os.WriteFile(filepath.Join(templateDir, "main.tf"), []byte(tmpl1), 0644)
-		os.WriteFile(filepath.Join(templateDir, "variables.tf.tmpl"), []byte(tmpl2), 0644)
+		require.NoError(t, os.WriteFile(filepath.Join(templateDir, "main.tf"), []byte(tmpl1), 0600))
+		require.NoError(t, os.WriteFile(filepath.Join(templateDir, "variables.tf.tmpl"), []byte(tmpl2), 0600))
 
 		renderer := NewRenderer(templateDir, outputDir)
 		ctx := &RenderContext{
@@ -170,12 +170,12 @@ func TestRender(t *testing.T) {
 func TestTemplateFunctions(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "template-test-*")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	templateDir := filepath.Join(tmpDir, "templates")
 	outputDir := filepath.Join(tmpDir, "output")
-	os.MkdirAll(templateDir, 0755)
-	os.MkdirAll(outputDir, 0755)
+	require.NoError(t, os.MkdirAll(templateDir, 0750))
+	require.NoError(t, os.MkdirAll(outputDir, 0750))
 
 	renderer := NewRenderer(templateDir, outputDir)
 
@@ -239,7 +239,7 @@ func TestTemplateFunctions(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			tmplPath := filepath.Join(templateDir, "test.tmpl")
-			err := os.WriteFile(tmplPath, []byte(tc.template), 0644)
+			err := os.WriteFile(tmplPath, []byte(tc.template), 0600)
 			require.NoError(t, err)
 
 			result, err := renderer.RenderSingle("test.tmpl", &RenderContext{})

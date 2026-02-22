@@ -115,13 +115,6 @@ func printInfo(format string, args ...interface{}) {
 	}
 }
 
-// printVerbose prints verbose output
-func printVerbose(format string, args ...interface{}) {
-	if verbose {
-		fmt.Printf("  %s\n", fmt.Sprintf(format, args...))
-	}
-}
-
 // getWorkDir returns the effective working directory
 func getWorkDir() string {
 	if workDir != "." {

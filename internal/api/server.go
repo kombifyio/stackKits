@@ -241,7 +241,7 @@ func rateLimitMiddleware(ctx context.Context, maxPerMinute int) func(http.Handle
 	var mu sync.Mutex
 	clients := make(map[string]*rateLimitEntry)
 
-	// Cleanup old entries every 5 minutes, stops when ctx is cancelled
+	// Cleanup old entries every 5 minutes, stops when ctx is canceled
 	go func() {
 		ticker := time.NewTicker(5 * time.Minute)
 		defer ticker.Stop()

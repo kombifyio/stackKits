@@ -50,94 +50,34 @@ func init() {
 	initCmd.Flags().BoolVar(&initNonInteractive, "non-interactive", false, "Run in non-interactive mode (fail if input is required)")
 }
 
-func runInit(cmd *cobra.Command, args []string) error {
-	wd := getWorkDir()
+// selectStackKit prompts the user to pick a StackKit or returns the one
+// already provided via CLI args. Returns the selected name.
+func selectStackKit(p *prompter, availableKits []*models.StackKit, wd string) (string, error) {
+	if len(availableKits) == 0 {
+		return "", fmt.Errorf("no StackKits found in %s", wd)
+	}
 
-	// Discover available StackKits
-	loader := config.NewLoader(wd)
-	availableKits, err := discoverStackKits(loader, wd)
+	var choices []choice
+	for _, sk := range availableKits {
+		choices = append(choices, choice{
+			Key:         sk.Metadata.Name,
+			Display:     sk.Metadata.DisplayName,
+			Description: sk.Metadata.Description,
+		})
+	}
+	if len(choices) > 0 {
+		choices[0].IsDefault = true
+	}
+
+	selected, err := p.selectOne("Select a StackKit:", choices)
 	if err != nil {
-		return fmt.Errorf("failed to discover StackKits: %w", err)
+		return "", fmt.Errorf("stackkit selection: %w", err)
 	}
+	return selected, nil
+}
 
-	stackkitName := ""
-	if len(args) > 0 {
-		stackkitName = args[0]
-	}
-
-	// Interactive mode when no stackkit given
-	needsInteractive := stackkitName == "" || initVariant == "" || initComputeTier == "" || initMode == ""
-
-	if needsInteractive && initNonInteractive {
-		if stackkitName == "" {
-			return fmt.Errorf("stackkit name required in non-interactive mode\n\nAvailable StackKits: %v", stackKitNames(availableKits))
-		}
-		// Apply defaults for missing flags in non-interactive mode
-		if initVariant == "" {
-			initVariant = "default"
-		}
-		if initComputeTier == "" {
-			initComputeTier = "standard"
-		}
-		if initMode == "" {
-			initMode = "simple"
-		}
-	}
-
-	var p *prompter
-	if stackkitName == "" || (needsInteractive && !initNonInteractive) {
-		p = newPrompter()
-	}
-
-	// ── Step 1: Select StackKit ──────────────────────────────────
-	if stackkitName == "" {
-		if len(availableKits) == 0 {
-			return fmt.Errorf("no StackKits found in %s", wd)
-		}
-
-		var choices []choice
-		for _, sk := range availableKits {
-			choices = append(choices, choice{
-				Key:         sk.Metadata.Name,
-				Display:     sk.Metadata.DisplayName,
-				Description: sk.Metadata.Description,
-			})
-		}
-		// Mark first as default
-		if len(choices) > 0 {
-			choices[0].IsDefault = true
-		}
-
-		selected, err := p.selectOne("Select a StackKit:", choices)
-		if err != nil {
-			return fmt.Errorf("stackkit selection: %w", err)
-		}
-		stackkitName = selected
-	}
-
-	printInfo("Initializing StackKit: %s", bold(stackkitName))
-
-	// Find and load StackKit
-	stackkitDir, err := loader.FindStackKitDir(stackkitName)
-	if err != nil {
-		// Try parent directories for development
-		parentDir := filepath.Dir(wd)
-		loader = config.NewLoader(parentDir)
-		stackkitDir, err = loader.FindStackKitDir(stackkitName)
-		if err != nil {
-			return fmt.Errorf("stackkit '%s' not found: %w", stackkitName, err)
-		}
-	}
-
-	stackkitPath := filepath.Join(stackkitDir, "stackkit.yaml")
-	stackkit, err := loader.LoadStackKit(stackkitPath)
-	if err != nil {
-		return fmt.Errorf("failed to load stackkit: %w", err)
-	}
-
-	printSuccess("Found StackKit: %s v%s", stackkit.Metadata.Name, stackkit.Metadata.Version)
-
-	// ── Step 2: Select variant ───────────────────────────────────
+// selectVariant prompts for a variant or applies the default.
+func selectVariant(p *prompter, stackkit *models.StackKit) (string, error) {
 	var availableVariants []string
 	for id := range stackkit.Variants {
 		availableVariants = append(availableVariants, id)
@@ -157,7 +97,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		}
 		selected, err := p.selectOne("Select a variant:", choices)
 		if err != nil {
-			return fmt.Errorf("variant selection: %w", err)
+			return "", fmt.Errorf("variant selection: %w", err)
 		}
 		initVariant = selected
 	}
@@ -165,12 +105,14 @@ func runInit(cmd *cobra.Command, args []string) error {
 		initVariant = "default"
 	}
 
-	// Validate variant
 	if _, ok := stackkit.Variants[initVariant]; !ok {
-		return fmt.Errorf("invalid variant '%s'. Available: %v", initVariant, availableVariants)
+		return "", fmt.Errorf("invalid variant '%s'. Available: %v", initVariant, availableVariants)
 	}
+	return initVariant, nil
+}
 
-	// ── Step 3: Select deployment mode ───────────────────────────
+// selectMode prompts for a deployment mode or applies the default.
+func selectMode(p *prompter, stackkit *models.StackKit) (string, error) {
 	if initMode == "" && p != nil {
 		var modeChoices []choice
 		if stackkit.Modes.Simple.Name != "" {
@@ -192,7 +134,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		if len(modeChoices) > 1 {
 			selected, err := p.selectOne("Select deployment mode:", modeChoices)
 			if err != nil {
-				return fmt.Errorf("mode selection: %w", err)
+				return "", fmt.Errorf("mode selection: %w", err)
 			}
 			initMode = selected
 		} else if len(modeChoices) == 1 {
@@ -202,8 +144,11 @@ func runInit(cmd *cobra.Command, args []string) error {
 	if initMode == "" {
 		initMode = "simple"
 	}
+	return initMode, nil
+}
 
-	// ── Step 4: Select compute tier ──────────────────────────────
+// selectComputeTier prompts for a compute tier or applies the default.
+func selectComputeTier(p *prompter, stackkit *models.StackKit) (string, error) {
 	if initComputeTier == "" && p != nil {
 		tierChoices := []choice{
 			{Key: "low", Display: "Low", Description: fmt.Sprintf("Minimum: %d CPU / %d GB RAM / %d GB disk",
@@ -214,84 +159,113 @@ func runInit(cmd *cobra.Command, args []string) error {
 		}
 		selected, err := p.selectOne("Select compute tier:", tierChoices)
 		if err != nil {
-			return fmt.Errorf("compute tier selection: %w", err)
+			return "", fmt.Errorf("compute tier selection: %w", err)
 		}
 		initComputeTier = selected
 	}
 	if initComputeTier == "" {
 		initComputeTier = "standard"
 	}
+	return initComputeTier, nil
+}
 
-	// ── Step 5: Domain & email (optional) ────────────────────────
-	domain := ""
-	email := ""
-	if p != nil && !initNonInteractive {
-		fmt.Println()
-		printInfo("Optional configuration (press Enter to skip):")
-		fmt.Println()
+// promptOptionalConfig asks for domain and email when running interactively.
+func promptOptionalConfig(p *prompter) (domain string, email string) {
+	if p == nil || initNonInteractive {
+		return "", ""
+	}
 
-		d, err := p.inputString("Domain (e.g. home.example.com)", "")
-		if err == nil {
-			domain = d
-		}
+	fmt.Println()
+	printInfo("Optional configuration (press Enter to skip):")
+	fmt.Println()
 
-		e, err := p.inputString("Email (for Let's Encrypt certificates)", "")
-		if err == nil {
-			email = e
+	d, err := p.inputString("Domain (e.g. home.example.com)", "")
+	if err == nil {
+		domain = d
+	}
+
+	e, err := p.inputString("Email (for Let's Encrypt certificates)", "")
+	if err == nil {
+		email = e
+	}
+	return domain, email
+}
+
+// applyNonInteractiveDefaults fills in missing flag values when running
+// without a TTY. Returns an error if the stackkit name is missing.
+func applyNonInteractiveDefaults(stackkitName string, availableKits []*models.StackKit) error {
+	if stackkitName == "" {
+		return fmt.Errorf("stackkit name required in non-interactive mode\n\nAvailable StackKits: %v", stackKitNames(availableKits))
+	}
+	if initVariant == "" {
+		initVariant = "default"
+	}
+	if initComputeTier == "" {
+		initComputeTier = "standard"
+	}
+	if initMode == "" {
+		initMode = "simple"
+	}
+	return nil
+}
+
+// loadStackKit finds and loads a StackKit definition, falling back to the
+// parent directory for development layouts.
+func loadStackKit(loader *config.Loader, stackkitName, wd string) (*config.Loader, *models.StackKit, error) {
+	stackkitDir, err := loader.FindStackKitDir(stackkitName)
+	if err != nil {
+		parentDir := filepath.Dir(wd)
+		loader = config.NewLoader(parentDir)
+		stackkitDir, err = loader.FindStackKitDir(stackkitName)
+		if err != nil {
+			return nil, nil, fmt.Errorf("stackkit '%s' not found: %w", stackkitName, err)
 		}
 	}
 
-	// ── Step 6: Check for existing spec ──────────────────────────
+	stackkitPath := filepath.Join(stackkitDir, "stackkit.yaml")
+	stackkit, err := loader.LoadStackKit(stackkitPath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to load stackkit: %w", err)
+	}
+	return loader, stackkit, nil
+}
+
+// resolveSpecPath returns the absolute path for the spec file and checks
+// whether it already exists (unless --force is set).
+func resolveSpecPath(wd string) (string, error) {
 	specPath := specFile
 	if !filepath.IsAbs(specFile) {
 		specPath = filepath.Join(wd, specFile)
 	}
 	if _, err := os.Stat(specPath); err == nil && !initForce {
-		return fmt.Errorf("spec file already exists: %s (use --force to overwrite)", specPath)
+		return "", fmt.Errorf("spec file already exists: %s (use --force to overwrite)", specPath)
 	}
+	return specPath, nil
+}
 
-	// ── Step 7: Create spec file ─────────────────────────────────
-	spec := &models.StackSpec{
-		Name:     filepath.Base(wd),
-		StackKit: stackkitName,
-		Variant:  initVariant,
-		Mode:     initMode,
-		Domain:   domain,
-		Email:    email,
-		Network: models.NetworkSpec{
-			Mode:   "local",
-			Subnet: "172.20.0.0/16",
-		},
-		Compute: models.ComputeSpec{
-			Tier: initComputeTier,
-		},
-		SSH: models.SSHSpec{
-			User: "root",
-			Port: 22,
-		},
-	}
-
+// writeSpecAndOutput creates the spec YAML and the output directory.
+func writeSpecAndOutput(loader *config.Loader, spec *models.StackSpec, specPath, wd string) error {
 	if err := loader.SaveStackSpec(spec, specPath); err != nil {
 		return fmt.Errorf("failed to save spec file: %w", err)
 	}
-
 	printSuccess("Created spec file: %s", specPath)
 
-	// Create output directory
 	outputPath := filepath.Join(wd, initOutputDir)
-	if err := os.MkdirAll(outputPath, 0755); err != nil {
+	if err := os.MkdirAll(outputPath, 0750); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
-
 	printSuccess("Created output directory: %s", outputPath)
+	return nil
+}
 
-	// Print summary & next steps
+// printInitSummary displays the final configuration and next-step hints.
+func printInitSummary(stackkitName, variant, mode, computeTier, domain, email string) {
 	fmt.Println()
 	printInfo("Configuration:")
 	fmt.Printf("  %s: %s\n", bold("StackKit"), stackkitName)
-	fmt.Printf("  %s: %s\n", bold("Variant"), initVariant)
-	fmt.Printf("  %s: %s\n", bold("Mode"), initMode)
-	fmt.Printf("  %s: %s\n", bold("Compute"), initComputeTier)
+	fmt.Printf("  %s: %s\n", bold("Variant"), variant)
+	fmt.Printf("  %s: %s\n", bold("Mode"), mode)
+	fmt.Printf("  %s: %s\n", bold("Compute"), computeTier)
 	if domain != "" {
 		fmt.Printf("  %s: %s\n", bold("Domain"), domain)
 	}
@@ -305,7 +279,119 @@ func runInit(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  2. Prepare system:        %s\n", cyan("stackkit prepare --spec "+specFile))
 	fmt.Printf("  3. Preview changes:       %s\n", cyan("stackkit plan"))
 	fmt.Printf("  4. Deploy:                %s\n", cyan("stackkit apply"))
+}
 
+// resolveStackKitName determines the StackKit name from CLI args, applying
+// non-interactive defaults or prompting the user as needed. It also returns
+// a prompter when interactive input is available.
+func resolveStackKitName(args []string, availableKits []*models.StackKit, wd string) (string, *prompter, error) {
+	stackkitName := ""
+	if len(args) > 0 {
+		stackkitName = args[0]
+	}
+
+	needsInteractive := stackkitName == "" || initVariant == "" || initComputeTier == "" || initMode == ""
+
+	if needsInteractive && initNonInteractive {
+		if err := applyNonInteractiveDefaults(stackkitName, availableKits); err != nil {
+			return "", nil, err
+		}
+	}
+
+	var p *prompter
+	if stackkitName == "" || (needsInteractive && !initNonInteractive) {
+		p = newPrompter()
+	}
+
+	if stackkitName == "" {
+		selected, err := selectStackKit(p, availableKits, wd)
+		if err != nil {
+			return "", nil, err
+		}
+		stackkitName = selected
+	}
+
+	return stackkitName, p, nil
+}
+
+// gatherInitChoices prompts (or defaults) all user choices for the init wizard.
+func gatherInitChoices(p *prompter, stackkit *models.StackKit) (variant, mode, computeTier, domain, email string, err error) {
+	variant, err = selectVariant(p, stackkit)
+	if err != nil {
+		return
+	}
+
+	mode, err = selectMode(p, stackkit)
+	if err != nil {
+		return
+	}
+
+	computeTier, err = selectComputeTier(p, stackkit)
+	if err != nil {
+		return
+	}
+
+	domain, email = promptOptionalConfig(p)
+	return
+}
+
+func runInit(cmd *cobra.Command, args []string) error {
+	wd := getWorkDir()
+
+	loader := config.NewLoader(wd)
+	availableKits, err := discoverStackKits(loader, wd)
+	if err != nil {
+		return fmt.Errorf("failed to discover StackKits: %w", err)
+	}
+
+	stackkitName, p, err := resolveStackKitName(args, availableKits, wd)
+	if err != nil {
+		return err
+	}
+
+	printInfo("Initializing StackKit: %s", bold(stackkitName))
+
+	loader, stackkit, err := loadStackKit(loader, stackkitName, wd)
+	if err != nil {
+		return err
+	}
+	printSuccess("Found StackKit: %s v%s", stackkit.Metadata.Name, stackkit.Metadata.Version)
+
+	variant, mode, computeTier, domain, email, err := gatherInitChoices(p, stackkit)
+	if err != nil {
+		return err
+	}
+
+	specPath, err := resolveSpecPath(wd)
+	if err != nil {
+		return err
+	}
+
+	spec := &models.StackSpec{
+		Name:     filepath.Base(wd),
+		StackKit: stackkitName,
+		Variant:  variant,
+		Mode:     mode,
+		Domain:   domain,
+		Email:    email,
+		Network: models.NetworkSpec{
+			Mode:   "local",
+			Subnet: "172.20.0.0/16",
+		},
+		Compute: models.ComputeSpec{
+			Tier: computeTier,
+		},
+		SSH: models.SSHSpec{
+			User: "root",
+			Port: 22,
+		},
+	}
+
+	if err := writeSpecAndOutput(loader, spec, specPath, wd); err != nil {
+		return err
+	}
+
+	printInitSummary(stackkitName, variant, mode, computeTier, domain, email)
 	return nil
 }
 

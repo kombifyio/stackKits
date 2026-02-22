@@ -11,12 +11,11 @@ import (
 	"github.com/kombihq/stackkits/internal/cue"
 	"github.com/kombihq/stackkits/internal/iac"
 	"github.com/kombihq/stackkits/internal/tofu"
+	"github.com/kombihq/stackkits/pkg/models"
 	"github.com/spf13/cobra"
 )
 
-var (
-	validateAll bool
-)
+var validateAll bool
 
 var validateCmd = &cobra.Command{
 	Use:   "validate [file]",
@@ -45,150 +44,31 @@ func runValidate(cmd *cobra.Command, args []string) error {
 	loader := config.NewLoader(wd)
 	validator := cue.NewValidator(wd)
 
-	hasErrors := false
-
-	// Determine what to validate
 	targetFile := specFile
 	if len(args) > 0 {
 		targetFile = args[0]
 	}
 
+	hasErrors := false
+
 	// Validate spec file
-	printInfo("Validating %s...", targetFile)
-
-	spec, err := loader.LoadStackSpec(targetFile)
-	if err != nil {
-		if os.IsNotExist(err) {
-			printWarning("Spec file not found: %s", targetFile)
-		} else {
-			printError("Failed to load spec: %v", err)
-			hasErrors = true
-		}
-	} else {
-		result, err := validator.ValidateSpec(spec)
-		if err != nil {
-			printError("Validation error: %v", err)
-			hasErrors = true
-		} else if !result.Valid {
-			printError("Spec validation failed:")
-			for _, e := range result.Errors {
-				fmt.Printf("  • %s: %s\n", red(e.Path), e.Message)
-			}
-			hasErrors = true
-		} else {
-			printSuccess("Spec file is valid")
-
-			for _, w := range result.Warnings {
-				printWarning("%s: %s", w.Path, w.Message)
-			}
-		}
+	spec, specHasErrors := validateSpecFile(loader, validator, targetFile)
+	if specHasErrors {
+		hasErrors = true
 	}
 
 	// Validate all CUE files if requested
 	if validateAll {
-		fmt.Println()
-		printInfo("Validating CUE schemas...")
-
-		cueFiles, err := findCUEFiles(wd)
-		if err != nil {
-			printWarning("Could not find CUE files: %v", err)
-		} else {
-			for _, cueFile := range cueFiles {
-				relPath, _ := filepath.Rel(wd, cueFile)
-				result, err := validator.ValidateCUEFile(cueFile)
-				if err != nil {
-					printError("%s: %v", relPath, err)
-					hasErrors = true
-				} else if !result.Valid {
-					printError("%s:", relPath)
-					for _, e := range result.Errors {
-						fmt.Printf("  • %s\n", e.Message)
-					}
-					hasErrors = true
-				} else {
-					printSuccess("%s is valid", relPath)
-				}
-			}
+		if validateCUESchemas(validator, wd) {
+			hasErrors = true
 		}
 	}
 
 	// Validate OpenTofu files
 	deployDir := filepath.Join(wd, config.GetDeployDir())
-	if _, err := os.Stat(deployDir); err == nil {
-		fmt.Println()
-		printInfo("Validating OpenTofu configuration...")
-
-		hasTF, err := tofu.HasTerraformFiles(deployDir)
-		if err != nil {
-			printWarning("Could not check for .tf files: %v", err)
-		} else if !hasTF {
-			printWarning("No .tf files found in %s", deployDir)
-		} else {
-			// Use unified iac executor — mode determined from spec
-			var executor iac.Executor
-			if spec != nil {
-				executor, err = iac.NewExecutorFromSpec(spec, deployDir)
-			} else {
-				executor, err = iac.NewExecutor(&iac.Config{WorkDir: deployDir, Mode: iac.ModeOpenTofu})
-			}
-			if err != nil {
-				printError("Failed to create executor: %v", err)
-				hasErrors = true
-			} else if !executor.IsInstalled() {
-				printWarning("%s is not installed — skipping validate", executor.Mode())
-			} else {
-				// Initialize if needed (validate requires init)
-				tfStatePath := filepath.Join(deployDir, ".terraform")
-				if _, err := os.Stat(tfStatePath); os.IsNotExist(err) {
-					printInfo("Initializing %s...", executor.Mode())
-					ctx := context.Background()
-					if initErr := executor.Init(ctx); initErr != nil {
-						printError("Init error: %v", initErr)
-						hasErrors = true
-					}
-				}
-
-				if !hasErrors {
-					ctx := context.Background()
-					result, err := executor.Validate(ctx)
-					if err != nil {
-						printError("Validate error: %v", err)
-						hasErrors = true
-					} else if !result.Success {
-						printError("Validation failed:")
-						// Parse JSON output from tofu validate -json
-						var valResult struct {
-							Valid       bool `json:"valid"`
-							ErrorCount  int  `json:"error_count"`
-							Diagnostics []struct {
-								Severity string `json:"severity"`
-								Summary  string `json:"summary"`
-								Detail   string `json:"detail"`
-							} `json:"diagnostics"`
-						}
-						if jsonErr := json.Unmarshal([]byte(result.Stdout), &valResult); jsonErr == nil {
-							for _, d := range valResult.Diagnostics {
-								if d.Severity == "error" {
-									fmt.Printf("  • %s: %s\n", red(d.Summary), d.Detail)
-								} else {
-									printWarning("%s: %s", d.Summary, d.Detail)
-								}
-							}
-						} else {
-							// Fallback: print raw output
-							if result.Stderr != "" {
-								fmt.Println(result.Stderr)
-							}
-							if result.Stdout != "" {
-								fmt.Println(result.Stdout)
-							}
-						}
-						hasErrors = true
-					} else {
-						printSuccess("IaC configuration is valid")
-					}
-				}
-			}
+	if _, statErr := os.Stat(deployDir); statErr == nil {
+		if validateIaCFiles(spec, deployDir) {
+			hasErrors = true
 		}
 	}
 
@@ -199,6 +79,163 @@ func runValidate(cmd *cobra.Command, args []string) error {
 
 	printSuccess("All validations passed!")
 	return nil
+}
+
+// validateSpecFile validates the stack-spec.yaml file and returns the parsed spec (may be nil) and whether errors occurred.
+func validateSpecFile(loader *config.Loader, validator *cue.Validator, targetFile string) (*models.StackSpec, bool) {
+	printInfo("Validating %s...", targetFile)
+
+	spec, err := loader.LoadStackSpec(targetFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			printWarning("Spec file not found: %s", targetFile)
+		} else {
+			printError("Failed to load spec: %v", err)
+			return nil, true
+		}
+		return nil, false
+	}
+
+	result, err := validator.ValidateSpec(spec)
+	if err != nil {
+		printError("Validation error: %v", err)
+		return spec, true
+	}
+	if !result.Valid {
+		printError("Spec validation failed:")
+		for _, e := range result.Errors {
+			fmt.Printf("  • %s: %s\n", red(e.Path), e.Message)
+		}
+		return spec, true
+	}
+
+	printSuccess("Spec file is valid")
+	for _, w := range result.Warnings {
+		printWarning("%s: %s", w.Path, w.Message)
+	}
+	return spec, false
+}
+
+// validateCUESchemas validates all CUE files in the working directory. Returns true if errors were found.
+func validateCUESchemas(validator *cue.Validator, wd string) bool {
+	fmt.Println()
+	printInfo("Validating CUE schemas...")
+
+	cueFiles, err := findCUEFiles(wd)
+	if err != nil {
+		printWarning("Could not find CUE files: %v", err)
+		return false
+	}
+
+	hasErrors := false
+	for _, cueFile := range cueFiles {
+		relPath, _ := filepath.Rel(wd, cueFile)
+		result, err := validator.ValidateCUEFile(cueFile)
+		if err != nil {
+			printError("%s: %v", relPath, err)
+			hasErrors = true
+		} else if !result.Valid {
+			printError("%s:", relPath)
+			for _, e := range result.Errors {
+				fmt.Printf("  • %s\n", e.Message)
+			}
+			hasErrors = true
+		} else {
+			printSuccess("%s is valid", relPath)
+		}
+	}
+	return hasErrors
+}
+
+// validateIaCFiles validates OpenTofu/Terramate configuration files. Returns true if errors were found.
+func validateIaCFiles(spec *models.StackSpec, deployDir string) bool {
+	fmt.Println()
+	printInfo("Validating OpenTofu configuration...")
+
+	hasTF, err := tofu.HasTerraformFiles(deployDir)
+	if err != nil {
+		printWarning("Could not check for .tf files: %v", err)
+		return false
+	}
+	if !hasTF {
+		printWarning("No .tf files found in %s", deployDir)
+		return false
+	}
+
+	executor, err := createIaCExecutor(spec, deployDir)
+	if err != nil {
+		printError("Failed to create executor: %v", err)
+		return true
+	}
+	if !executor.IsInstalled() {
+		printWarning("%s is not installed — skipping validate", executor.Mode())
+		return false
+	}
+
+	// Initialize if needed (validate requires init)
+	tfStatePath := filepath.Join(deployDir, ".terraform")
+	if _, statErr := os.Stat(tfStatePath); os.IsNotExist(statErr) {
+		printInfo("Initializing %s...", executor.Mode())
+		ctx := context.Background()
+		if initErr := executor.Init(ctx); initErr != nil {
+			printError("Init error: %v", initErr)
+			return true
+		}
+	}
+
+	ctx := context.Background()
+	result, err := executor.Validate(ctx)
+	if err != nil {
+		printError("Validate error: %v", err)
+		return true
+	}
+	if !result.Success {
+		printIaCValidationErrors(result)
+		return true
+	}
+
+	printSuccess("IaC configuration is valid")
+	return false
+}
+
+func createIaCExecutor(spec *models.StackSpec, deployDir string) (iac.Executor, error) {
+	if spec != nil {
+		return iac.NewExecutorFromSpec(spec, deployDir)
+	}
+	return iac.NewExecutor(&iac.Config{WorkDir: deployDir, Mode: iac.ModeOpenTofu})
+}
+
+func printIaCValidationErrors(result *iac.ExecResult) {
+	printError("Validation failed:")
+
+	var valResult struct {
+		Valid       bool `json:"valid"`
+		ErrorCount  int  `json:"error_count"`
+		Diagnostics []struct {
+			Severity string `json:"severity"`
+			Summary  string `json:"summary"`
+			Detail   string `json:"detail"`
+		} `json:"diagnostics"`
+	}
+
+	if jsonErr := json.Unmarshal([]byte(result.Stdout), &valResult); jsonErr == nil {
+		for _, d := range valResult.Diagnostics {
+			if d.Severity == "error" {
+				fmt.Printf("  • %s: %s\n", red(d.Summary), d.Detail)
+			} else {
+				printWarning("%s: %s", d.Summary, d.Detail)
+			}
+		}
+		return
+	}
+
+	// Fallback: print raw output
+	if result.Stderr != "" {
+		fmt.Println(result.Stderr)
+	}
+	if result.Stdout != "" {
+		fmt.Println(result.Stdout)
+	}
 }
 
 func findCUEFiles(dir string) ([]string, error) {

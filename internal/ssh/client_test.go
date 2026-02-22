@@ -214,7 +214,7 @@ func TestClientClose(t *testing.T) {
 	t.Run("close on unconnected client does not panic", func(t *testing.T) {
 		client := NewClient()
 		// Should not panic
-		client.Close()
+		_ = client.Close()
 		assert.False(t, client.IsConnected())
 	})
 }

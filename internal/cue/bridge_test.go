@@ -17,7 +17,7 @@ func TestTerraformBridge_GenerateTFVars(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	tests := []struct {
 		name        string
@@ -384,7 +384,7 @@ func TestWriteTFVars(t *testing.T) {
 		tmpDir := t.TempDir()
 		// Create a file that blocks directory creation
 		blocker := filepath.Join(tmpDir, "blocker")
-		require.NoError(t, os.WriteFile(blocker, []byte("x"), 0644))
+		require.NoError(t, os.WriteFile(blocker, []byte("x"), 0600))
 
 		tfvars := &TFVars{Variant: "test"}
 		err := bridge.writeTFVars(tfvars, filepath.Join(blocker, "sub"))
@@ -406,7 +406,7 @@ func TestGenerateTFVars_ErrorPaths(t *testing.T) {
 		cueContent := `package broken
 name: "test
 `
-		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "bad.cue"), []byte(cueContent), 0644))
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "bad.cue"), []byte(cueContent), 0600))
 
 		bridge := NewTerraformBridge(tmpDir)
 		outputDir := filepath.Join(tmpDir, "output")
@@ -441,7 +441,7 @@ func TestValidateStackKit_ErrorPaths(t *testing.T) {
 import "nonexistent/module"
 x: module.Y
 `
-		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "bad.cue"), []byte(cueContent), 0644))
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "bad.cue"), []byte(cueContent), 0600))
 
 		validator := NewValidator(tmpDir)
 		result, err := validator.ValidateStackKit(tmpDir)
@@ -460,7 +460,7 @@ x: module.Y
 name: string
 version: string
 `
-		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "abstract.cue"), []byte(cueContent), 0644))
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "abstract.cue"), []byte(cueContent), 0600))
 
 		validator := NewValidator(tmpDir)
 		result, err := validator.ValidateStackKit(tmpDir)
@@ -485,7 +485,7 @@ func TestValidateBeforeGeneration_Failure(t *testing.T) {
 		cueContent := `package test
 name: string
 `
-		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "abstract.cue"), []byte(cueContent), 0644))
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "abstract.cue"), []byte(cueContent), 0600))
 
 		bridge := NewTerraformBridge(tmpDir)
 		err := bridge.ValidateBeforeGeneration()

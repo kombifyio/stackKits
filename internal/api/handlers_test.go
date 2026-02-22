@@ -13,6 +13,22 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// testValidationEndpoint posts JSON to a validation endpoint and asserts the status code
+// and the "valid" field in the response data.
+func testValidationEndpoint(t *testing.T, handler http.Handler, method, path, body string, expectedStatus int, expectedValid bool) {
+	t.Helper()
+	req := httptest.NewRequest(method, path, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	assert.Equal(t, expectedStatus, rec.Code)
+	resp := parseResponse(t, rec)
+	var result map[string]interface{}
+	require.NoError(t, json.Unmarshal(resp["data"], &result))
+	assert.Equal(t, expectedValid, result["valid"])
+}
+
 // testServer creates a test API server with a temp directory containing fixture stackkits.
 func testServer(t *testing.T) (*Server, string) {
 	t.Helper()
@@ -20,7 +36,7 @@ func testServer(t *testing.T) (*Server, string) {
 
 	// Create a minimal stackkit fixture: base-homelab
 	baseDir := filepath.Join(tmpDir, "base-homelab")
-	require.NoError(t, os.MkdirAll(baseDir, 0755))
+	require.NoError(t, os.MkdirAll(baseDir, 0750))
 	stackkitYAML := `metadata:
   apiVersion: v1
   kind: StackKit
@@ -64,7 +80,7 @@ variants:
     services:
       - traefik
 `
-	require.NoError(t, os.WriteFile(filepath.Join(baseDir, "stackkit.yaml"), []byte(stackkitYAML), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(baseDir, "stackkit.yaml"), []byte(stackkitYAML), 0600))
 
 	// Create a minimal CUE schema file
 	schemaCUE := `package base_homelab
@@ -75,7 +91,7 @@ import "github.com/kombihq/stackkits/base"
   metadata: name: "base-homelab"
 }
 `
-	require.NoError(t, os.WriteFile(filepath.Join(baseDir, "stackfile.cue"), []byte(schemaCUE), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(baseDir, "stackfile.cue"), []byte(schemaCUE), 0600))
 
 	srv := NewServer(ServerConfig{
 		Port:    0,
@@ -177,7 +193,7 @@ func TestHandleListStackKits_AutoDiscover(t *testing.T) {
 
 	// Add a second stackkit dynamically
 	extraDir := filepath.Join(tmpDir, "custom-kit")
-	require.NoError(t, os.MkdirAll(extraDir, 0755))
+	require.NoError(t, os.MkdirAll(extraDir, 0750))
 	extraYAML := `metadata:
   name: custom-kit
   version: "1.0.0"
@@ -209,7 +225,7 @@ variants:
       - nginx
     default: true
 `
-	require.NoError(t, os.WriteFile(filepath.Join(extraDir, "stackkit.yaml"), []byte(extraYAML), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(extraDir, "stackkit.yaml"), []byte(extraYAML), 0600))
 
 	req := httptest.NewRequest("GET", "/api/v1/stackkits", nil)
 	rec := httptest.NewRecorder()
@@ -234,7 +250,7 @@ func TestHandleListStackKits_Pagination(t *testing.T) {
 
 	// Add a second stackkit so we have 2 total
 	extraDir := filepath.Join(tmpDir, "custom-kit")
-	require.NoError(t, os.MkdirAll(extraDir, 0755))
+	require.NoError(t, os.MkdirAll(extraDir, 0750))
 	extraYAML := `metadata:
   name: custom-kit
   version: "1.0.0"
@@ -266,7 +282,7 @@ variants:
       - nginx
     default: true
 `
-	require.NoError(t, os.WriteFile(filepath.Join(extraDir, "stackkit.yaml"), []byte(extraYAML), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(extraDir, "stackkit.yaml"), []byte(extraYAML), 0600))
 
 	// Request with limit=1
 	req := httptest.NewRequest("GET", "/api/v1/stackkits?limit=1&offset=0", nil)
@@ -429,16 +445,7 @@ func TestHandleValidateSpec(t *testing.T) {
 
 	t.Run("valid spec", func(t *testing.T) {
 		body := `{"name":"test","stackkit":"base-homelab","domain":"example.com","email":"a@b.com","network":{"mode":"local"},"compute":{"tier":"standard"}}`
-		req := httptest.NewRequest("POST", "/api/v1/validate", strings.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		rec := httptest.NewRecorder()
-		handler.ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusOK, rec.Code)
-		resp := parseResponse(t, rec)
-		var result map[string]interface{}
-		require.NoError(t, json.Unmarshal(resp["data"], &result))
-		assert.Equal(t, true, result["valid"])
+		testValidationEndpoint(t, handler, "POST", "/api/v1/validate", body, http.StatusOK, true)
 	})
 
 	t.Run("missing stackkit field", func(t *testing.T) {
@@ -468,172 +475,51 @@ func TestHandleValidatePartial(t *testing.T) {
 	handler := srv.Handler()
 
 	t.Run("valid stackkit", func(t *testing.T) {
-		body := `{"stackkit":"base-homelab"}`
-		req := httptest.NewRequest("POST", "/api/v1/validate/partial", strings.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		rec := httptest.NewRecorder()
-		handler.ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusOK, rec.Code)
-		resp := parseResponse(t, rec)
-		var result map[string]interface{}
-		require.NoError(t, json.Unmarshal(resp["data"], &result))
-		assert.Equal(t, true, result["valid"])
+		testValidationEndpoint(t, handler, "POST", "/api/v1/validate/partial", `{"stackkit":"base-homelab"}`, http.StatusOK, true)
 	})
 
 	t.Run("unknown stackkit", func(t *testing.T) {
-		body := `{"stackkit":"nonexistent"}`
-		req := httptest.NewRequest("POST", "/api/v1/validate/partial", strings.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		rec := httptest.NewRecorder()
-		handler.ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusOK, rec.Code)
-		resp := parseResponse(t, rec)
-		var result map[string]interface{}
-		require.NoError(t, json.Unmarshal(resp["data"], &result))
-		assert.Equal(t, false, result["valid"])
+		testValidationEndpoint(t, handler, "POST", "/api/v1/validate/partial", `{"stackkit":"nonexistent"}`, http.StatusOK, false)
 	})
 
 	t.Run("unknown variant", func(t *testing.T) {
-		body := `{"stackkit":"base-homelab","variant":"nonexistent"}`
-		req := httptest.NewRequest("POST", "/api/v1/validate/partial", strings.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		rec := httptest.NewRecorder()
-		handler.ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusOK, rec.Code)
-		resp := parseResponse(t, rec)
-		var result map[string]interface{}
-		require.NoError(t, json.Unmarshal(resp["data"], &result))
-		assert.Equal(t, false, result["valid"])
+		testValidationEndpoint(t, handler, "POST", "/api/v1/validate/partial", `{"stackkit":"base-homelab","variant":"nonexistent"}`, http.StatusOK, false)
 	})
 
 	t.Run("invalid mode", func(t *testing.T) {
-		body := `{"mode":"badmode"}`
-		req := httptest.NewRequest("POST", "/api/v1/validate/partial", strings.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		rec := httptest.NewRecorder()
-		handler.ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusOK, rec.Code)
-		resp := parseResponse(t, rec)
-		var result map[string]interface{}
-		require.NoError(t, json.Unmarshal(resp["data"], &result))
-		assert.Equal(t, false, result["valid"])
+		testValidationEndpoint(t, handler, "POST", "/api/v1/validate/partial", `{"mode":"badmode"}`, http.StatusOK, false)
 	})
 
 	t.Run("unusual network mode", func(t *testing.T) {
-		body := `{"network":{"mode":"custom"}}`
-		req := httptest.NewRequest("POST", "/api/v1/validate/partial", strings.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		rec := httptest.NewRecorder()
-		handler.ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusOK, rec.Code)
-		resp := parseResponse(t, rec)
-		var result map[string]interface{}
-		require.NoError(t, json.Unmarshal(resp["data"], &result))
-		// Unusual network modes produce warnings, not errors
-		assert.Equal(t, true, result["valid"])
+		testValidationEndpoint(t, handler, "POST", "/api/v1/validate/partial", `{"network":{"mode":"custom"}}`, http.StatusOK, true)
 	})
 
 	t.Run("invalid email", func(t *testing.T) {
-		body := `{"email":"notanemail"}`
-		req := httptest.NewRequest("POST", "/api/v1/validate/partial", strings.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		rec := httptest.NewRecorder()
-		handler.ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusOK, rec.Code)
-		resp := parseResponse(t, rec)
-		var result map[string]interface{}
-		require.NoError(t, json.Unmarshal(resp["data"], &result))
-		assert.Equal(t, false, result["valid"])
+		testValidationEndpoint(t, handler, "POST", "/api/v1/validate/partial", `{"email":"notanemail"}`, http.StatusOK, false)
 	})
 
 	t.Run("invalid domain", func(t *testing.T) {
-		body := `{"domain":"no spaces"}`
-		req := httptest.NewRequest("POST", "/api/v1/validate/partial", strings.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		rec := httptest.NewRecorder()
-		handler.ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusOK, rec.Code)
-		resp := parseResponse(t, rec)
-		var result map[string]interface{}
-		require.NoError(t, json.Unmarshal(resp["data"], &result))
-		assert.Equal(t, false, result["valid"])
+		testValidationEndpoint(t, handler, "POST", "/api/v1/validate/partial", `{"domain":"no spaces"}`, http.StatusOK, false)
 	})
 
 	t.Run("invalid compute tier", func(t *testing.T) {
-		body := `{"compute":{"tier":"mega"}}`
-		req := httptest.NewRequest("POST", "/api/v1/validate/partial", strings.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		rec := httptest.NewRecorder()
-		handler.ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusOK, rec.Code)
-		resp := parseResponse(t, rec)
-		var result map[string]interface{}
-		require.NoError(t, json.Unmarshal(resp["data"], &result))
-		assert.Equal(t, false, result["valid"])
+		testValidationEndpoint(t, handler, "POST", "/api/v1/validate/partial", `{"compute":{"tier":"mega"}}`, http.StatusOK, false)
 	})
 
 	t.Run("invalid SSH port", func(t *testing.T) {
-		body := `{"ssh":{"port":99999}}`
-		req := httptest.NewRequest("POST", "/api/v1/validate/partial", strings.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		rec := httptest.NewRecorder()
-		handler.ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusOK, rec.Code)
-		resp := parseResponse(t, rec)
-		var result map[string]interface{}
-		require.NoError(t, json.Unmarshal(resp["data"], &result))
-		assert.Equal(t, false, result["valid"])
+		testValidationEndpoint(t, handler, "POST", "/api/v1/validate/partial", `{"ssh":{"port":99999}}`, http.StatusOK, false)
 	})
 
 	t.Run("invalid node role", func(t *testing.T) {
-		body := `{"nodes":[{"name":"node1","role":"boss"}]}`
-		req := httptest.NewRequest("POST", "/api/v1/validate/partial", strings.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		rec := httptest.NewRecorder()
-		handler.ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusOK, rec.Code)
-		resp := parseResponse(t, rec)
-		var result map[string]interface{}
-		require.NoError(t, json.Unmarshal(resp["data"], &result))
-		assert.Equal(t, false, result["valid"])
+		testValidationEndpoint(t, handler, "POST", "/api/v1/validate/partial", `{"nodes":[{"name":"node1","role":"boss"}]}`, http.StatusOK, false)
 	})
 
 	t.Run("duplicate node names", func(t *testing.T) {
-		body := `{"nodes":[{"name":"node1","role":"worker"},{"name":"node1","role":"worker"}]}`
-		req := httptest.NewRequest("POST", "/api/v1/validate/partial", strings.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		rec := httptest.NewRecorder()
-		handler.ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusOK, rec.Code)
-		resp := parseResponse(t, rec)
-		var result map[string]interface{}
-		require.NoError(t, json.Unmarshal(resp["data"], &result))
-		assert.Equal(t, false, result["valid"])
+		testValidationEndpoint(t, handler, "POST", "/api/v1/validate/partial", `{"nodes":[{"name":"node1","role":"worker"},{"name":"node1","role":"worker"}]}`, http.StatusOK, false)
 	})
 
 	t.Run("valid expanded fields", func(t *testing.T) {
-		body := `{"email":"test@example.com","domain":"lab.local","compute":{"tier":"standard"},"ssh":{"port":22,"user":"root"}}`
-		req := httptest.NewRequest("POST", "/api/v1/validate/partial", strings.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		rec := httptest.NewRecorder()
-		handler.ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusOK, rec.Code)
-		resp := parseResponse(t, rec)
-		var result map[string]interface{}
-		require.NoError(t, json.Unmarshal(resp["data"], &result))
-		assert.Equal(t, true, result["valid"])
+		testValidationEndpoint(t, handler, "POST", "/api/v1/validate/partial", `{"email":"test@example.com","domain":"lab.local","compute":{"tier":"standard"},"ssh":{"port":22,"user":"root"}}`, http.StatusOK, true)
 	})
 }
 

@@ -183,7 +183,7 @@ func prepareRemoteSystem(ctx context.Context, spec *models.StackSpec) error {
 	if err := sshClient.Connect(); err != nil {
 		return fmt.Errorf("failed to connect to %s: %w", prepareHost, err)
 	}
-	defer sshClient.Close()
+	defer func() { _ = sshClient.Close() }()
 
 	printSuccess("Connected to %s", prepareHost)
 
@@ -199,37 +199,13 @@ func prepareRemoteSystem(ctx context.Context, spec *models.StackSpec) error {
 	}
 
 	// Check Docker
-	if !prepareSkipDocker {
-		if sysInfo.DockerVersion != "" {
-			printSuccess("Docker %s installed", sysInfo.DockerVersion)
-		} else {
-			if prepareDryRun {
-				printWarning("Docker not installed - would install")
-			} else {
-				printInfo("Installing Docker...")
-				if err := installDockerRemote(ctx, sshClient, sysInfo.OS); err != nil {
-					return fmt.Errorf("failed to install Docker: %w", err)
-				}
-				printSuccess("Docker installed successfully")
-			}
-		}
+	if err := checkRemoteDocker(ctx, sshClient, sysInfo); err != nil {
+		return err
 	}
 
 	// Check OpenTofu
-	if !prepareSkipTofu {
-		if sysInfo.TofuVersion != "" {
-			printSuccess("OpenTofu %s installed", sysInfo.TofuVersion)
-		} else {
-			if prepareDryRun {
-				printWarning("OpenTofu not installed - would install")
-			} else {
-				printInfo("Installing OpenTofu...")
-				if err := installTofuRemote(ctx, sshClient); err != nil {
-					return fmt.Errorf("failed to install OpenTofu: %w", err)
-				}
-				printSuccess("OpenTofu installed successfully")
-			}
-		}
+	if err := checkRemoteTofu(ctx, sshClient, sysInfo); err != nil {
+		return err
 	}
 
 	// Check ports
@@ -254,6 +230,46 @@ func prepareRemoteSystem(ctx context.Context, spec *models.StackSpec) error {
 	return nil
 }
 
+func checkRemoteDocker(ctx context.Context, sshClient *ssh.Client, sysInfo *models.SystemInfo) error {
+	if prepareSkipDocker {
+		return nil
+	}
+	if sysInfo.DockerVersion != "" {
+		printSuccess("Docker %s installed", sysInfo.DockerVersion)
+		return nil
+	}
+	if prepareDryRun {
+		printWarning("Docker not installed - would install")
+		return nil
+	}
+	printInfo("Installing Docker...")
+	if err := installDockerRemote(ctx, sshClient, sysInfo.OS); err != nil {
+		return fmt.Errorf("failed to install Docker: %w", err)
+	}
+	printSuccess("Docker installed successfully")
+	return nil
+}
+
+func checkRemoteTofu(ctx context.Context, sshClient *ssh.Client, sysInfo *models.SystemInfo) error {
+	if prepareSkipTofu {
+		return nil
+	}
+	if sysInfo.TofuVersion != "" {
+		printSuccess("OpenTofu %s installed", sysInfo.TofuVersion)
+		return nil
+	}
+	if prepareDryRun {
+		printWarning("OpenTofu not installed - would install")
+		return nil
+	}
+	printInfo("Installing OpenTofu...")
+	if err := installTofuRemote(ctx, sshClient); err != nil {
+		return fmt.Errorf("failed to install OpenTofu: %w", err)
+	}
+	printSuccess("OpenTofu installed successfully")
+	return nil
+}
+
 func checkLocalResources(spec *models.StackSpec) {
 	// CPU check
 	numCPU := runtime.NumCPU()
@@ -274,7 +290,7 @@ func checkLocalResources(spec *models.StackSpec) {
 		var totalKB uint64
 		for _, line := range strings.Split(string(data), "\n") {
 			if strings.HasPrefix(line, "MemTotal:") {
-				fmt.Sscanf(line, "MemTotal: %d kB", &totalKB)
+				_, _ = fmt.Sscanf(line, "MemTotal: %d kB", &totalKB)
 				break
 			}
 		}

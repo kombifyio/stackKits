@@ -56,7 +56,7 @@ func runDestroy(cmd *cobra.Command, args []string) error {
 
 	// Determine deploy directory
 	deployDir := filepath.Join(wd, config.GetDeployDir())
-	if _, err := os.Stat(deployDir); os.IsNotExist(err) {
+	if _, statErr := os.Stat(deployDir); os.IsNotExist(statErr) {
 		printWarning("Deploy directory not found: %s", deployDir)
 		if !destroyForce {
 			return fmt.Errorf("nothing to destroy")
@@ -70,9 +70,9 @@ func runDestroy(cmd *cobra.Command, args []string) error {
 		fmt.Print("Type 'yes' to confirm: ")
 
 		var confirm string
-		fmt.Scanln(&confirm)
+		_, _ = fmt.Scanln(&confirm)
 		if confirm != "yes" {
-			printInfo("Destroy cancelled")
+			printInfo("Destroy canceled")
 			return nil
 		}
 	}
@@ -124,7 +124,7 @@ func runDestroy(cmd *cobra.Command, args []string) error {
 	}
 
 	stateFile := filepath.Join(wd, ".stackkit", "state.yaml")
-	if err := os.MkdirAll(filepath.Dir(stateFile), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(stateFile), 0750); err != nil {
 		printWarning("Failed to create state directory: %v", err)
 	} else if err := loader.SaveDeploymentState(state, stateFile); err != nil {
 		printWarning("Failed to save deployment state: %v", err)

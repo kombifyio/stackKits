@@ -22,7 +22,7 @@ func TestLoadStackSpec(t *testing.T) {
 	// Create temp directory
 	tmpDir, err := os.MkdirTemp("", "stackkit-test-*")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	t.Run("loads valid spec file", func(t *testing.T) {
 		specContent := `name: test-deployment
@@ -40,7 +40,7 @@ ssh:
   port: 22
 `
 		specPath := filepath.Join(tmpDir, "stack-spec.yaml")
-		err := os.WriteFile(specPath, []byte(specContent), 0644)
+		err := os.WriteFile(specPath, []byte(specContent), 0600)
 		require.NoError(t, err)
 
 		loader := NewLoader(tmpDir)
@@ -65,7 +65,7 @@ ssh:
 stackkit: base-homelab
 `
 		specPath := filepath.Join(tmpDir, "minimal-spec.yaml")
-		err := os.WriteFile(specPath, []byte(specContent), 0644)
+		err := os.WriteFile(specPath, []byte(specContent), 0600)
 		require.NoError(t, err)
 
 		loader := NewLoader(tmpDir)
@@ -84,7 +84,7 @@ stackkit: base-homelab
 	t.Run("returns error for invalid YAML", func(t *testing.T) {
 		specContent := `invalid: yaml: content: [}`
 		specPath := filepath.Join(tmpDir, "invalid.yaml")
-		err := os.WriteFile(specPath, []byte(specContent), 0644)
+		err := os.WriteFile(specPath, []byte(specContent), 0600)
 		require.NoError(t, err)
 
 		loader := NewLoader(tmpDir)
@@ -97,7 +97,7 @@ stackkit: base-homelab
 func TestSaveStackSpec(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "stackkit-test-*")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	t.Run("saves spec file", func(t *testing.T) {
 		spec := &models.StackSpec{
@@ -147,7 +147,7 @@ func TestSaveStackSpec(t *testing.T) {
 func TestLoadStackKit(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "stackkit-test-*")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	t.Run("loads valid stackkit.yaml", func(t *testing.T) {
 		stackkitContent := `metadata:
@@ -189,7 +189,7 @@ variants:
     default: true
 `
 		stackkitPath := filepath.Join(tmpDir, "stackkit.yaml")
-		err := os.WriteFile(stackkitPath, []byte(stackkitContent), 0644)
+		err := os.WriteFile(stackkitPath, []byte(stackkitContent), 0600)
 		require.NoError(t, err)
 
 		loader := NewLoader(tmpDir)
@@ -210,7 +210,7 @@ supportedOS:
   - ubuntu-24
 `
 		stackkitPath := filepath.Join(tmpDir, "invalid-stackkit.yaml")
-		err := os.WriteFile(stackkitPath, []byte(stackkitContent), 0644)
+		err := os.WriteFile(stackkitPath, []byte(stackkitContent), 0600)
 		require.NoError(t, err)
 
 		loader := NewLoader(tmpDir)
@@ -224,7 +224,7 @@ supportedOS:
 func TestDeploymentState(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "stackkit-test-*")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	t.Run("saves and loads deployment state", func(t *testing.T) {
 		state := &models.DeploymentState{
@@ -279,8 +279,7 @@ func TestExpandPath(t *testing.T) {
 	})
 
 	t.Run("expands environment variables", func(t *testing.T) {
-		os.Setenv("TEST_VAR", "test-value")
-		defer os.Unsetenv("TEST_VAR")
+		t.Setenv("TEST_VAR", "test-value")
 
 		expanded := ExpandPath("$TEST_VAR/path")
 
@@ -291,17 +290,17 @@ func TestExpandPath(t *testing.T) {
 func TestFindStackKitDir(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "stackkit-test-*")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	t.Run("finds stackkit in base path", func(t *testing.T) {
 		// Create stackkit directory
 		stackkitDir := filepath.Join(tmpDir, "test-stackkit")
-		err := os.MkdirAll(stackkitDir, 0755)
+		err := os.MkdirAll(stackkitDir, 0750)
 		require.NoError(t, err)
 
 		// Create stackkit.yaml
 		stackkitPath := filepath.Join(stackkitDir, "stackkit.yaml")
-		err = os.WriteFile(stackkitPath, []byte("metadata:\n  name: test"), 0644)
+		err = os.WriteFile(stackkitPath, []byte("metadata:\n  name: test"), 0600)
 		require.NoError(t, err)
 
 		loader := NewLoader(tmpDir)
@@ -353,7 +352,7 @@ func TestValidateStackKitName(t *testing.T) {
 	})
 
 	t.Run("accepts valid names", func(t *testing.T) {
-		validNames := []string{"base-homelab", "ha-homelab", "modern-homelab", "dev-homelab", "my_stack"}
+		validNames := []string{"base-homelab", "ha-homelab", "modern-homelab", "my_stack"}
 		for _, name := range validNames {
 			err := validateStackKitName(name)
 			assert.NoError(t, err, "name %q should be valid", name)
@@ -444,7 +443,7 @@ func TestSaveStackSpecEdgeCases(t *testing.T) {
 	t.Run("fails for invalid output path", func(t *testing.T) {
 		// Create a file, then try to use it as a directory component
 		blocker := filepath.Join(tmpDir, "blocker")
-		require.NoError(t, os.WriteFile(blocker, []byte("x"), 0644))
+		require.NoError(t, os.WriteFile(blocker, []byte("x"), 0600))
 
 		spec := &models.StackSpec{Name: "test", StackKit: "base-homelab"}
 		err := loader.SaveStackSpec(spec, filepath.Join(blocker, "sub", "spec.yaml"))

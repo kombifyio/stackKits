@@ -3,23 +3,15 @@ package commands
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 
 	"github.com/kombihq/stackkits/internal/config"
+	cueval "github.com/kombihq/stackkits/internal/cue"
 	"github.com/kombihq/stackkits/internal/template"
 	"github.com/kombihq/stackkits/pkg/models"
 	"github.com/spf13/cobra"
 )
-
-// getDockerHost returns the Docker host from environment or empty string
-func getDockerHost() string {
-	if host := os.Getenv("DOCKER_HOST"); host != "" {
-		return host
-	}
-	return ""
-}
 
 var (
 	genOutputDir string
@@ -80,24 +72,34 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load stackkit: %w", err)
 	}
 
+	// Validate CUE schemas before generating
+	cueValidator := cueval.NewValidator(wd)
+	if cueResult, valErr := cueValidator.ValidateStackKit(stackkitDir); valErr != nil {
+		printWarning("CUE validation: %v", valErr)
+	} else if !cueResult.Valid {
+		for _, e := range cueResult.Errors {
+			printWarning("CUE: %s: %s", e.Path, e.Message)
+		}
+	}
+
 	// Determine template directory based on mode
 	templateDir := filepath.Join(stackkitDir, "templates", spec.Mode)
-	if _, err := os.Stat(templateDir); os.IsNotExist(err) {
+	if _, statErr := os.Stat(templateDir); os.IsNotExist(statErr) {
 		// Fall back to simple mode
 		templateDir = filepath.Join(stackkitDir, "templates", "simple")
-		if _, err := os.Stat(templateDir); os.IsNotExist(err) {
+		if _, statErr2 := os.Stat(templateDir); os.IsNotExist(statErr2) {
 			return fmt.Errorf("no templates found for mode '%s' in %s", spec.Mode, stackkitDir)
 		}
 	}
 
 	// Create output directory
 	outputPath := filepath.Join(wd, genOutputDir)
-	if _, err := os.Stat(outputPath); err == nil && !genForce {
+	if _, statErr := os.Stat(outputPath); statErr == nil && !genForce {
 		return fmt.Errorf("output directory already exists: %s (use --force to overwrite)", outputPath)
 	}
 
-	if err := os.MkdirAll(outputPath, 0755); err != nil {
-		return fmt.Errorf("failed to create output directory: %w", err)
+	if mkdirErr := os.MkdirAll(outputPath, 0750); mkdirErr != nil {
+		return fmt.Errorf("failed to create output directory: %w", mkdirErr)
 	}
 
 	// Check if templates use Go templating or are plain files
@@ -108,14 +110,14 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 
 	// Generate main.tf if not present
 	mainTfPath := filepath.Join(outputPath, "main.tf")
-	if _, err := os.Stat(mainTfPath); os.IsNotExist(err) {
+	if _, statErr := os.Stat(mainTfPath); os.IsNotExist(statErr) {
 		// Generate a basic main.tf
 		renderCtx := &template.RenderContext{
 			Spec:     spec,
 			StackKit: stackkit,
 		}
 		mainTf := template.GenerateMainTf(renderCtx)
-		if err := os.WriteFile(mainTfPath, []byte(mainTf), 0644); err != nil {
+		if err := os.WriteFile(mainTfPath, []byte(mainTf), 0600); err != nil {
 			return fmt.Errorf("failed to write main.tf: %w", err)
 		}
 		printSuccess("Generated: main.tf")
@@ -124,7 +126,7 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 	// Generate terraform.tfvars.json from spec (JSON format for consistency with API)
 	tfvarsPath := filepath.Join(outputPath, "terraform.tfvars.json")
 	tfvarsData := generateTfvarsJSON(spec)
-	if err := os.WriteFile(tfvarsPath, tfvarsData, 0644); err != nil {
+	if err := os.WriteFile(tfvarsPath, tfvarsData, 0600); err != nil {
 		return fmt.Errorf("failed to write terraform.tfvars.json: %w", err)
 	}
 	printSuccess("Generated: terraform.tfvars.json")
@@ -155,65 +157,82 @@ func copyOrRenderTemplates(srcDir, dstDir string, spec *models.StackSpec, stackk
 	return renderer.Render(renderCtx)
 }
 
-// copyFile copies a file from src to dst
-func copyFile(src, dst string) error {
-	srcFile, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer srcFile.Close()
-
-	dstFile, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer dstFile.Close()
-
-	_, err = io.Copy(dstFile, srcFile)
-	return err
-}
-
-// generateTfvarsJSON generates terraform.tfvars.json content from spec (JSON format).
-// This matches the API's output format for consistency.
+// generateTfvarsJSON generates terraform.tfvars.json matching the template variables.
+// The template (main.tf) uses these variables to configure which services are deployed.
 func generateTfvarsJSON(spec *models.StackSpec) []byte {
 	vars := make(map[string]interface{})
 
-	// Docker host from environment (for remote Docker daemon)
-	if dockerHost := getDockerHost(); dockerHost != "" {
-		vars["docker_host"] = dockerHost
-	}
-
-	// Basic settings
+	// Domain
 	if spec.Domain != "" {
 		vars["domain"] = spec.Domain
 	} else {
-		vars["domain"] = "example.local"
+		vars["domain"] = "stack.local"
 	}
 
-	if spec.Email != "" {
-		vars["acme_email"] = spec.Email
+	// Network
+	vars["network_name"] = "base_net"
+	if spec.Network.Subnet != "" {
+		vars["network_subnet"] = spec.Network.Subnet
 	} else {
-		vars["acme_email"] = "admin@example.com"
+		vars["network_subnet"] = "172.20.0.0/16"
 	}
 
-	// Variant
-	if spec.Variant != "" {
-		vars["variant"] = spec.Variant
+	// Service enablement based on variant
+	variant := spec.Variant
+	if variant == "" {
+		variant = "default"
 	}
 
-	// Compute tier
-	if spec.Compute.Tier != "" && spec.Compute.Tier != "auto" {
-		vars["compute_tier"] = spec.Compute.Tier
+	switch variant {
+	case "default", "secure":
+		vars["enable_traefik"] = true
+		vars["enable_tinyauth"] = true
+		vars["enable_pocketid"] = true
+		vars["enable_dokploy"] = true
+		vars["enable_dokploy_apps"] = true
+		vars["enable_dashboard"] = true
+	case "beszel":
+		vars["enable_traefik"] = true
+		vars["enable_tinyauth"] = true
+		vars["enable_pocketid"] = true
+		vars["enable_dokploy"] = true
+		vars["enable_dokploy_apps"] = true
+		vars["enable_dashboard"] = true
+	case "minimal":
+		vars["enable_traefik"] = true
+		vars["enable_tinyauth"] = false
+		vars["enable_pocketid"] = false
+		vars["enable_dokploy"] = false
+		vars["enable_dokploy_apps"] = false
+		vars["enable_dashboard"] = false
 	}
 
-	// Network settings
-	if spec.Network.Mode == "public" {
-		vars["network_mode"] = "public"
+	// TinyAuth configuration
+	domain := vars["domain"].(string)
+	vars["tinyauth_app_url"] = fmt.Sprintf("http://auth.%s", domain)
+	vars["tinyauth_users"] = "admin:$2y$10$2aSDNcypqNOcOSOXkmQlSO0MBxZcUeRRtsU/gDZBIwWws.Oly8AYC"
+
+	// Dashboard
+	vars["brand_color"] = "#F97316"
+	if spec.Name != "" {
+		vars["dashboard_title"] = spec.Name
+	} else {
+		vars["dashboard_title"] = "My Homelab"
+	}
+
+	// Allow spec-level service overrides
+	if spec.Services != nil {
+		for name, cfg := range spec.Services {
+			if cfgMap, ok := cfg.(map[string]interface{}); ok {
+				if enabled, exists := cfgMap["enabled"]; exists {
+					vars["enable_"+name] = enabled
+				}
+			}
+		}
 	}
 
 	data, err := json.MarshalIndent(vars, "", "  ")
 	if err != nil {
-		// Should never happen with simple map, but log and fall back
 		return []byte("{}")
 	}
 	return append(data, '\n')

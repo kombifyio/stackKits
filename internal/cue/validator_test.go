@@ -236,7 +236,7 @@ func TestValidateSpec(t *testing.T) {
 func TestValidateCUEFile(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "cue-test-*")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	validator := NewValidator(tmpDir)
 
@@ -247,7 +247,7 @@ name: "test"
 version: "1.0.0"
 `
 		cuePath := filepath.Join(tmpDir, "valid.cue")
-		err := os.WriteFile(cuePath, []byte(cueContent), 0644)
+		err := os.WriteFile(cuePath, []byte(cueContent), 0600)
 		require.NoError(t, err)
 
 		result, err := validator.ValidateCUEFile(cuePath)
@@ -263,7 +263,7 @@ name: "test
 version: "1.0.0"
 `
 		cuePath := filepath.Join(tmpDir, "invalid.cue")
-		err := os.WriteFile(cuePath, []byte(cueContent), 0644)
+		err := os.WriteFile(cuePath, []byte(cueContent), 0600)
 		require.NoError(t, err)
 
 		result, err := validator.ValidateCUEFile(cuePath)

@@ -166,7 +166,7 @@ func (c *Client) Connect() error {
 	var hostKeyCallback ssh.HostKeyCallback
 	if c.strictHostKey {
 		// Try to use known_hosts file
-		if _, err := os.Stat(c.knownHostsPath); err == nil {
+		if _, statErr := os.Stat(c.knownHostsPath); statErr == nil {
 			hostKeyCallback, err = knownhosts.New(c.knownHostsPath)
 			if err != nil {
 				return fmt.Errorf("failed to load known_hosts: %w", err)
@@ -179,7 +179,7 @@ func (c *Client) Connect() error {
 		}
 	} else {
 		// Warning: Only use this for testing/development
-		hostKeyCallback = ssh.InsecureIgnoreHostKey()
+		hostKeyCallback = ssh.InsecureIgnoreHostKey() //nolint:gosec // G106: InsecureIgnoreHostKey is the fallback when no known_hosts file exists
 	}
 
 	config := &ssh.ClientConfig{
@@ -226,7 +226,7 @@ func (c *Client) createAutoAddCallback() ssh.HostKeyCallback {
 		if err != nil {
 			return fmt.Errorf("failed to open known_hosts: %w", err)
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 
 		// Format the host key entry
 		line := knownhosts.Line([]string{knownhosts.Normalize(hostname)}, key)
@@ -256,7 +256,7 @@ func (c *Client) Run(ctx context.Context, command string) (string, string, error
 	if err != nil {
 		return "", "", fmt.Errorf("failed to create session: %w", err)
 	}
-	defer session.Close()
+	defer func() { _ = session.Close() }()
 
 	var stdout, stderr bytes.Buffer
 	session.Stdout = &stdout
@@ -270,7 +270,7 @@ func (c *Client) Run(ctx context.Context, command string) (string, string, error
 
 	select {
 	case <-ctx.Done():
-		session.Signal(ssh.SIGKILL)
+		_ = session.Signal(ssh.SIGKILL)
 		return "", "", ctx.Err()
 	case err := <-done:
 		return stdout.String(), stderr.String(), err
@@ -323,13 +323,13 @@ func (c *Client) WriteFile(ctx context.Context, remotePath string, content []byt
 	if err != nil {
 		return fmt.Errorf("failed to create session: %w", err)
 	}
-	defer session.Close()
+	defer func() { _ = session.Close() }()
 
 	// Use cat to write the file with properly quoted path
 	go func() {
 		w, _ := session.StdinPipe()
 		defer w.Close()
-		io.Copy(w, bytes.NewReader(content))
+		_, _ = io.Copy(w, bytes.NewReader(content))
 	}()
 
 	// Use properly quoted path to prevent command injection
@@ -414,19 +414,19 @@ func (c *Client) GetSystemInfo(ctx context.Context) (*models.SystemInfo, error) 
 	// Get CPU cores
 	stdout, _, err = c.Run(ctx, "nproc")
 	if err == nil {
-		fmt.Sscanf(strings.TrimSpace(stdout), "%d", &info.CPUCores)
+		_, _ = fmt.Sscanf(strings.TrimSpace(stdout), "%d", &info.CPUCores)
 	}
 
 	// Get memory
 	stdout, _, err = c.Run(ctx, "free -m | awk '/^Mem:/ {print $2}'")
 	if err == nil {
-		fmt.Sscanf(strings.TrimSpace(stdout), "%d", &info.MemoryMB)
+		_, _ = fmt.Sscanf(strings.TrimSpace(stdout), "%d", &info.MemoryMB)
 	}
 
 	// Get disk space
 	stdout, _, err = c.Run(ctx, "df -BG / | awk 'NR==2 {print $4}' | tr -d 'G'")
 	if err == nil {
-		fmt.Sscanf(strings.TrimSpace(stdout), "%d", &info.DiskGB)
+		_, _ = fmt.Sscanf(strings.TrimSpace(stdout), "%d", &info.DiskGB)
 	}
 
 	// Get Docker version
@@ -459,7 +459,7 @@ func Ping(host string, port int, timeout time.Duration) bool {
 	if err != nil {
 		return false
 	}
-	conn.Close()
+	_ = conn.Close()
 	return true
 }
 

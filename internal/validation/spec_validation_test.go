@@ -259,11 +259,7 @@ func isValidCIDR(cidr string) bool {
 	}
 
 	ipParts := strings.Split(parts[0], ".")
-	if len(ipParts) != 4 {
-		return false
-	}
-
-	return true
+	return len(ipParts) == 4
 }
 
 // TestSpecDefaults tests that default values are properly applied
@@ -402,7 +398,7 @@ func TestLoadAndTransformSpec(t *testing.T) {
 	// Create a temporary spec file
 	tmpDir, err := os.MkdirTemp("", "spec-test-*")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	specContent := `
 name: test-stack
@@ -417,7 +413,7 @@ nodes:
 `
 
 	specPath := filepath.Join(tmpDir, "stack-spec.yaml")
-	err = os.WriteFile(specPath, []byte(specContent), 0644)
+	err = os.WriteFile(specPath, []byte(specContent), 0600)
 	require.NoError(t, err)
 
 	// Load the spec using the config loader

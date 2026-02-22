@@ -173,7 +173,7 @@ func (e *Executor) run(ctx context.Context, args ...string) (*Result, error) {
 	ctx, cancel := context.WithTimeout(ctx, e.timeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, e.binary, args...)
+	cmd := exec.CommandContext(ctx, e.binary, args...) // #nosec G204 -- binary path is set at construction, not from user input
 	cmd.Dir = e.workDir
 
 	var stdout, stderr bytes.Buffer
@@ -243,7 +243,7 @@ func ParsePlanOutput(output string) *PlanChanges {
 			for i, part := range parts {
 				if part == "to" && i > 0 && i+1 < len(parts) {
 					num := 0
-					fmt.Sscanf(parts[i-1], "%d", &num)
+					_, _ = fmt.Sscanf(parts[i-1], "%d", &num)
 					switch parts[i+1] {
 					case "add,", "add.":
 						changes.Add = num
@@ -333,7 +333,7 @@ func IsTimeoutError(err error) bool {
 // EnsureStateDir ensures the state directory exists
 func EnsureStateDir(baseDir string) error {
 	stateDir := filepath.Join(baseDir, ".stackkit")
-	return os.MkdirAll(stateDir, 0755)
+	return os.MkdirAll(stateDir, 0750)
 }
 
 // ValidateWorkDir validates the working directory

@@ -3,7 +3,6 @@ package tofu
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,6 +13,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+const osWindows = "windows"
 
 func TestExecutor(t *testing.T) {
 	t.Run("creates executor with defaults", func(t *testing.T) {
@@ -234,7 +235,7 @@ func TestHasTerraformFiles(t *testing.T) {
 
 	t.Run("directory with .tf files", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		os.WriteFile(filepath.Join(tmpDir, "main.tf"), []byte("# test"), 0644)
+		_ = os.WriteFile(filepath.Join(tmpDir, "main.tf"), []byte("# test"), 0600)
 
 		has, err := HasTerraformFiles(tmpDir)
 		assert.NoError(t, err)
@@ -243,8 +244,8 @@ func TestHasTerraformFiles(t *testing.T) {
 
 	t.Run("directory with non-tf files only", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		os.WriteFile(filepath.Join(tmpDir, "readme.md"), []byte("# test"), 0644)
-		os.WriteFile(filepath.Join(tmpDir, "config.json"), []byte("{}"), 0644)
+		_ = os.WriteFile(filepath.Join(tmpDir, "readme.md"), []byte("# test"), 0600)
+		_ = os.WriteFile(filepath.Join(tmpDir, "config.json"), []byte("{}"), 0600)
 
 		has, err := HasTerraformFiles(tmpDir)
 		assert.NoError(t, err)
@@ -298,7 +299,7 @@ func TestValidateWorkDir_FileNotDir(t *testing.T) {
 	t.Run("file instead of directory", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		tmpFile := filepath.Join(tmpDir, "not-a-dir.txt")
-		os.WriteFile(tmpFile, []byte("test"), 0644)
+		_ = os.WriteFile(tmpFile, []byte("test"), 0600)
 
 		err := ValidateWorkDir(tmpFile)
 		assert.Error(t, err)
@@ -365,7 +366,7 @@ func TestEnsureStateDirNestedPath(t *testing.T) {
 	t.Run("creates nested state directory", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		nested := filepath.Join(tmpDir, "a", "b", "c")
-		os.MkdirAll(nested, 0755)
+		_ = os.MkdirAll(nested, 0750)
 
 		err := EnsureStateDir(nested)
 		assert.NoError(t, err)
@@ -381,18 +382,10 @@ func TestEnsureStateDirNestedPath(t *testing.T) {
 
 // echoCmd returns a binary and args that print to stdout on any platform.
 func echoCmd() (binary string, args []string) {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == osWindows {
 		return "cmd", []string{"/C", "echo"}
 	}
 	return "echo", nil
-}
-
-// failCmd returns a binary and args that exit with code 1 on any platform.
-func failCmd() (binary string, args []string) {
-	if runtime.GOOS == "windows" {
-		return "cmd", []string{"/C", "exit /b 1"}
-	}
-	return "sh", []string{"-c", "exit 1"}
 }
 
 func TestRunMethodViaVersion(t *testing.T) {
@@ -406,12 +399,14 @@ func TestRunMethodViaVersion(t *testing.T) {
 	tmpDir := t.TempDir()
 	var scriptPath string
 
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == osWindows {
 		scriptPath = filepath.Join(tmpDir, "fake-tofu.bat")
-		os.WriteFile(scriptPath, []byte("@echo off\nif \"%1\"==\"version\" echo OpenTofu v1.8.0\n"), 0755)
+		//nolint:gosec // G306: scripts need execute permissions
+		_ = os.WriteFile(scriptPath, []byte("@echo off\nif \"%1\"==\"version\" echo OpenTofu v1.8.0\n"), 0750)
 	} else {
 		scriptPath = filepath.Join(tmpDir, "fake-tofu")
-		os.WriteFile(scriptPath, []byte("#!/bin/sh\nif [ \"$1\" = \"version\" ]; then echo \"OpenTofu v1.8.0\"; fi\n"), 0755)
+		//nolint:gosec // G306: scripts need execute permissions
+		_ = os.WriteFile(scriptPath, []byte("#!/bin/sh\nif [ \"$1\" = \"version\" ]; then echo \"OpenTofu v1.8.0\"; fi\n"), 0750)
 	}
 
 	_ = baseArgs // not needed for this test
@@ -434,7 +429,7 @@ func TestRunMethodSuccess(t *testing.T) {
 	tmpDir := t.TempDir()
 	var scriptPath string
 
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == osWindows {
 		scriptPath = filepath.Join(tmpDir, "fake-tofu.bat")
 		// Script that echoes valid JSON for validate, and handles other commands
 		script := `@echo off
@@ -464,7 +459,8 @@ if "%1"=="fmt" (
 echo OK
 exit /b 0
 `
-		os.WriteFile(scriptPath, []byte(script), 0755)
+		//nolint:gosec // G306: scripts need execute permissions
+		_ = os.WriteFile(scriptPath, []byte(script), 0750)
 	} else {
 		scriptPath = filepath.Join(tmpDir, "fake-tofu")
 		script := `#!/bin/sh
@@ -478,7 +474,8 @@ case "$1" in
   *) echo OK; exit 0;;
 esac
 `
-		os.WriteFile(scriptPath, []byte(script), 0755)
+		//nolint:gosec // G306: scripts need execute permissions
+		_ = os.WriteFile(scriptPath, []byte(script), 0750)
 	}
 
 	executor := NewExecutor(
@@ -537,12 +534,14 @@ func TestRunMethodFailure(t *testing.T) {
 	tmpDir := t.TempDir()
 	var scriptPath string
 
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == osWindows {
 		scriptPath = filepath.Join(tmpDir, "fail-tofu.bat")
-		os.WriteFile(scriptPath, []byte("@echo off\necho Error: something failed >&2\nexit /b 1\n"), 0755)
+		//nolint:gosec // G306: scripts need execute permissions
+		_ = os.WriteFile(scriptPath, []byte("@echo off\necho Error: something failed >&2\nexit /b 1\n"), 0750)
 	} else {
 		scriptPath = filepath.Join(tmpDir, "fail-tofu")
-		os.WriteFile(scriptPath, []byte("#!/bin/sh\necho 'Error: something failed' >&2\nexit 1\n"), 0755)
+		//nolint:gosec // G306: scripts need execute permissions
+		_ = os.WriteFile(scriptPath, []byte("#!/bin/sh\necho 'Error: something failed' >&2\nexit 1\n"), 0750)
 	}
 
 	executor := NewExecutor(
@@ -569,12 +568,14 @@ func TestRunMethodTimeout(t *testing.T) {
 	tmpDir := t.TempDir()
 	var scriptPath string
 
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == osWindows {
 		scriptPath = filepath.Join(tmpDir, "slow-tofu.bat")
-		os.WriteFile(scriptPath, []byte("@echo off\nping -n 10 127.0.0.1 > nul\n"), 0755)
+		//nolint:gosec // G306: scripts need execute permissions
+		_ = os.WriteFile(scriptPath, []byte("@echo off\nping -n 10 127.0.0.1 > nul\n"), 0750)
 	} else {
 		scriptPath = filepath.Join(tmpDir, "slow-tofu")
-		os.WriteFile(scriptPath, []byte("#!/bin/sh\nsleep 10\n"), 0755)
+		//nolint:gosec // G306: scripts need execute permissions
+		_ = os.WriteFile(scriptPath, []byte("#!/bin/sh\nsleep 10\n"), 0750)
 	}
 
 	executor := NewExecutor(
@@ -597,12 +598,14 @@ func TestRunEnvironment(t *testing.T) {
 	tmpDir := t.TempDir()
 	var scriptPath string
 
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == osWindows {
 		scriptPath = filepath.Join(tmpDir, "env-tofu.bat")
-		os.WriteFile(scriptPath, []byte("@echo off\necho TF_IN_AUTOMATION=%TF_IN_AUTOMATION%\necho TF_INPUT=%TF_INPUT%\n"), 0755)
+		//nolint:gosec // G306: scripts need execute permissions
+		_ = os.WriteFile(scriptPath, []byte("@echo off\necho TF_IN_AUTOMATION=%TF_IN_AUTOMATION%\necho TF_INPUT=%TF_INPUT%\n"), 0750)
 	} else {
 		scriptPath = filepath.Join(tmpDir, "env-tofu")
-		os.WriteFile(scriptPath, []byte("#!/bin/sh\necho TF_IN_AUTOMATION=$TF_IN_AUTOMATION\necho TF_INPUT=$TF_INPUT\n"), 0755)
+		//nolint:gosec // G306: scripts need execute permissions
+		_ = os.WriteFile(scriptPath, []byte("#!/bin/sh\necho TF_IN_AUTOMATION=$TF_IN_AUTOMATION\necho TF_INPUT=$TF_INPUT\n"), 0750)
 	}
 
 	executor := NewExecutor(
@@ -623,12 +626,14 @@ func TestPlanExitCode2(t *testing.T) {
 	tmpDir := t.TempDir()
 	var scriptPath string
 
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == osWindows {
 		scriptPath = filepath.Join(tmpDir, "plan-tofu.bat")
-		os.WriteFile(scriptPath, []byte(fmt.Sprintf("@echo off\necho Plan: 2 to add, 0 to change, 0 to destroy.\nexit /b 2\n")), 0755)
+		//nolint:gosec // G306: scripts need execute permissions
+		_ = os.WriteFile(scriptPath, []byte("@echo off\necho Plan: 2 to add, 0 to change, 0 to destroy.\nexit /b 2\n"), 0750)
 	} else {
 		scriptPath = filepath.Join(tmpDir, "plan-tofu")
-		os.WriteFile(scriptPath, []byte("#!/bin/sh\necho 'Plan: 2 to add, 0 to change, 0 to destroy.'\nexit 2\n"), 0755)
+		//nolint:gosec // G306: scripts need execute permissions
+		_ = os.WriteFile(scriptPath, []byte("#!/bin/sh\necho 'Plan: 2 to add, 0 to change, 0 to destroy.'\nexit 2\n"), 0750)
 	}
 
 	executor := NewExecutor(

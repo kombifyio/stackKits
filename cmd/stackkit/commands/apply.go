@@ -13,10 +13,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	applyAutoApprove bool
-	applyPlanFile    string
-)
+var applyAutoApprove bool
 
 var applyCmd = &cobra.Command{
 	Use:   "apply [plan-file]",
@@ -51,10 +48,15 @@ func runApply(cmd *cobra.Command, args []string) error {
 
 	printInfo("Applying deployment: %s (%s variant)", spec.StackKit, spec.Variant)
 
-	// Determine deploy directory
+	// Determine deploy directory — auto-generate if missing
 	deployDir := filepath.Join(wd, config.GetDeployDir())
-	if _, err := os.Stat(deployDir); os.IsNotExist(err) {
-		return fmt.Errorf("deploy directory not found: %s\nRun 'stackkit init' first", deployDir)
+	if _, statErr := os.Stat(deployDir); os.IsNotExist(statErr) {
+		printInfo("Deploy directory not found, running generate...")
+		genOutputDir = config.GetDeployDir()
+		genForce = false
+		if genErr := runGenerate(cmd, nil); genErr != nil {
+			return fmt.Errorf("auto-generate failed: %w", genErr)
+		}
 	}
 
 	// Get plan file if provided
@@ -76,10 +78,10 @@ func runApply(cmd *cobra.Command, args []string) error {
 
 	// Initialize if needed
 	tfStatePath := filepath.Join(deployDir, ".terraform")
-	if _, err := os.Stat(tfStatePath); os.IsNotExist(err) {
+	if _, statErr := os.Stat(tfStatePath); os.IsNotExist(statErr) {
 		printInfo("Initializing %s...", executor.Mode())
-		if err := executor.Init(ctx); err != nil {
-			return fmt.Errorf("init error: %w", err)
+		if initErr := executor.Init(ctx); initErr != nil {
+			return fmt.Errorf("init error: %w", initErr)
 		}
 		printSuccess("Initialized successfully")
 	}
@@ -117,10 +119,10 @@ func runApply(cmd *cobra.Command, args []string) error {
 	}
 
 	stateFile := filepath.Join(wd, ".stackkit", "state.yaml")
-	if err := os.MkdirAll(filepath.Dir(stateFile), 0755); err != nil {
-		printWarning("Failed to create state directory: %v", err)
-	} else if err := loader.SaveDeploymentState(state, stateFile); err != nil {
-		printWarning("Failed to save deployment state: %v", err)
+	if mkdirErr := os.MkdirAll(filepath.Dir(stateFile), 0750); mkdirErr != nil {
+		printWarning("Failed to create state directory: %v", mkdirErr)
+	} else if saveErr := loader.SaveDeploymentState(state, stateFile); saveErr != nil {
+		printWarning("Failed to save deployment state: %v", saveErr)
 	}
 
 	fmt.Println()
