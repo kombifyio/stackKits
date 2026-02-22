@@ -143,7 +143,7 @@ import "github.com/kombihq/stackkits/base"
 
 	network: {
 		ports: [
-			{host: 3002, container: 3000, protocol: "tcp", description: "Web UI"},
+			{host: 4002, container: 3000, protocol: "tcp", description: "Web UI"},
 		]
 		traefik: {
 			enabled: true
@@ -220,27 +220,27 @@ import "github.com/kombihq/stackkits/base"
 	type:        "auth"
 	required:    false
 	enabled:     false // Disabled by default
-	image:       "stonith404/pocket-id"
-	tag:         "latest"
+	image:       "ghcr.io/pocket-id/pocket-id"
+	tag:         "v1"
 	description: "Self-hosted OIDC provider for single sign-on"
 	needs:       ["traefik"]
 
 	network: {
 		ports: [
-			{host: 3003, container: 3000, protocol: "tcp", description: "Web UI"},
+			{host: 4003, container: 80, protocol: "tcp", description: "Web UI"},
 		]
 		traefik: {
 			enabled: true
 			rule:    "Host(`id.{{.domain}}`)"
 			tls:     true
-			port:    3000
+			port:    80
 		}
 	}
 
 	volumes: [
 		{
 			source:      "pocketid-data"
-			target:      "/app/data"
+			target:      "/app/backend/data"
 			type:        "volume"
 			backup:      true
 			description: "PocketID database and config"
@@ -248,15 +248,16 @@ import "github.com/kombihq/stackkits/base"
 	]
 
 	environment: {
-		"TZ":            "Europe/Berlin"
-		"PUBLIC_APP_URL": "https://id.{{.domain}}"
+		"TZ":              "Europe/Berlin"
+		"PUBLIC_APP_URL":  "https://id.{{.domain}}"
+		"TRUST_PROXY":     "true"
 	}
 
 	healthCheck: {
 		enabled: true
 		http: {
 			path:   "/api/health"
-			port:   3000
+			port:   80
 			scheme: "http"
 		}
 		interval:    "30s"
@@ -276,7 +277,7 @@ import "github.com/kombihq/stackkits/base"
 		"traefik.http.routers.pocketid.entrypoints":           "websecure"
 		"traefik.http.routers.pocketid.rule":                  "Host(`id.{{.domain}}`)"
 		"traefik.http.routers.pocketid.tls.certresolver":      "letsencrypt"
-		"traefik.http.services.pocketid.loadbalancer.server.port": "3000"
+		"traefik.http.services.pocketid.loadbalancer.server.port": "80"
 		// Layer classification
 		"stackkit.layer":      "2-platform"
 		"stackkit.managed-by": "terraform"
@@ -313,11 +314,11 @@ import "github.com/kombihq/stackkits/base"
 
 	network: {
 		ports: [
-			{host: 3000, container: 3000, protocol: "tcp", description: "Web UI"},
+			{host: 4000, container: 3000, protocol: "tcp", description: "Web UI"},
 		]
 		traefik: {
 			enabled: true
-			rule:    "Host(`deploy.{{.domain}}`)"
+			rule:    "Host(`dokploy.{{.domain}}`)"
 			tls:     true
 			port:    3000
 		}
@@ -367,7 +368,7 @@ import "github.com/kombihq/stackkits/base"
 	labels: {
 		"traefik.enable":                                       "true"
 		"traefik.http.routers.dokploy.entrypoints":             "websecure"
-		"traefik.http.routers.dokploy.rule":                    "Host(`deploy.{{.domain}}`)"
+		"traefik.http.routers.dokploy.rule":                    "Host(`dokploy.{{.domain}}`)"
 		"traefik.http.routers.dokploy.tls.certresolver":        "letsencrypt"
 		"traefik.http.services.dokploy.loadbalancer.server.port": "3000"
 		// Layer classification
@@ -376,7 +377,7 @@ import "github.com/kombihq/stackkits/base"
 	}
 
 	output: {
-		url:         "https://deploy.{{.domain}}"
+		url:         "https://dokploy.{{.domain}}"
 		description: "Dokploy Dashboard - Deploy and manage applications"
 		credentials: {
 			defaultUser: "admin"
@@ -505,11 +506,11 @@ import "github.com/kombihq/stackkits/base"
 
 	network: {
 		ports: [
-			{host: 3001, container: 3001, protocol: "tcp", description: "Web UI"},
+			{host: 4001, container: 3001, protocol: "tcp", description: "Web UI"},
 		]
 		traefik: {
 			enabled: true
-			rule:    "Host(`status.{{.domain}}`)"
+			rule:    "Host(`kuma.{{.domain}}`)"
 			tls:     true
 			port:    3001
 		}
@@ -547,7 +548,7 @@ import "github.com/kombihq/stackkits/base"
 	labels: {
 		"traefik.enable":                                           "true"
 		"traefik.http.routers.uptime-kuma.entrypoints":             "websecure"
-		"traefik.http.routers.uptime-kuma.rule":                    "Host(`status.{{.domain}}`)"
+		"traefik.http.routers.uptime-kuma.rule":                    "Host(`kuma.{{.domain}}`)"
 		"traefik.http.routers.uptime-kuma.tls.certresolver":        "letsencrypt"
 		"traefik.http.services.uptime-kuma.loadbalancer.server.port": "3001"
 		// Layer classification - deployed via PAAS (Dokploy)
@@ -556,7 +557,7 @@ import "github.com/kombihq/stackkits/base"
 	}
 
 	output: {
-		url:         "https://status.{{.domain}}"
+		url:         "https://kuma.{{.domain}}"
 		description: "Uptime Kuma - Service status and monitoring"
 		credentials: {
 			note: "Create admin account on first access"
@@ -1093,22 +1094,27 @@ import "github.com/kombihq/stackkits/base"
 // SERVICE COLLECTIONS (Pre-defined Service Sets)
 // =============================================================================
 
-// #DefaultServices - Standard deployment (Dokploy-based)
+// #DefaultServices - Standard deployment (Dokploy-based, with identity)
+// Service enablement is controlled by tfvars at deployment time.
 #DefaultServices: {
 	traefik:    #TraefikService
+	tinyauth:   #TinyAuthService
+	pocketid:   #PocketIDService
 	dokploy:    #DokployService
 	uptimeKuma: #UptimeKumaService
 	dozzle:     #DozzleService
 	whoami:     #WhoamiService
 }
 
-// #DefaultServicesWithBeszel - Alternative monitoring
+// #DefaultServicesWithBeszel - Alternative monitoring (with identity)
 #DefaultServicesWithBeszel: {
-	traefik: #TraefikService
-	dokploy: #DokployService
-	beszel:  #BeszelService
-	dozzle:  #DozzleService
-	whoami:  #WhoamiService
+	traefik:  #TraefikService
+	tinyauth: #TinyAuthService
+	pocketid: #PocketIDService
+	dokploy:  #DokployService
+	beszel:   #BeszelService
+	dozzle:   #DozzleService
+	whoami:   #WhoamiService
 }
 
 // #DefaultServicesWithAuth - With platform identity (TinyAuth)

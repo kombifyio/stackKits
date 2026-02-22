@@ -1,177 +1,72 @@
-# base-homelab Default Spec
-# Single-Server Homelab mit Docker-Services
-# Für CLI-Only Nutzung ohne kombify Stack UI
+# base-homelab Stack Specification
 #
-# Verwendung:
-#   1. Kopiere diese Datei: cp default-spec.yaml my-homelab-spec.yaml
-#   2. Passe Werte an (IP, SSH-User; Domains optional)
-#   3. Führe aus: stackkit apply my-homelab-spec.yaml
+# Single-server homelab with identity, reverse proxy, PaaS, and monitoring.
 #
-# Version: 1.0
-# StackKit: base-homelab
-# Variant: os/ubuntu-24 (Ubuntu 24.04 LTS)
-# Network Mode: local (Docker-only, keine Public Services)
+# Usage:
+#   1. Copy: cp default-spec.yaml stack-spec.yaml
+#   2. Adjust: IP, SSH user, domain (optional)
+#   3. Deploy: stackkit generate && stackkit apply
+#
+# Architecture:
+#   L1 Foundation  - PocketID (OIDC), TinyAuth (ForwardAuth)
+#   L2 Platform    - Traefik, Dokploy + PostgreSQL + Redis, Dashboard
+#   L3 Application - Uptime Kuma, Whoami (deployed via Compose)
+#
+# All services accessible at <service>.stack.local (or your domain).
+# All protected by TinyAuth ForwardAuth middleware.
 
-version: "1.0"
-
-stack:
-  name: base-homelab-default
-  kit: base-homelab
-  variant: os/ubuntu-24
-  addons: []
-
-nodes:
-  - name: homelab-server
-    type: main
-    provider: local
-    ip: 192.168.1.100  # ⚠️ ANPASSEN: Deine Server-IP
-    ssh:
-      host: 192.168.1.100  # ⚠️ ANPASSEN: Gleiche IP
-      port: 22
-      user: admin  # ⚠️ ANPASSEN: Dein SSH-User
-      key_path: ~/.ssh/id_ed25519  # ⚠️ ANPASSEN: Dein SSH-Key
-    os:
-      type: ubuntu
-      version: "24.04"
-      arch: amd64
-    compute:
-      tier: standard
-      min_ram_gb: 4
-      min_cpu_cores: 2
-    docker:
-      version: "27.5.1"
-      installed: false  # StackKit installiert Docker automatisch
-
-services:
-  # Traefik - Reverse Proxy & SSL
-  - name: traefik
-    type: reverse-proxy
-    node: homelab-server
-    image: traefik:v3.2
-    ports:
-      - 80   # HTTP
-      - 443  # HTTPS
-      - 8080 # Dashboard (nur localhost)
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /opt/kombistack/traefik/config:/etc/traefik
-      - /opt/kombistack/traefik/certs:/certs
-    env:
-      TRAEFIK_API_DASHBOARD: "true"
-      TRAEFIK_API_INSECURE: "true"  # Dashboard auf :8080
-      TRAEFIK_PROVIDERS_DOCKER: "true"
-      TRAEFIK_PROVIDERS_DOCKER_EXPOSEDBYDEFAULT: "false"
-      TRAEFIK_ENTRYPOINTS_WEB_ADDRESS: ":80"
-      TRAEFIK_ENTRYPOINTS_WEBSECURE_ADDRESS: ":443"
-    labels:
-      kombistack.service: traefik
-      kombistack.managed: "true"
-      traefik.enable: "false"  # Traefik managed sich nicht selbst
-
-  # Dokploy - App Deployment Platform
-  - name: dokploy
-    type: deployment-platform
-    node: homelab-server
-    image: dokploy/dokploy:latest
-    ports:
-      - 3000  # Web UI
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - /opt/kombistack/dokploy/data:/app/data
-    env:
-      DATABASE_URL: postgresql://dokploy:dokploy@postgres:5432/dokploy
-      NEXTAUTH_URL: http://192.168.1.100:3000  # ⚠️ ANPASSEN: Deine Server-IP
-      NEXTAUTH_SECRET: changeme_generate_random_secret_32chars  # ⚠️ ANPASSEN!
-    labels:
-      kombistack.service: dokploy
-      kombistack.managed: "true"
-      traefik.enable: "true"
-      traefik.http.routers.dokploy.rule: Host(`dokploy.local`)  # ⚠️ ANPASSEN: Domain
-      traefik.http.services.dokploy.loadbalancer.server.port: "3000"
-    needs:
-      - postgres
-
-  # PostgreSQL - Database für Dokploy
-  - name: postgres
-    type: database
-    node: homelab-server
-    image: postgres:16-alpine
-    ports:
-      - 5432
-    volumes:
-      - /opt/kombistack/postgres/data:/var/lib/postgresql/data
-    env:
-      POSTGRES_DB: dokploy
-      POSTGRES_USER: dokploy
-      POSTGRES_PASSWORD: changeme_generate_strong_password  # ⚠️ ANPASSEN!
-    labels:
-      kombistack.service: postgres
-      kombistack.managed: "true"
-      traefik.enable: "false"
-
-  # Uptime Kuma - Monitoring & Uptime
-  - name: uptime-kuma
-    type: monitoring
-    node: homelab-server
-    image: louislam/uptime-kuma:1
-    ports:
-      - 3001
-    volumes:
-      - /opt/kombistack/uptime-kuma/data:/app/data
-    labels:
-      kombistack.service: uptime-kuma
-      kombistack.managed: "true"
-      traefik.enable: "true"
-      traefik.http.routers.uptime.rule: Host(`uptime.local`)  # ⚠️ ANPASSEN: Domain
-      traefik.http.services.uptime.loadbalancer.server.port: "3001"
+name: my-homelab
+stackkit: base-homelab
+variant: default
+mode: simple
+domain: stack.local
+email: admin@stack.local
 
 network:
   mode: local
-  docker_network: kombi_net
   subnet: 172.20.0.0/16
-  gateway: 172.20.0.1
 
-metadata:
-  created_at: "2026-01-10T12:00:00Z"
-  description: "Default base-homelab configuration with Traefik, Dokploy, PostgreSQL, and Uptime Kuma"
-  unifier_version: "n/a"  # CLI-only, kein Unifier
-  stackkit_version: "1.0.0"
-  tags:
-    - homelab
-    - docker
-    - single-server
+compute:
+  tier: standard
 
-# Anleitung: Was musst du anpassen?
+ssh:
+  user: admin
+  port: 22
+  keyPath: ~/.ssh/id_ed25519
+
+nodes:
+  - name: homelab-server
+    role: standalone
+    ip: 192.168.1.100  # ADJUST: Your server IP
+
+# What to adjust:
 #
-# 1. IP-Adressen (3 Stellen):
-#    - nodes[0].ip
-#    - nodes[0].ssh.host
-#    - services[1].env.NEXTAUTH_URL (Dokploy)
+#   Required:
+#     nodes[0].ip      - Your server's IP address
+#     ssh.user         - Your SSH username (e.g. "admin", "ubuntu")
+#     ssh.keyPath      - Path to your SSH private key
 #
-# 2. SSH-Konfiguration:
-#    - nodes[0].ssh.user (z.B. "admin", "kombi", "ubuntu")
-#    - nodes[0].ssh.key_path (Pfad zu deinem SSH-Key)
+#   Optional:
+#     domain           - Your domain (default: stack.local)
+#     email            - ACME email for Let's Encrypt certificates
 #
-# 3. Secrets (3 Stellen):
-#    - services[1].env.NEXTAUTH_SECRET (Dokploy)
-#    - services[2].env.POSTGRES_PASSWORD
+# DNS setup (add to /etc/hosts or use dnsmasq):
+#   192.168.1.100  auth.stack.local
+#   192.168.1.100  id.stack.local
+#   192.168.1.100  traefik.stack.local
+#   192.168.1.100  dokploy.stack.local
+#   192.168.1.100  base.stack.local
+#   192.168.1.100  kuma.stack.local
+#   192.168.1.100  whoami.stack.local
+#   Or wildcard: *.stack.local -> 192.168.1.100
 #
-#    Generiere mit: openssl rand -hex 32
+# First login:
+#   1. Open http://auth.stack.local -> TinyAuth
+#      Username: admin  |  Password: admin123
+#      CHANGE PASSWORD IMMEDIATELY
+#   2. Open http://dokploy.stack.local (redirects through TinyAuth)
+#   3. Uptime Kuma and Whoami are auto-deployed
 #
-# 4. Domains (optional, 2 Stellen):
-#    - services[1].labels.traefik.http.routers.dokploy.rule
-#    - services[3].labels.traefik.http.routers.uptime.rule
-#
-#    Optionen:
-#    - Host(`app.local`) - Für /etc/hosts Eintrag
-#    - Host(`app.yourdomain.com`) - Für echte Domain
-#    - Host(`192.168.1.100`) - Direkte IP (ohne DNS)
-#
-# 5. (Optional) Hardware:
-#    - nodes[0].compute.tier: low | standard | high
-#    - nodes[0].compute.min_ram_gb
-#    - nodes[0].compute.min_cpu_cores
-#
-# Nach Anpassung:
-#   stackkit validate my-homelab-spec.yaml  # Prüfen
-#   stackkit apply my-homelab-spec.yaml     # Provisionieren
+# Secrets:
+#   Generated automatically by OpenTofu (random_password).
+#   No manual secret setup required.

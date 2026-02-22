@@ -263,7 +263,7 @@ package base
 
 // #PortMapping defines a port mapping
 #PortMapping: {
-	host:         uint16 & >0 & <=65535
+	host?:        uint16 & >0 & <=65535
 	container:    uint16 & >0 & <=65535
 	protocol:     "tcp" | "udp" | *"tcp"
 	description?: string // Optional description for documentation
