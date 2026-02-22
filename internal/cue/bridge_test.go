@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"cuelang.org/go/cue/cuecontext"
+	"github.com/kombihq/stackkits/pkg/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -490,5 +491,182 @@ name: string
 		bridge := NewTerraformBridge(tmpDir)
 		err := bridge.ValidateBeforeGeneration()
 		assert.Error(t, err)
+	})
+}
+
+// --- Tests for GenerateTFVarsFromSpec ---
+
+func TestGenerateTFVarsFromSpec(t *testing.T) {
+	t.Run("generates complete tfvars from spec with domain", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		bridge := NewTerraformBridge(tmpDir)
+
+		spec := &models.StackSpec{
+			Name:     "my-homelab",
+			StackKit: "base-homelab",
+			Domain:   "homelab.example.com",
+			Email:    "admin@example.com",
+			Variant:  "beszel",
+			Compute:  models.ComputeSpec{Tier: "high"},
+			Nodes: []models.NodeSpec{
+				{Name: "server1", IP: "192.168.1.100", Role: "standalone"},
+			},
+		}
+
+		outputDir := filepath.Join(tmpDir, "output")
+		err := bridge.GenerateTFVarsFromSpec(spec, outputDir)
+		require.NoError(t, err)
+
+		data, err := os.ReadFile(filepath.Join(outputDir, "terraform.tfvars.json"))
+		require.NoError(t, err)
+
+		var tfvars TFVars
+		require.NoError(t, json.Unmarshal(data, &tfvars))
+
+		assert.Equal(t, "homelab.example.com", tfvars.Domain)
+		assert.Equal(t, "admin@example.com", tfvars.ACMEEmail)
+		assert.Equal(t, "proxy", tfvars.AccessMode)
+		assert.True(t, tfvars.EnableHTTPS)
+		assert.True(t, tfvars.EnableLetsEncrypt)
+		assert.Equal(t, "beszel", tfvars.Variant)
+		assert.Equal(t, "high", tfvars.ComputeTier)
+		assert.Equal(t, "192.168.1.100", tfvars.AdvertiseHost)
+	})
+
+	t.Run("generates minimal tfvars for local mode", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		bridge := NewTerraformBridge(tmpDir)
+
+		spec := &models.StackSpec{
+			Name:     "local-homelab",
+			StackKit: "base-homelab",
+		}
+
+		outputDir := filepath.Join(tmpDir, "output")
+		err := bridge.GenerateTFVarsFromSpec(spec, outputDir)
+		require.NoError(t, err)
+
+		data, err := os.ReadFile(filepath.Join(outputDir, "terraform.tfvars.json"))
+		require.NoError(t, err)
+
+		var tfvars TFVars
+		require.NoError(t, json.Unmarshal(data, &tfvars))
+
+		assert.Equal(t, "ports", tfvars.AccessMode)
+		assert.Equal(t, "default", tfvars.Variant)
+		assert.Equal(t, "standard", tfvars.ComputeTier)
+		assert.False(t, tfvars.EnableHTTPS)
+		assert.False(t, tfvars.EnableLetsEncrypt)
+		assert.Empty(t, tfvars.Domain)
+	})
+
+	t.Run("email without domain does not enable letsencrypt", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		bridge := NewTerraformBridge(tmpDir)
+
+		spec := &models.StackSpec{
+			Name:     "email-only",
+			StackKit: "base-homelab",
+			Email:    "admin@example.com",
+		}
+
+		outputDir := filepath.Join(tmpDir, "output")
+		err := bridge.GenerateTFVarsFromSpec(spec, outputDir)
+		require.NoError(t, err)
+
+		data, err := os.ReadFile(filepath.Join(outputDir, "terraform.tfvars.json"))
+		require.NoError(t, err)
+
+		var tfvars TFVars
+		require.NoError(t, json.Unmarshal(data, &tfvars))
+
+		assert.Equal(t, "ports", tfvars.AccessMode)
+		assert.False(t, tfvars.EnableLetsEncrypt)
+		assert.Equal(t, "admin@example.com", tfvars.ACMEEmail)
+	})
+
+	t.Run("ignores auto compute tier", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		bridge := NewTerraformBridge(tmpDir)
+
+		spec := &models.StackSpec{
+			Name:     "auto-tier",
+			StackKit: "base-homelab",
+			Compute:  models.ComputeSpec{Tier: "auto"},
+		}
+
+		outputDir := filepath.Join(tmpDir, "output")
+		err := bridge.GenerateTFVarsFromSpec(spec, outputDir)
+		require.NoError(t, err)
+
+		data, err := os.ReadFile(filepath.Join(outputDir, "terraform.tfvars.json"))
+		require.NoError(t, err)
+
+		var tfvars TFVars
+		require.NoError(t, json.Unmarshal(data, &tfvars))
+
+		assert.Equal(t, "standard", tfvars.ComputeTier)
+	})
+
+	t.Run("extracts service port overrides", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		bridge := NewTerraformBridge(tmpDir)
+
+		spec := &models.StackSpec{
+			Name:     "custom-ports",
+			StackKit: "base-homelab",
+			Services: map[string]any{
+				"traefik": map[string]any{"port": 9090},
+				"dozzle":  map[string]any{"port": 9999},
+			},
+		}
+
+		outputDir := filepath.Join(tmpDir, "output")
+		err := bridge.GenerateTFVarsFromSpec(spec, outputDir)
+		require.NoError(t, err)
+
+		data, err := os.ReadFile(filepath.Join(outputDir, "terraform.tfvars.json"))
+		require.NoError(t, err)
+
+		var tfvars TFVars
+		require.NoError(t, json.Unmarshal(data, &tfvars))
+
+		assert.Equal(t, 9090, tfvars.TraefikDashboardPort)
+		assert.Equal(t, 9999, tfvars.DozzlePort)
+	})
+}
+
+func TestSpecToTFVars(t *testing.T) {
+	bridge := NewTerraformBridge(".")
+
+	t.Run("returns sensible defaults for empty spec", func(t *testing.T) {
+		spec := &models.StackSpec{}
+		tfvars := bridge.specToTFVars(spec)
+
+		assert.Equal(t, "ports", tfvars.AccessMode)
+		assert.Equal(t, "default", tfvars.Variant)
+		assert.Equal(t, "standard", tfvars.ComputeTier)
+		assert.Equal(t, "0.0.0.0", tfvars.BindAddress)
+		assert.False(t, tfvars.EnableHTTPS)
+		assert.False(t, tfvars.EnableLetsEncrypt)
+	})
+
+	t.Run("domain triggers proxy mode and HTTPS", func(t *testing.T) {
+		spec := &models.StackSpec{Domain: "test.example.com"}
+		tfvars := bridge.specToTFVars(spec)
+
+		assert.Equal(t, "proxy", tfvars.AccessMode)
+		assert.True(t, tfvars.EnableHTTPS)
+		assert.False(t, tfvars.EnableLetsEncrypt)
+	})
+
+	t.Run("domain + email enables letsencrypt", func(t *testing.T) {
+		spec := &models.StackSpec{
+			Domain: "test.example.com",
+			Email:  "admin@example.com",
+		}
+		tfvars := bridge.specToTFVars(spec)
+
+		assert.True(t, tfvars.EnableLetsEncrypt)
 	})
 }

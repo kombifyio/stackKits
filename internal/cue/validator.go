@@ -117,6 +117,17 @@ func (v *Validator) ValidateSpec(spec *models.StackSpec) (*models.ValidationResu
 		})
 	}
 
+	// Validate context
+	validContexts := map[string]bool{"local": true, "cloud": true, "pi": true}
+	if spec.Context != "" && !validContexts[spec.Context] {
+		result.Valid = false
+		result.Errors = append(result.Errors, models.ValidationError{
+			Path:    "context",
+			Message: fmt.Sprintf("invalid context '%s', must be one of: local, cloud, pi", spec.Context),
+			Code:    "INVALID_VALUE",
+		})
+	}
+
 	// Validate compute tier
 	validTiers := map[string]bool{"low": true, "standard": true, "high": true}
 	if spec.Compute.Tier != "" && !validTiers[spec.Compute.Tier] {

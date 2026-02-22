@@ -33,10 +33,11 @@ var (
 
 // Global flags
 var (
-	verbose  bool
-	quiet    bool
-	workDir  string
-	specFile string
+	verbose     bool
+	quiet       bool
+	workDir     string
+	specFile    string
+	contextFlag string
 )
 
 // rootCmd represents the base command
@@ -73,6 +74,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolVarP(&quiet, "quiet", "q", false, "Suppress non-essential output")
 	rootCmd.PersistentFlags().StringVarP(&workDir, "chdir", "C", ".", "Change to directory before running")
 	rootCmd.PersistentFlags().StringVarP(&specFile, "spec", "s", "stack-spec.yaml", "Path to stack specification file")
+	rootCmd.PersistentFlags().StringVar(&contextFlag, "context", "", "Node context override (local, cloud, pi). Auto-detected if omitted.")
 
 	// Add subcommands
 	rootCmd.AddCommand(initCmd)
@@ -85,6 +87,7 @@ func init() {
 	rootCmd.AddCommand(validateCmd)
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(completionCmd)
+	rootCmd.AddCommand(addonCmd)
 }
 
 // Helper functions for output
@@ -114,6 +117,22 @@ func printInfo(format string, args ...interface{}) {
 		fmt.Printf("%s %s\n", cyan("ℹ"), fmt.Sprintf(format, args...))
 	}
 }
+
+// printVerbose prints verbose output
+func printVerbose(format string, args ...interface{}) {
+	if verbose {
+		fmt.Printf("  %s\n", fmt.Sprintf(format, args...))
+	}
+}
+
+// contextOrDefault returns the context display string
+func contextOrDefault(ctx string) string {
+	if ctx == "" {
+		return "auto-detect"
+	}
+	return ctx
+}
+
 
 // getWorkDir returns the effective working directory
 func getWorkDir() string {

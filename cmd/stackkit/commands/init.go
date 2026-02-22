@@ -266,6 +266,7 @@ func printInitSummary(stackkitName, variant, mode, computeTier, domain, email st
 	fmt.Printf("  %s: %s\n", bold("Variant"), variant)
 	fmt.Printf("  %s: %s\n", bold("Mode"), mode)
 	fmt.Printf("  %s: %s\n", bold("Compute"), computeTier)
+	fmt.Printf("  %s: %s\n", bold("Context"), contextOrDefault(contextFlag))
 	if domain != "" {
 		fmt.Printf("  %s: %s\n", bold("Domain"), domain)
 	}

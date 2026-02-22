@@ -78,12 +78,14 @@ type StackSpec struct {
 	StackKit    string            `yaml:"stackkit" json:"stackkit"`
 	Variant     string            `yaml:"variant,omitempty" json:"variant,omitempty"`
 	Mode        string            `yaml:"mode,omitempty" json:"mode,omitempty"`
+	Context     string            `yaml:"context,omitempty" json:"context,omitempty"`
 	Domain      string            `yaml:"domain,omitempty" json:"domain,omitempty"`
 	Email       string            `yaml:"email,omitempty" json:"email,omitempty"`
 	Network     NetworkSpec       `yaml:"network,omitempty" json:"network,omitempty"`
 	Compute     ComputeSpec       `yaml:"compute,omitempty" json:"compute,omitempty"`
 	SSH         SSHSpec           `yaml:"ssh,omitempty" json:"ssh,omitempty"`
 	Nodes       []NodeSpec        `yaml:"nodes,omitempty" json:"nodes,omitempty"`
+	Addons      []string          `yaml:"addons,omitempty" json:"addons,omitempty"`
 	Services    map[string]any    `yaml:"services,omitempty" json:"services,omitempty"`
 	Environment map[string]string `yaml:"environment,omitempty" json:"environment,omitempty"`
 }

@@ -10,6 +10,9 @@ package base
 	// Variant selection (optional, defined by extending StackKits)
 	variant?: string
 
+	// Node context (auto-detected or user-specified via --context flag)
+	context?: #NodeContext
+
 	// Deployment mode (simple/advanced)
 	deploymentMode?: string
 
@@ -78,6 +81,9 @@ package base
 
 	// Node definitions (to be provided by user spec)
 	nodes: [...#NodeDefinition]
+
+	// Add-ons (composable capability extensions)
+	addons?: [string]: _
 
 	// Output URLs and documentation (optional)
 	outputs?: _

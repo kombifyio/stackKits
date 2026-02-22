@@ -50,8 +50,13 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load spec file: %w", err)
 	}
 
+	// Apply --context flag override if provided
+	if contextFlag != "" {
+		spec.Context = contextFlag
+	}
+
 	printInfo("Generating OpenTofu files for: %s", bold(spec.Name))
-	printInfo("StackKit: %s, Variant: %s, Mode: %s", spec.StackKit, spec.Variant, spec.Mode)
+	printInfo("StackKit: %s, Variant: %s, Mode: %s, Context: %s", spec.StackKit, spec.Variant, spec.Mode, contextOrDefault(spec.Context))
 
 	// Find StackKit directory
 	stackkitDir, err := loader.FindStackKitDir(spec.StackKit)

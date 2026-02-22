@@ -33,6 +33,13 @@ package backup
 		description: "Restic-based encrypted backups with 3-2-1 strategy"
 	}
 
+	_compatibility: {
+		stackkits: ["base-homelab", "dev-homelab", "modern-homelab", "ha-homelab"]
+		contexts:  ["local", "cloud", "pi"]
+		requires:  []
+		conflicts: []
+	}
+
 	enabled: bool | *true
 
 	// Backup engine
