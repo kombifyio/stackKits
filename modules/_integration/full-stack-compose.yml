@@ -175,6 +175,8 @@ services:
       PUBLIC_APP_URL: "http://id.test.local"
       TRUST_PROXY: "true"
       ENCRYPTION_KEY: "stack-test-encryption-key-32b!"
+      # Static API key for machine-level admin access (no passkey required)
+      STATIC_API_KEY: "stack-static-api-key-for-testing"
     volumes:
       - pocketid-data:/app/backend/data
     labels:
@@ -304,6 +306,8 @@ services:
   uptime-kuma:
     image: louislam/uptime-kuma:2
     container_name: stack-uptime-kuma
+    environment:
+      UPTIME_KUMA_DB_TYPE: sqlite
     volumes:
       - uptime-kuma-data:/app/data
     labels:
@@ -421,6 +425,87 @@ services:
     mem_limit: 32m
     cpus: 0.1
     restart: unless-stopped
+
+  # --- Provisioners (one-shot, run after services are healthy) ---
+  dokploy-provisioner:
+    image: alpine/curl:latest
+    container_name: stack-dokploy-provisioner
+    depends_on:
+      dokploy:
+        condition: service_healthy
+    command:
+      - sh
+      - -c
+      - |
+        echo "Provisioning Dokploy admin account..."
+        result=$$(curl -s -w "\n%{http_code}" -X POST http://dokploy:3000/api/auth/sign-up/email \
+          -H "Content-Type: application/json" \
+          -d '{"email":"admin@stack.local","password":"Admin1234!","name":"Admin","lastName":""}')
+        code=$$(echo "$$result" | tail -1)
+        body=$$(echo "$$result" | head -1)
+        echo "HTTP $$code: $$body"
+        if [ "$$code" = "200" ] || [ "$$code" = "201" ]; then
+          echo "Dokploy: admin created (admin@stack.local / Admin1234!)"
+        else
+          echo "Dokploy: response $$code (may already be configured)"
+        fi
+    networks:
+      - frontend
+    restart: "no"
+
+  pocketid-provisioner:
+    image: alpine/curl:latest
+    container_name: stack-pocketid-provisioner
+    depends_on:
+      pocketid:
+        condition: service_healthy
+    command:
+      - sh
+      - -c
+      - |
+        echo "Provisioning PocketID admin account..."
+        result=$$(curl -s -w "\n%{http_code}" -X POST http://pocketid:1411/api/signup/setup \
+          -H "Content-Type: application/json" \
+          -d '{"username":"admin","firstName":"Admin","lastName":"","email":"admin@stack.local","token":""}')
+        code=$$(echo "$$result" | tail -1)
+        body=$$(echo "$$result" | head -1)
+        echo "HTTP $$code: $$body"
+        if [ "$$code" = "200" ] || [ "$$code" = "201" ]; then
+          echo "PocketID: admin user created — visit id.test.local to register your passkey"
+        else
+          echo "PocketID: response $$code (may already be configured)"
+        fi
+    networks:
+      - frontend
+    restart: "no"
+
+  kuma-provisioner:
+    image: node:22-alpine
+    container_name: stack-kuma-provisioner
+    depends_on:
+      uptime-kuma:
+        condition: service_healthy
+    command:
+      - sh
+      - -c
+      - |
+        npm install --silent --prefix /tmp socket.io-client@4 2>/dev/null
+        node -e "
+          const { io } = require('/tmp/node_modules/socket.io-client');
+          const s = io('http://uptime-kuma:3001', { transports: ['websocket'] });
+          s.on('connect', () => {
+            s.emit('setup', 'admin', 'Admin1234!', (res) => {
+              if (res && res.ok) { console.log('Kuma: admin created (admin / Admin1234!)'); process.exit(0); }
+              console.log('Kuma: setup result:', JSON.stringify(res));
+              process.exit(0);
+            });
+            setTimeout(() => { console.log('Kuma: timeout (may already be configured)'); process.exit(0); }, 8000);
+          });
+          s.on('connect_error', (e) => { console.error('Kuma connect error:', e.message); process.exit(1); });
+        "
+    networks:
+      - frontend
+    restart: "no"
 
 networks:
   # Traefik + all routed services

@@ -113,20 +113,21 @@ const PORTAL_SERVICES = [
 // GET /api/portal/deployment — what was deployed
 app.get('/api/portal/deployment', (_req, res) => {
   const domain = process.env.DOMAIN || 'stack.local';
+  const kombifyBase = process.env.KOMBIFY_BASE_SUBDOMAIN || '';
+  const serviceUrl = (subdomain) => kombifyBase
+    ? `https://${kombifyBase}-${subdomain}.kombify.me`
+    : `https://${subdomain}.${domain}`;
   res.json({
     kit: { name: 'Base Homelab Kit', version: '1.0.0' },
-    domain,
+    domain: kombifyBase ? `${kombifyBase}.kombify.me` : domain,
     nodeCount: 1,
-    services: PORTAL_SERVICES.map(s => ({
-      ...s,
-      url: `https://${s.subdomain}.${domain}`,
-    })),
+    services: PORTAL_SERVICES.map(s => ({ ...s, url: serviceUrl(s.subdomain) })),
     config: {
       auth: 'TinyAuth + PocketID',
       paas: 'Dokploy',
       monitoring: 'Uptime Kuma',
       ingress: 'Traefik v3.3',
-      tls: domain.endsWith('.local') ? 'Self-signed' : "Let's Encrypt",
+      tls: kombifyBase ? 'kombify.me (managed)' : domain.endsWith('.local') ? 'Self-signed' : "Let's Encrypt",
     },
   });
 });

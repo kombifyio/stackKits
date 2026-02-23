@@ -35,8 +35,10 @@ services:
       - NET_BIND_SERVICE
 
   uptime-kuma:
-    image: louislam/uptime-kuma:1
+    image: louislam/uptime-kuma:2
     container_name: test-uptime-kuma
+    environment:
+      UPTIME_KUMA_DB_TYPE: sqlite
     volumes:
       - uptime-kuma-data:/app/data
     labels:
@@ -45,7 +47,7 @@ services:
       - "traefik.http.routers.uptime-kuma.entrypoints=web"
       - "traefik.http.services.uptime-kuma.loadbalancer.server.port=3001"
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"const http=require('http');const r=http.get('http://127.0.0.1:3001',s=>{process.exit(s.statusCode===200?0:1)});r.on('error',()=>process.exit(1))\""]
+      test: ["CMD-SHELL", "node -e \"const http=require('http');const r=http.get('http://127.0.0.1:3001',s=>{process.exit(s.statusCode<400?0:1)});r.on('error',()=>process.exit(1))\""]
       interval: 10s
       timeout: 5s
       retries: 15
@@ -56,8 +58,42 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - FOWNER
+      - DAC_OVERRIDE
     mem_limit: 512m
     cpus: 0.5
+
+  kuma-provisioner:
+    image: node:22-alpine
+    container_name: test-kuma-provisioner
+    depends_on:
+      uptime-kuma:
+        condition: service_healthy
+    command:
+      - sh
+      - -c
+      - |
+        npm install --silent --prefix /tmp socket.io-client@4 2>/dev/null
+        node -e "
+          const { io } = require('/tmp/node_modules/socket.io-client');
+          const s = io('http://uptime-kuma:3001', { transports: ['websocket'] });
+          s.on('connect', () => {
+            s.emit('setup', 'admin', 'Admin1234!', (res) => {
+              if (res && res.ok) { console.log('Kuma: admin created'); process.exit(0); }
+              console.log('Kuma: setup result:', JSON.stringify(res));
+              process.exit(0);
+            });
+            setTimeout(() => { console.log('Kuma: setup timeout (may already be configured)'); process.exit(0); }, 8000);
+          });
+          s.on('connect_error', (e) => { console.error('Kuma connect error:', e.message); process.exit(1); });
+        "
+    networks:
+      - test-net
+    restart: "no"
 
 networks:
   test-net:

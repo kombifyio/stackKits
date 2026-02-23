@@ -73,6 +73,29 @@ Files **deleted** (2026-02-23):
 - [x] Docker socket mount for label-based access control
 - [x] Health check works, configuration proven in E2E
 
+### E1.5: First-Boot Provisioning (Zero-Touch Deployments)
+
+> **Goal**: `stackkit apply` produces a fully usable stack. No setup wizards, no manual account creation.
+> **Principle**: A service showing a setup wizard after deploy is a broken StackKit.
+
+- [x] **Uptime Kuma v2**: `UPTIME_KUMA_DB_TYPE=sqlite` skips DB wizard; `kuma-provisioner` (node:22-alpine + socket.io-client) creates admin via Socket.IO `setup` event
+  - Verified: redirects to `/dashboard` not `/setup-database` after start
+  - Credentials: `admin / Admin1234!`
+- [x] **Dokploy**: `dokploy-provisioner` (alpine/curl) calls `POST /api/auth/sign-up/email` after service_healthy
+  - Idempotent: 422 USER_ALREADY_EXISTS on subsequent runs
+  - Credentials: `admin@stack.local / Admin1234!`
+- [x] **PocketID v2**: `STATIC_API_KEY` env var (machine API access) + `pocketid-provisioner` calls `POST /api/signup/setup`
+  - Admin user created headlessly with `isAdmin: true`
+  - Passkey registration still requires one browser visit (WebAuthn = browser-only by W3C spec, cannot be scripted)
+  - Credentials: `admin@stack.local` — passkey registered on first browser visit to `id.test.local`
+- [x] **LLDAP**: `lldap-provisioner` authenticates via `/auth/simple/login` then creates groups via GraphQL API
+  - Groups: `homelab_owner`, `homelab_operator`, `homelab_developer`, `homelab_viewer` — all HTTP 200
+  - Credentials: admin / `LLDAP_LDAP_USER_PASS` (set in CUE perma settings)
+- [x] **Provisioner pattern**: Formalize `#ProvisionerService` schema in CUE
+  - `restart: no`, `depends_on: service_healthy`, generated as one-shot Compose service
+  - Defined in `base/module.cue` — image, command, dependsOn, networks, environment
+- [ ] **Full-stack test update**: Add tests verifying no setup wizards (check redirect targets)
+
 ---
 
 ## EPIC 2: L1 Foundation — Host OS Security (0% implemented)
@@ -212,7 +235,7 @@ Files **deleted** (2026-02-23):
   - Settings perma: admin password, JWT secret, base DN
   - Settings flexible: LDAP port, HTTP port, LDAPS port
 - [x] Reference compose + integration test (11 tests: health, web UI, LDAP port, admin auth, hardening, routing)
-- [ ] Default groups: `homelab_owner`, `homelab_operator`, `homelab_developer`, `homelab_viewer`
+- [x] Default groups: `homelab_owner`, `homelab_operator`, `homelab_developer`, `homelab_viewer` (created by lldap-provisioner via GraphQL)
 - [ ] Integration with PocketID: LDAP user sync
 - [ ] Integration with TinyAuth: LLDAP group claims in OIDC tokens
 - [ ] Full-stack test: create user in LLDAP -> login via PocketID -> TinyAuth sees group claims
@@ -248,19 +271,23 @@ Files **deleted** (2026-02-23):
 > **Layer**: L2 Platform
 
 ### E5.1: AdGuard Home Module
-- [ ] Module CUE definition: `modules/adguard-home/module.cue`
-  - DNS filtering, ad/malware blocking
-  - Local DNS rewrites (`*.stack.local` -> internal IPs)
-  - DNS rebinding protection (critical)
-- [ ] Reference compose + integration test
-- [ ] Context-dependent upstream: Unbound (local/cloud) or Cloudflare DoH (pi)
+- [x] Module CUE definition: `modules/adguard-home/module.cue`
+  - Layer: L2-platform-dns (new layer added to base/module.cue)
+  - DNS filtering, ad/malware blocking, local DNS rewrites, DNS rebinding protection
+  - Context overrides: Unbound upstream for local/cloud, Cloudflare DoH for pi
+  - `adguard-provisioner`: calls `/control/install/configure` to skip setup wizard
+- [x] Reference compose + integration test (port 8899, DNS on 5353/udp)
+- [x] Context-dependent upstream: Unbound (local/cloud) or Cloudflare DoH (pi)
 
 ### E5.2: Unbound Module
-- [ ] Module CUE definition: `modules/unbound/module.cue`
-  - Recursive DNS resolver, DNSSEC validation
-  - No third-party DNS dependency
-- [ ] Reference compose + integration test
-- [ ] Chain: AdGuard Home -> Unbound -> root servers
+- [x] Module CUE definition: `modules/unbound/module.cue`
+  - Layer: L1-foundation
+  - Recursive DNS resolver with DNSSEC validation
+  - No third-party DNS dependency — resolves from root servers directly
+  - Port 5335 (non-privileged alternative to 53)
+- [x] Reference compose + integration test (DNS on 5335/udp)
+- [x] Chain: AdGuard Home -> Unbound -> root servers
+- [ ] Integrate into full-stack compose (after AdGuard Home + Unbound tested)
 
 ---
 
@@ -305,7 +332,7 @@ Files **deleted** (2026-02-23):
 
 ### E7.3: CI/CD Pipeline
 - [x] CUE validation on every PR (base/, base-homelab/, modern-homelab/, all modules/)
-- [x] Module integration tests — 12-module matrix (traefik, tinyauth, pocketid, dokploy, uptime-kuma, dozzle, whoami, dashboard, socket-proxy, crowdsec, lldap, step-ca)
+- [x] Module integration tests — 14-module matrix (traefik, tinyauth, pocketid, dokploy, uptime-kuma, dozzle, whoami, dashboard, socket-proxy, crowdsec, lldap, step-ca, adguard-home, unbound)
 - [x] Full-stack composition test (all base kit modules together, ~60 tests)
 - [x] ci-passed gate: lint + test + cue-validation + module-tests + composition-test
 - [ ] E2E test on main branch (scheduled, needs VM runner)

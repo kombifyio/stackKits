@@ -195,14 +195,14 @@ func generateTfvarsJSON(spec *models.StackSpec) []byte {
 		vars["enable_pocketid"] = true
 		vars["enable_dokploy"] = true
 		vars["enable_dokploy_apps"] = true
-		vars["enable_dashboard"] = true
+		vars["enable_dashboard"] = false
 	case "beszel":
 		vars["enable_traefik"] = true
 		vars["enable_tinyauth"] = true
 		vars["enable_pocketid"] = true
 		vars["enable_dokploy"] = true
 		vars["enable_dokploy_apps"] = true
-		vars["enable_dashboard"] = true
+		vars["enable_dashboard"] = false
 	case "minimal":
 		vars["enable_traefik"] = true
 		vars["enable_tinyauth"] = false

@@ -88,12 +88,12 @@ services:
     restart: unless-stopped
     ports:
       - "${ORCHESTRATOR_PORT:-9000}:9000"
+    environment:
+      DOMAIN: "${DOMAIN:-stack.local}"
+      KOMBIFY_BASE_SUBDOMAIN: "${KOMBIFY_BASE_SUBDOMAIN:-}"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - .:/workspace:ro
-    depends_on:
-      vm:
-        condition: service_healthy
     networks:
       - stackkits-net
 

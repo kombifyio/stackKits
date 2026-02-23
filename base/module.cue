@@ -34,6 +34,7 @@ package base
 	"L2-platform-ingress" |
 	"L2-platform-identity" |
 	"L2-platform-paas" |
+	"L2-platform-dns" |
 	"L3-application"
 
 // #RequiresSpec declares what a module needs from other modules or infrastructure.
@@ -123,6 +124,33 @@ package base
 // Keys are NodeContext values ("local", "cloud", "pi").
 #ContextOverrides: [#NodeContext]: _
 
+// #ProvisionerService defines a one-shot container that configures a service
+// after it becomes healthy. Provisioners run setup logic (create admin users,
+// seed groups, configure defaults) and exit. They never restart.
+//
+// Pattern:
+//   - restart: "no"
+//   - depends_on: {<service>: {condition: "service_healthy"}}
+//   - Idempotent: safe to run multiple times (handle "already exists" responses)
+//
+// Examples: kuma-provisioner, dokploy-provisioner, pocketid-provisioner, lldap-provisioner
+#ProvisionerService: {
+	// Container image (e.g., "alpine/curl:latest", "node:22-alpine")
+	image: string
+
+	// Shell command(s) to run — use $var (double-dollar) in Docker Compose YAML
+	command: string
+
+	// Service this provisioner configures (must be healthy before running)
+	dependsOn: string
+
+	// Additional networks to join (to reach the service being provisioned)
+	networks?: [...string]
+
+	// Environment variables
+	environment?: [string]: string
+}
+
 // #ModuleContract is the complete contract for a service module.
 // Every module/<name>/module.cue MUST define a value satisfying this schema.
 #ModuleContract: {
@@ -143,6 +171,9 @@ package base
 
 	// The service definition(s) this module deploys
 	services: [string]: #ServiceDefinition
+
+	// Optional one-shot provisioners (run after services are healthy)
+	provisioners?: [string]: #ProvisionerService
 
 	// Whether this module is enabled in the current composition
 	enabled: bool | *true

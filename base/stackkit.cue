@@ -227,24 +227,26 @@ package base
 }
 
 // #ServiceType categorizes services (comprehensive homelab taxonomy)
-#ServiceType: 
+#ServiceType:
 	// Infrastructure
-	"reverse-proxy" | "load-balancer" | "ingress" | "vpn" | "vpn-client" | "dns" |
-	// Platform  
+	"reverse-proxy" | "load-balancer" | "ingress" | "vpn" | "vpn-client" | "dns" | "infrastructure" |
+	// Platform
 	"paas" | "container-manager" | "compose-manager" | "cluster" |
+	// Identity & Security
+	"auth" | "directory" | "pki" | "security" |
 	// Data
 	"database" | "cache" | "storage" | "block-storage" | "distributed-storage" |
 	// Application Tiers
 	"backend" | "frontend" | "application" | "api" |
 	// Observability
-	"monitoring" | "metrics" | "metrics-aggregation" | "dashboards" | 
+	"monitoring" | "metrics" | "metrics-aggregation" | "dashboards" | "dashboard" |
 	"logging" | "logs" | "log-shipper" | "uptime" | "observability" | "alerting" |
 	// DevOps
 	"ci-cd" | "gitops" | "registry" | "backup" | "disaster-recovery" | "automation" |
 	// Management
-	"management" | "auth" |
+	"management" |
 	// Specialized
-	"media" | "object-storage" | "custom"
+	"media" | "object-storage" | "test" | "custom"
 
 // #ServiceNetworkConfig defines service networking
 #ServiceNetworkConfig: {

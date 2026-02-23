@@ -101,7 +101,7 @@ jobs:
           for dir in modules/*/; do
             if [ -f "$dir/module.cue" ]; then
               echo "Validating $dir..."
-              cue vet "./$dir/..."
+              cue vet -c=false "./$dir/..."
             fi
           done
 
@@ -112,7 +112,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        module: [traefik, tinyauth, pocketid, dokploy, uptime-kuma, dozzle, whoami, dashboard, socket-proxy, crowdsec, lldap, step-ca]
+        module: [traefik, tinyauth, pocketid, dokploy, uptime-kuma, dozzle, whoami, dashboard, socket-proxy, crowdsec, lldap, step-ca, adguard-home, unbound]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

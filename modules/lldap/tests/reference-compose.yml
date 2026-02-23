@@ -64,8 +64,46 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - DAC_OVERRIDE
     mem_limit: 256m
     cpus: 0.25
+
+  lldap-provisioner:
+    image: alpine/curl:latest
+    container_name: test-lldap-provisioner
+    depends_on:
+      lldap:
+        condition: service_healthy
+    command:
+      - sh
+      - -c
+      - |
+        echo "Provisioning LLDAP default groups..."
+        token=$$(curl -s -X POST http://lldap:17170/auth/simple/login \
+          -H "Content-Type: application/json" \
+          -d '{"username":"admin","password":"test-admin-pass"}' | \
+          grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+        if [ -z "$$token" ]; then
+          echo "LLDAP: failed to authenticate"
+          exit 1
+        fi
+        echo "LLDAP: authenticated, creating default groups..."
+        for group in homelab_owner homelab_operator homelab_developer homelab_viewer; do
+          result=$$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST http://lldap:17170/api/graphql \
+            -H "Authorization: Bearer $$token" \
+            -H "Content-Type: application/json" \
+            -d "{\"query\":\"mutation { createGroup(name: \\\"$$group\\\") { id displayName } }\"}")
+          echo "  $$group → HTTP $$result"
+        done
+        echo "LLDAP: default groups provisioned"
+    networks:
+      - test-net
+    restart: "no"
 
 networks:
   test-net:

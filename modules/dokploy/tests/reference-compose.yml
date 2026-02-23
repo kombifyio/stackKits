@@ -115,6 +115,32 @@ services:
     mem_limit: 256m
     cpus: 0.25
 
+  dokploy-provisioner:
+    image: alpine/curl:latest
+    container_name: test-dokploy-provisioner
+    depends_on:
+      dokploy:
+        condition: service_healthy
+    command:
+      - sh
+      - -c
+      - |
+        echo "Provisioning Dokploy admin account..."
+        result=$$(curl -s -w "\n%{http_code}" -X POST http://dokploy:3000/api/auth/sign-up/email \
+          -H "Content-Type: application/json" \
+          -d '{"email":"admin@stack.local","password":"Admin1234!","name":"Admin","lastName":""}')
+        code=$$(echo "$$result" | tail -1)
+        body=$$(echo "$$result" | head -1)
+        echo "HTTP $$code: $$body"
+        if [ "$$code" = "200" ] || [ "$$code" = "201" ]; then
+          echo "Dokploy: admin created (admin@stack.local / Admin1234!)"
+        else
+          echo "Dokploy: response $$code (may already be configured)"
+        fi
+    networks:
+      - test-net
+    restart: "no"
+
 networks:
   test-net:
     driver: bridge
