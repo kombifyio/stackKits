@@ -1,0 +1,127 @@
+# Dokploy Module — Reference Compose Test
+# Tests Dokploy + PostgreSQL + Redis + Traefik in isolation.
+#
+# Usage:
+#   docker compose -f modules/dokploy/tests/reference-compose.yml up -d --wait
+#   ./modules/dokploy/tests/integration_test.sh
+
+services:
+  traefik:
+    image: traefik:v3.3
+    container_name: test-traefik-dokploy
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+    ports:
+      - "8892:80"
+      - "19092:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - test-net
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+
+  dokploy:
+    image: dokploy/dokploy:latest
+    container_name: test-dokploy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: "postgresql://dokploy:testpass123@dokploy-postgres:5432/dokploy"
+      REDIS_URL: "redis://dokploy-redis:6379"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - dokploy-data:/app/data
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dokploy.rule=Host(`dokploy.test.local`)"
+      - "traefik.http.routers.dokploy.entrypoints=web"
+      - "traefik.http.services.dokploy.loadbalancer.server.port=3000"
+    depends_on:
+      dokploy-postgres:
+        condition: service_healthy
+      dokploy-redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3000/api/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    networks:
+      - test-net
+      - test-db-net
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 1g
+    cpus: 1.0
+
+  dokploy-postgres:
+    image: postgres:16-alpine
+    container_name: test-dokploy-postgres
+    environment:
+      POSTGRES_DB: dokploy
+      POSTGRES_USER: dokploy
+      POSTGRES_PASSWORD: testpass123
+    volumes:
+      - dokploy-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dokploy"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - test-db-net
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 512m
+    cpus: 0.5
+
+  dokploy-redis:
+    image: redis:7-alpine
+    container_name: test-dokploy-redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    networks:
+      - test-db-net
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /data
+    mem_limit: 256m
+    cpus: 0.25
+
+networks:
+  test-net:
+    driver: bridge
+  test-db-net:
+    driver: bridge
+    internal: true
+
+volumes:
+  dokploy-data:
+  dokploy-postgres-data:

@@ -1,0 +1,67 @@
+# Uptime Kuma Reference Compose
+# Purpose: Isolated testing of Uptime Kuma with Traefik
+# Usage:
+#   docker compose -f modules/uptime-kuma/tests/reference-compose.yml up -d
+#   Add to /etc/hosts: 127.0.0.1 kuma.test.local
+#   Browser: http://kuma.test.local:8893 (Uptime Kuma dashboard)
+
+services:
+  traefik:
+    image: traefik:v3.3
+    container_name: test-traefik-kuma
+    command:
+      - --api.insecure=true
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+    ports:
+      - "8893:80"
+      - "19093:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - test-net
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: test-uptime-kuma
+    volumes:
+      - uptime-kuma-data:/app/data
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.uptime-kuma.rule=Host(`kuma.test.local`)"
+      - "traefik.http.routers.uptime-kuma.entrypoints=web"
+      - "traefik.http.services.uptime-kuma.loadbalancer.server.port=3001"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"const http=require('http');const r=http.get('http://127.0.0.1:3001',s=>{process.exit(s.statusCode===200?0:1)});r.on('error',()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+    networks:
+      - test-net
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 512m
+    cpus: 0.5
+
+networks:
+  test-net:
+    driver: bridge
+
+volumes:
+  uptime-kuma-data:

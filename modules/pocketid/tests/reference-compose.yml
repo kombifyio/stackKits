@@ -1,0 +1,70 @@
+# PocketID Module — Reference Compose Test
+# Tests PocketID + Traefik routing in isolation.
+#
+# Usage:
+#   docker compose -f modules/pocketid/tests/reference-compose.yml up -d --wait
+#   ./modules/pocketid/tests/integration_test.sh
+
+services:
+  traefik:
+    image: traefik:v3.3
+    container_name: test-traefik-pocketid
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+    ports:
+      - "8891:80"
+      - "19091:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - test-net
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+
+  pocketid:
+    image: ghcr.io/pocket-id/pocket-id:v1
+    container_name: test-pocketid
+    environment:
+      PUBLIC_APP_URL: "http://id.test.local"
+      TRUST_PROXY: "true"
+    volumes:
+      - pocketid-data:/app/backend/data
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.pocketid.rule=Host(`id.test.local`)"
+      - "traefik.http.routers.pocketid.entrypoints=web"
+      - "traefik.http.services.pocketid.loadbalancer.server.port=80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:80/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - test-net
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 512m
+    cpus: 0.5
+
+networks:
+  test-net:
+    driver: bridge
+
+volumes:
+  pocketid-data:

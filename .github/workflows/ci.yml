@@ -96,6 +96,56 @@ jobs:
       - name: Validate modern-homelab
         run: cue vet ./modern-homelab/...
 
+      - name: Validate modules
+        run: |
+          for dir in modules/*/; do
+            if [ -f "$dir/module.cue" ]; then
+              echo "Validating $dir..."
+              cue vet "./$dir/..."
+            fi
+          done
+
+  module-tests:
+    name: Module Test (${{ matrix.module }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        module: [traefik, tinyauth, pocketid, dokploy, uptime-kuma, dozzle, whoami, dashboard, socket-proxy, crowdsec, lldap, step-ca]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run module integration test
+        run: |
+          SCRIPT="modules/${{ matrix.module }}/tests/integration_test.sh"
+          if [ -f "$SCRIPT" ]; then
+            chmod +x "$SCRIPT"
+            bash "$SCRIPT"
+          else
+            echo "SKIP: $SCRIPT not found yet"
+          fi
+
+  composition-test:
+    name: Full Stack Composition
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [module-tests, cue-validation]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run composition test
+        run: |
+          SCRIPT="modules/_integration/integration_test.sh"
+          if [ -f "$SCRIPT" ]; then
+            chmod +x "$SCRIPT"
+            bash "$SCRIPT"
+          else
+            echo "SKIP: Composition test not yet created"
+          fi
+
   build:
     name: Build
     runs-on: ubuntu-latest
@@ -177,8 +227,8 @@ jobs:
 
   # Final status check for branch protection
   ci-passed:
-    name: ✅ CI Passed
-    needs: [lint, test, cue-validation]
+    name: CI Passed
+    needs: [lint, test, cue-validation, module-tests, composition-test]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     if: always()
@@ -187,8 +237,10 @@ jobs:
         run: |
           if [ "${{ needs.lint.result }}" != "success" ] || \
              [ "${{ needs.test.result }}" != "success" ] || \
-             [ "${{ needs.cue-validation.result }}" != "success" ]; then
-            echo "❌ Some jobs failed"
+             [ "${{ needs.cue-validation.result }}" != "success" ] || \
+             [ "${{ needs.module-tests.result }}" != "success" ] || \
+             [ "${{ needs.composition-test.result }}" != "success" ]; then
+            echo "Some jobs failed"
             exit 1
           fi
-          echo "✅ All CI jobs passed"
+          echo "All CI jobs passed"

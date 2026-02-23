@@ -97,6 +97,69 @@ app.post('/api/demos/:name/test', (req, res) => {
   });
 });
 
+// --- Portal API ---
+
+// Service definitions for the Portal deployment view
+const PORTAL_SERVICES = [
+  { name: 'traefik',   layer: 'L2 Platform', role: 'Reverse Proxy',    subdomain: 'traefik', container: 'traefik',         description: 'Ingress controller with auto-HTTPS and service discovery' },
+  { name: 'tinyauth',  layer: 'L2 Platform', role: 'Authentication',   subdomain: 'auth',    container: 'tinyauth',        description: 'ForwardAuth proxy with passkeys, passwords, and OAuth' },
+  { name: 'pocketid',  layer: 'L2 Platform', role: 'Identity / OIDC',  subdomain: 'id',      container: 'pocketid',        description: 'Self-hosted OpenID Connect identity provider' },
+  { name: 'dokploy',   layer: 'L2 Platform', role: 'App Deployment',   subdomain: 'dokploy', container: 'dokploy',         description: 'PaaS platform for deploying your applications' },
+  { name: 'kuma',      layer: 'L3 Apps',     role: 'Monitoring',       subdomain: 'kuma',    container: 'uptime-kuma',     description: 'Uptime monitoring with notifications and status pages' },
+  { name: 'dozzle',    layer: 'L3 Apps',     role: 'Log Viewer',       subdomain: 'logs',    container: 'dozzle',          description: 'Real-time Docker container log viewer' },
+  { name: 'whoami',    layer: 'L3 Apps',     role: 'Network Test',     subdomain: 'whoami',  container: 'whoami',          description: 'HTTP echo service for network and routing diagnostics' },
+];
+
+// GET /api/portal/deployment — what was deployed
+app.get('/api/portal/deployment', (_req, res) => {
+  const domain = process.env.DOMAIN || 'stack.local';
+  res.json({
+    kit: { name: 'Base Homelab Kit', version: '1.0.0' },
+    domain,
+    nodeCount: 1,
+    services: PORTAL_SERVICES.map(s => ({
+      ...s,
+      url: `https://${s.subdomain}.${domain}`,
+    })),
+    config: {
+      auth: 'TinyAuth + PocketID',
+      paas: 'Dokploy',
+      monitoring: 'Uptime Kuma',
+      ingress: 'Traefik v3.3',
+      tls: domain.endsWith('.local') ? 'Self-signed' : "Let's Encrypt",
+    },
+  });
+});
+
+// GET /api/portal/health — live container health from VM Docker daemon
+app.get('/api/portal/health', async (_req, res) => {
+  try {
+    // Connect to VM Docker daemon for container status
+    const vmDocker = new Docker({ host: 'vm', port: 2375 });
+    const containers = await vmDocker.listContainers({ all: true });
+    const health = {};
+    for (const svc of PORTAL_SERVICES) {
+      const match = containers.find(c =>
+        c.Names.some(n => n.replace('/', '').includes(svc.container))
+      );
+      if (match) {
+        health[svc.name] = {
+          state: match.State,
+          health: match.Status.includes('healthy') ? 'healthy'
+                : match.Status.includes('starting') ? 'starting'
+                : match.State === 'running' ? 'running' : 'stopped',
+          status: match.Status,
+        };
+      } else {
+        health[svc.name] = { state: 'not_found', health: 'unknown', status: 'Not deployed' };
+      }
+    }
+    res.json({ connected: true, services: health });
+  } catch (e) {
+    res.json({ connected: false, services: {}, error: e.message });
+  }
+});
+
 // WebSocket: terminal into VM via docker exec
 const wss = new WebSocketServer({ noServer: true });
 

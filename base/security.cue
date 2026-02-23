@@ -237,12 +237,14 @@ package base
 	}
 }
 
-// #SecretsPolicy defines how secrets are managed
+// #SecretsPolicy defines how secrets are managed.
+// Default for homelab: SOPS + age (encrypted in Git, no server component).
+// Doppler is dev-only, NOT a self-hosting solution.
 #SecretsPolicy: {
 	// Secrets backend
-	backend: "file" | "env" | "vault" | "sops" | *"file"
+	backend: "file" | "env" | "vault" | "sops-age" | *"sops-age"
 
-	// Secrets directory
+	// Secrets directory inside containers
 	secretsDir: string | *"/run/secrets"
 
 	// File permissions for secrets
@@ -255,11 +257,65 @@ package base
 		path:    string | *"secret"
 	}
 
-	// SOPS configuration (if backend = sops)
-	sops?: {
-		keyType: "age" | "pgp" | "kms"
-		keyId:   string
+	// SOPS + age configuration (default backend for homelab)
+	sopsAge: #SOPSAgeConfig | *{
+		keyFile:      "~/.config/sops/age/keys.txt"
+		encryptedDir: "secrets/"
+		creationRules: [{
+			pathRegex: "secrets/.*\\.enc\\.yaml$"
+			age:       "" // Set at deploy time from keyFile
+		}]
 	}
+}
+
+// #SOPSAgeConfig defines SOPS + age encryption settings.
+// Secrets are encrypted at rest in Git using age public key.
+// `stackkit generate` decrypts them using the age private key
+// and injects values into deployment artifacts.
+//
+// Workflow:
+//   1. Generate age keypair: `age-keygen -o keys.txt`
+//   2. Encrypt: `sops --encrypt --age <public-key> secrets.yaml > secrets.enc.yaml`
+//   3. Commit encrypted file to Git (safe — encrypted)
+//   4. `stackkit generate` reads keys.txt, decrypts, produces tfvars
+//   5. `stackkit apply` deploys with decrypted values
+//
+// age is chosen over PGP because: simpler, no key server, smaller keys,
+// no web of trust complexity. Over KMS because: no cloud dependency.
+#SOPSAgeConfig: {
+	// Path to age private key file (never committed to Git)
+	keyFile: string | *"~/.config/sops/age/keys.txt"
+
+	// Directory containing encrypted secret files
+	encryptedDir: string | *"secrets/"
+
+	// SOPS creation rules (maps file patterns to age recipients)
+	creationRules: [...#SOPSCreationRule] | *[]
+
+	// Encrypted file suffix (helps identify encrypted vs plain files)
+	encryptedSuffix: string | *".enc.yaml"
+}
+
+// #SOPSCreationRule maps file patterns to encryption recipients.
+#SOPSCreationRule: {
+	// Regex for file paths this rule applies to
+	pathRegex: string
+
+	// age public key (recipient) — the encrypted-to key
+	age: string
+}
+
+// #GitleaksConfig defines pre-commit secret scanning settings.
+// Prevents accidental commits of unencrypted secrets.
+#GitleaksConfig: {
+	// Enable gitleaks pre-commit hook
+	enabled: bool | *true
+
+	// Allow-listed paths (e.g., encrypted files are OK to commit)
+	allowPaths: [...string] | *["secrets/.*\\.enc\\.yaml$"]
+
+	// Additional rules
+	additionalRules: [...string] | *[]
 }
 
 // #TLSPolicy defines TLS/SSL settings

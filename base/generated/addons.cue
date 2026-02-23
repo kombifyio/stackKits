@@ -15,7 +15,7 @@ package base
 // =============================================================================
 
 #ArchitecturePattern: "BASE" | "MODERN" | "HA"
-#NodeContext:          "LOCAL" | "CLOUD" | "PI"
+#NodeContext:          "local" | "cloud" | "pi"
 
 #AddOn: {
   name:               string
@@ -48,7 +48,7 @@ package base
     category:           "applications"
     version:            "1.0.0"
     compatibleKits:     ["BASE", "MODERN"]
-    compatibleContexts: ["LOCAL", "CLOUD", "PI"]
+    compatibleContexts: ["local", "cloud", "pi"]
     dependsOn:          []
     conflictsWith:      []
     minMemoryMB:        512
@@ -67,7 +67,7 @@ package base
     category:           "compute"
     version:            "1.0.0"
     compatibleKits:     ["BASE", "MODERN"]
-    compatibleContexts: ["LOCAL", "CLOUD"]
+    compatibleContexts: ["local", "cloud"]
     dependsOn:          []
     conflictsWith:      []
     minMemoryMB:        2048
@@ -86,7 +86,7 @@ package base
     category:           "data"
     version:            "1.0.0"
     compatibleKits:     ["BASE", "MODERN", "HA"]
-    compatibleContexts: ["LOCAL", "CLOUD", "PI"]
+    compatibleContexts: ["local", "cloud", "pi"]
     dependsOn:          []
     conflictsWith:      []
     minMemoryMB:        128
@@ -105,7 +105,7 @@ package base
     category:           "development"
     version:            "1.0.0"
     compatibleKits:     ["BASE", "MODERN", "HA"]
-    compatibleContexts: ["LOCAL", "CLOUD"]
+    compatibleContexts: ["local", "cloud"]
     dependsOn:          []
     conflictsWith:      []
     minMemoryMB:        512
@@ -124,7 +124,7 @@ package base
     category:           "iot"
     version:            "1.0.0"
     compatibleKits:     ["BASE"]
-    compatibleContexts: ["LOCAL", "PI"]
+    compatibleContexts: ["local", "pi"]
     dependsOn:          []
     conflictsWith:      []
     minMemoryMB:        256
@@ -143,7 +143,7 @@ package base
     category:           "networking"
     version:            "1.0.0"
     compatibleKits:     ["MODERN", "HA"]
-    compatibleContexts: ["LOCAL", "CLOUD"]
+    compatibleContexts: ["local", "cloud"]
     dependsOn:          []
     conflictsWith:      []
     minMemoryMB:        64
@@ -162,7 +162,7 @@ package base
     category:           "observability"
     version:            "1.0.0"
     compatibleKits:     ["BASE", "MODERN", "HA"]
-    compatibleContexts: ["LOCAL", "CLOUD"]
+    compatibleContexts: ["local", "cloud"]
     dependsOn:          []
     conflictsWith:      []
     minMemoryMB:        512

@@ -1,0 +1,11 @@
+{
+  "name": "stackkits-orchestrator",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "dockerode": "^4.0.4",
+    "express": "^4.21.2",
+    "ws": "^8.18.0"
+  }
+}

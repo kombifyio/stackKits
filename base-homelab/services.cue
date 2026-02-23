@@ -137,8 +137,8 @@ import "github.com/kombihq/stackkits/base"
 	required:    false
 	enabled:     false // Disabled by default in base-homelab
 	image:       "ghcr.io/steveiliop56/tinyauth"
-	tag:         "v3"
-	description: "Lightweight identity proxy for application authentication"
+	tag:         "v4"
+	description: "Lightweight authentication proxy with ForwardAuth, passkeys, and OAuth"
 	needs:       ["traefik"]
 
 	network: {
@@ -159,26 +159,33 @@ import "github.com/kombihq/stackkits/base"
 			target:      "/data"
 			type:        "volume"
 			backup:      true
-			description: "TinyAuth data and users"
+			description: "TinyAuth SQLite database and session data"
+		},
+		{
+			source:      "/var/run/docker.sock"
+			target:      "/var/run/docker.sock"
+			type:        "bind"
+			readOnly:    true
+			backup:      false
+			description: "Docker socket for label-based access control"
 		},
 	]
 
 	environment: {
-		"TZ":      "Europe/Berlin"
-		"APP_URL": "https://auth.{{.domain}}"
+		"TZ":             "Europe/Berlin"
+		"APP_URL":        "https://auth.{{.domain}}"
+		"USERS":          "{{.tinyauth_users}}"
+		"SECURE_COOKIE":  "{{.tinyauth_secure_cookie}}"
+		"SESSION_EXPIRY": "{{.tinyauth_session_expiry}}"
 	}
 
 	healthCheck: {
 		enabled: true
-		http: {
-			path:   "/api/health"
-			port:   3000
-			scheme: "http"
-		}
+		command: "tinyauth healthcheck"
 		interval:    "30s"
 		timeout:     "5s"
 		retries:     3
-		startPeriod: "10s"
+		startPeriod: "15s"
 	}
 
 	resources: {
@@ -188,13 +195,14 @@ import "github.com/kombihq/stackkits/base"
 	}
 
 	labels: {
-		"traefik.enable":                                           "true"
-		"traefik.http.routers.tinyauth.entrypoints":                "websecure"
-		"traefik.http.routers.tinyauth.rule":                       "Host(`auth.{{.domain}}`)"
-		"traefik.http.routers.tinyauth.tls.certresolver":           "letsencrypt"
-		"traefik.http.services.tinyauth.loadbalancer.server.port":  "3000"
-		"traefik.http.middlewares.tinyauth.forwardauth.address":      "http://tinyauth:3000/api/auth/verify"
-		"traefik.http.middlewares.tinyauth.forwardauth.authResponseHeaders": "X-User,X-Email"
+		"traefik.enable":                                                        "true"
+		"traefik.http.routers.tinyauth.entrypoints":                             "websecure"
+		"traefik.http.routers.tinyauth.rule":                                    "Host(`auth.{{.domain}}`)"
+		"traefik.http.routers.tinyauth.tls.certresolver":                        "letsencrypt"
+		"traefik.http.services.tinyauth.loadbalancer.server.port":               "3000"
+		"traefik.http.middlewares.tinyauth.forwardauth.address":                 "http://tinyauth:3000/api/auth/traefik"
+		"traefik.http.middlewares.tinyauth.forwardauth.trustForwardHeader":      "true"
+		"traefik.http.middlewares.tinyauth.forwardauth.authResponseHeaders":     "remote-user,remote-sub,remote-name,remote-email,remote-groups"
 		// Layer classification
 		"stackkit.layer":      "2-platform"
 		"stackkit.managed-by": "terraform"
@@ -203,9 +211,9 @@ import "github.com/kombihq/stackkits/base"
 
 	output: {
 		url:         "https://auth.{{.domain}}"
-		description: "TinyAuth - Identity proxy for applications"
+		description: "TinyAuth - Authentication portal with passkeys and OAuth"
 		credentials: {
-			note: "Configure users on first access"
+			note: "Credentials set via USERS env var (bcrypt hashed)"
 		}
 	}
 

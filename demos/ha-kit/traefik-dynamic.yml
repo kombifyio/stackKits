@@ -1,0 +1,118 @@
+# HA Kit Demo — Traefik dynamic configuration
+# 3-node HA topology: main + worker-1 + worker-2
+# Domains: *.ha.local
+
+http:
+  routers:
+    # Auth services (no ForwardAuth)
+    tinyauth:
+      rule: "Host(`auth.ha.local`)"
+      entryPoints: [web]
+      service: tinyauth
+
+    pocketid:
+      rule: "Host(`id.ha.local`)"
+      entryPoints: [web]
+      service: pocketid
+
+    # Main node services (ForwardAuth protected)
+    prometheus:
+      rule: "Host(`prometheus.ha.local`)"
+      entryPoints: [web]
+      service: prometheus
+      middlewares: [tinyauth-forward]
+
+    grafana:
+      rule: "Host(`grafana.ha.local`)"
+      entryPoints: [web]
+      service: grafana
+      middlewares: [tinyauth-forward]
+
+    traefik-dashboard:
+      rule: "Host(`traefik.ha.local`)"
+      entryPoints: [web]
+      service: traefik-api
+      middlewares: [tinyauth-forward]
+
+    dashboard:
+      rule: "Host(`ha.ha.local`)"
+      entryPoints: [web]
+      service: dashboard
+      middlewares: [tinyauth-forward]
+
+    # Worker node services (ForwardAuth protected)
+    dokploy:
+      rule: "Host(`dokploy.ha.local`)"
+      entryPoints: [web]
+      service: dokploy
+      middlewares: [tinyauth-forward]
+
+    kuma:
+      rule: "Host(`status.ha.local`)"
+      entryPoints: [web]
+      service: kuma
+      middlewares: [tinyauth-forward]
+
+    whoami:
+      rule: "Host(`whoami.ha.local`)"
+      entryPoints: [web]
+      service: whoami
+      middlewares: [tinyauth-forward]
+
+  services:
+    tinyauth:
+      loadBalancer:
+        servers:
+          - url: "http://tinyauth:3000"
+
+    pocketid:
+      loadBalancer:
+        servers:
+          - url: "http://pocketid:1411"
+
+    prometheus:
+      loadBalancer:
+        servers:
+          - url: "http://prometheus:9090"
+
+    grafana:
+      loadBalancer:
+        servers:
+          - url: "http://grafana:3002"
+
+    traefik-api:
+      loadBalancer:
+        servers:
+          - url: "http://traefik:8080"
+
+    dashboard:
+      loadBalancer:
+        servers:
+          - url: "http://dashboard:80"
+
+    dokploy:
+      loadBalancer:
+        servers:
+          - url: "http://dokploy:3000"
+
+    kuma:
+      loadBalancer:
+        servers:
+          - url: "http://kuma:3001"
+
+    whoami:
+      loadBalancer:
+        servers:
+          - url: "http://whoami:80"
+
+  middlewares:
+    tinyauth-forward:
+      forwardAuth:
+        address: "http://tinyauth:3000/api/auth/traefik"
+        trustForwardHeader: true
+        authResponseHeaders:
+          - remote-user
+          - remote-sub
+          - remote-name
+          - remote-email
+          - remote-groups
