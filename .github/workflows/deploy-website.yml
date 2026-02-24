@@ -48,16 +48,27 @@ jobs:
           login-server: ${{ env.ACR_NAME }}.azurecr.io
           username: ${{ secrets.ACR_USERNAME }}
           password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       
-      - name: Build and push Docker image
+      - name: Build and push Docker image (ACR + GHCR)
         run: |
           docker build \
             -f ${{ env.WEBSITE_DIR }}/Dockerfile \
             -t ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }} \
             -t ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:latest \
+            -t ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }} \
+            -t ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:latest \
             ${{ env.WEBSITE_DIR }}
           docker push ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
           docker push ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:latest
+          docker push ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
+          docker push ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:latest
       
       - name: Check if Container App exists
         id: check_app
@@ -103,13 +114,31 @@ jobs:
             --query "properties.configuration.ingress.fqdn" -o tsv)
           echo "fqdn=$FQDN" >> $GITHUB_OUTPUT
 
+      - name: Health check
+        id: health
+        run: |
+          FQDN="${{ steps.get_url.outputs.fqdn }}"
+          echo "Checking health at https://$FQDN"
+          for i in {1..10}; do
+            STATUS=$(curl -sL -o /dev/null -w "%{http_code}" "https://$FQDN" --max-time 10 2>/dev/null || echo "000")
+            if [ "$STATUS" -lt 400 ]; then
+              echo "Health check passed (HTTP $STATUS)"
+              exit 0
+            fi
+            echo "Attempt $i/10: HTTP $STATUS, retrying..."
+            sleep 10
+          done
+          echo "::error::Health check failed"
+          exit 1
+
       - name: Deployment Summary
         run: |
           echo "## StackKits Website Deployed" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Image | \`${{ env.IMAGE_NAME }}:${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| ACR Image | \`${{ env.IMAGE_NAME }}:${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| GHCR Image | \`ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Environment | ${{ github.ref_name == 'main' && 'production' || 'test' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| ACA URL | https://${{ steps.get_url.outputs.fqdn }} |" >> $GITHUB_STEP_SUMMARY
           if [ "${{ github.ref_name }}" = "main" ]; then
