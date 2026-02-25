@@ -13,7 +13,6 @@ import (
 )
 
 func TestTerraformBridge_GenerateTFVars(t *testing.T) {
-	// Create a temporary directory for test output
 	tmpDir, err := os.MkdirTemp("", "tfbridge-test")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
@@ -34,7 +33,6 @@ func TestTerraformBridge_GenerateTFVars(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Check if stackkit dir exists
 			if _, err := os.Stat(tt.stackkitDir); os.IsNotExist(err) {
 				t.Skipf("StackKit directory not found: %s", tt.stackkitDir)
 			}
@@ -49,7 +47,6 @@ func TestTerraformBridge_GenerateTFVars(t *testing.T) {
 			}
 
 			if !tt.wantErr {
-				// Check if output file was created
 				outputPath := filepath.Join(outputDir, "terraform.tfvars.json")
 				if _, err := os.Stat(outputPath); os.IsNotExist(err) {
 					t.Errorf("Expected output file not created: %s", outputPath)
@@ -74,7 +71,6 @@ func TestTerraformBridge_ValidateBeforeGeneration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Check if stackkit dir exists
 			if _, err := os.Stat(tt.stackkitDir); os.IsNotExist(err) {
 				t.Skipf("StackKit directory not found: %s", tt.stackkitDir)
 			}
@@ -106,7 +102,6 @@ func TestTerraformBridge_GenerateWithValidation(t *testing.T) {
 			return
 		}
 
-		// Verify output file exists
 		outputPath := filepath.Join(outputDir, "terraform.tfvars.json")
 		if _, err := os.Stat(outputPath); os.IsNotExist(err) {
 			t.Errorf("Expected output file not created: %s", outputPath)
@@ -153,35 +148,35 @@ func TestTerraformBridge_GenerateTFVars_OutputCreation(t *testing.T) {
 			t.Fatalf("Failed to read output: %v", err)
 		}
 
-		// Verify it's valid JSON (not empty)
 		if len(data) < 2 {
 			t.Error("Output file is too small to be valid JSON")
 		}
 	})
 }
 
-// --- Tests for extractTFVars and extractFromStack ---
+// --- Tests for extractTFVars ---
 
 func TestExtractTFVars(t *testing.T) {
 	ctx := cuecontext.New()
 	bridge := &TerraformBridge{ctx: ctx, stackkitDir: "."}
 
-	t.Run("defaults when CUE value has no relevant fields", func(t *testing.T) {
+	t.Run("defaults: all core services enabled, dashboard off", func(t *testing.T) {
 		value := ctx.CompileString(`{ foo: "bar" }`)
 		require.NoError(t, value.Err())
 
 		tfvars, err := bridge.extractTFVars(value)
 		require.NoError(t, err)
-		assert.Equal(t, "ports", tfvars.AccessMode)
-		assert.Equal(t, "default", tfvars.Variant)
-		assert.Equal(t, "standard", tfvars.ComputeTier)
-		assert.Equal(t, "0.0.0.0", tfvars.BindAddress)
+		assert.True(t, tfvars.EnableTraefik)
+		assert.True(t, tfvars.EnableTinyauth)
+		assert.True(t, tfvars.EnablePocketID)
+		assert.True(t, tfvars.EnableDokploy)
+		assert.True(t, tfvars.EnableDokployApps)
+		assert.False(t, tfvars.EnableDashboard)
 		assert.Empty(t, tfvars.Domain)
-		assert.False(t, tfvars.EnableHTTPS)
-		assert.False(t, tfvars.EnableLetsEncrypt)
+		assert.Empty(t, tfvars.NetworkSubnet)
 	})
 
-	t.Run("extracts network domain and sets proxy mode", func(t *testing.T) {
+	t.Run("extracts domain from network block", func(t *testing.T) {
 		value := ctx.CompileString(`{
 			network: {
 				domain: "example.com"
@@ -192,67 +187,29 @@ func TestExtractTFVars(t *testing.T) {
 		tfvars, err := bridge.extractTFVars(value)
 		require.NoError(t, err)
 		assert.Equal(t, "example.com", tfvars.Domain)
-		assert.Equal(t, "proxy", tfvars.AccessMode)
-		assert.True(t, tfvars.EnableHTTPS)
 	})
 
-	t.Run("extracts network domain and acmeEmail enables letsencrypt", func(t *testing.T) {
+	t.Run("extracts subnet from network block", func(t *testing.T) {
 		value := ctx.CompileString(`{
 			network: {
-				domain:    "example.com"
-				acmeEmail: "admin@example.com"
+				domain: "stack.local"
+				subnet: "172.20.0.0/16"
 			}
 		}`)
 		require.NoError(t, value.Err())
 
 		tfvars, err := bridge.extractTFVars(value)
 		require.NoError(t, err)
-		assert.Equal(t, "example.com", tfvars.Domain)
-		assert.Equal(t, "admin@example.com", tfvars.ACMEEmail)
-		assert.True(t, tfvars.EnableLetsEncrypt)
-	})
-
-	t.Run("acmeEmail without domain does not enable letsencrypt", func(t *testing.T) {
-		value := ctx.CompileString(`{
-			network: {
-				acmeEmail: "admin@example.com"
-			}
-		}`)
-		require.NoError(t, value.Err())
-
-		tfvars, err := bridge.extractTFVars(value)
-		require.NoError(t, err)
-		assert.Empty(t, tfvars.Domain)
-		assert.Equal(t, "admin@example.com", tfvars.ACMEEmail)
-		assert.False(t, tfvars.EnableLetsEncrypt)
-	})
-
-	t.Run("extracts variant", func(t *testing.T) {
-		value := ctx.CompileString(`{ variant: "minimal" }`)
-		require.NoError(t, value.Err())
-
-		tfvars, err := bridge.extractTFVars(value)
-		require.NoError(t, err)
-		assert.Equal(t, "minimal", tfvars.Variant)
-	})
-
-	t.Run("extracts computeTier", func(t *testing.T) {
-		value := ctx.CompileString(`{ computeTier: "high" }`)
-		require.NoError(t, value.Err())
-
-		tfvars, err := bridge.extractTFVars(value)
-		require.NoError(t, err)
-		assert.Equal(t, "high", tfvars.ComputeTier)
+		assert.Equal(t, "stack.local", tfvars.Domain)
+		assert.Equal(t, "172.20.0.0/16", tfvars.NetworkSubnet)
 	})
 
 	t.Run("extracts from stack sub-path", func(t *testing.T) {
 		value := ctx.CompileString(`{
 			stack: {
-				variant:     "full"
-				computeTier: "low"
 				network: {
-					domain:    "stack.example.com"
-					acmeEmail: "ops@example.com"
+					domain: "stack.example.com"
+					subnet: "10.0.0.0/24"
 				}
 			}
 		}`)
@@ -260,18 +217,13 @@ func TestExtractTFVars(t *testing.T) {
 
 		tfvars, err := bridge.extractTFVars(value)
 		require.NoError(t, err)
-		assert.Equal(t, "full", tfvars.Variant)
-		assert.Equal(t, "low", tfvars.ComputeTier)
 		assert.Equal(t, "stack.example.com", tfvars.Domain)
-		assert.Equal(t, "ops@example.com", tfvars.ACMEEmail)
-		assert.True(t, tfvars.EnableHTTPS)
-		assert.True(t, tfvars.EnableLetsEncrypt)
+		assert.Equal(t, "10.0.0.0/24", tfvars.NetworkSubnet)
 	})
 
 	t.Run("extracts from testStack sub-path", func(t *testing.T) {
 		value := ctx.CompileString(`{
 			testStack: {
-				variant: "test"
 				network: {
 					domain: "test.local"
 				}
@@ -281,7 +233,6 @@ func TestExtractTFVars(t *testing.T) {
 
 		tfvars, err := bridge.extractTFVars(value)
 		require.NoError(t, err)
-		assert.Equal(t, "test", tfvars.Variant)
 		assert.Equal(t, "test.local", tfvars.Domain)
 	})
 }
@@ -290,66 +241,41 @@ func TestExtractFromStack(t *testing.T) {
 	ctx := cuecontext.New()
 	bridge := &TerraformBridge{ctx: ctx, stackkitDir: "."}
 
-	t.Run("extracts all fields from stack", func(t *testing.T) {
+	t.Run("extracts domain and subnet from stack.network", func(t *testing.T) {
 		stack := ctx.CompileString(`{
-			variant:     "production"
-			computeTier: "high"
 			network: {
-				domain:    "prod.example.com"
-				acmeEmail: "certs@example.com"
+				domain: "prod.example.com"
+				subnet: "192.168.100.0/24"
 			}
 		}`)
 		require.NoError(t, stack.Err())
 
-		tfvars := &TFVars{
-			AccessMode:  "ports",
-			Variant:     "default",
-			ComputeTier: "standard",
-			BindAddress: "0.0.0.0",
-		}
+		tfvars := newDefaultTFVars()
 		bridge.extractFromStack(stack, tfvars)
 
-		assert.Equal(t, "production", tfvars.Variant)
-		assert.Equal(t, "high", tfvars.ComputeTier)
 		assert.Equal(t, "prod.example.com", tfvars.Domain)
-		assert.Equal(t, "certs@example.com", tfvars.ACMEEmail)
-		assert.True(t, tfvars.EnableHTTPS)
-		assert.True(t, tfvars.EnableLetsEncrypt)
+		assert.Equal(t, "192.168.100.0/24", tfvars.NetworkSubnet)
 	})
 
-	t.Run("partial stack with only variant", func(t *testing.T) {
-		stack := ctx.CompileString(`{ variant: "slim" }`)
+	t.Run("stack without network leaves domain empty", func(t *testing.T) {
+		stack := ctx.CompileString(`{ name: "bare" }`)
 		require.NoError(t, stack.Err())
 
-		tfvars := &TFVars{}
+		tfvars := newDefaultTFVars()
 		bridge.extractFromStack(stack, tfvars)
-		assert.Equal(t, "slim", tfvars.Variant)
 		assert.Empty(t, tfvars.Domain)
 	})
 
-	t.Run("stack network domain without acmeEmail", func(t *testing.T) {
+	t.Run("stack network without subnet leaves subnet empty", func(t *testing.T) {
 		stack := ctx.CompileString(`{
 			network: { domain: "local.dev" }
 		}`)
 		require.NoError(t, stack.Err())
 
-		tfvars := &TFVars{}
+		tfvars := newDefaultTFVars()
 		bridge.extractFromStack(stack, tfvars)
 		assert.Equal(t, "local.dev", tfvars.Domain)
-		assert.True(t, tfvars.EnableHTTPS)
-		assert.False(t, tfvars.EnableLetsEncrypt)
-	})
-
-	t.Run("stack acmeEmail without domain no letsencrypt", func(t *testing.T) {
-		stack := ctx.CompileString(`{
-			network: { acmeEmail: "x@test.com" }
-		}`)
-		require.NoError(t, stack.Err())
-
-		tfvars := &TFVars{}
-		bridge.extractFromStack(stack, tfvars)
-		assert.Empty(t, tfvars.Domain)
-		assert.False(t, tfvars.EnableLetsEncrypt)
+		assert.Empty(t, tfvars.NetworkSubnet)
 	})
 }
 
@@ -357,15 +283,17 @@ func TestWriteTFVars(t *testing.T) {
 	ctx := cuecontext.New()
 	bridge := &TerraformBridge{ctx: ctx, stackkitDir: "."}
 
-	t.Run("writes valid JSON file", func(t *testing.T) {
+	t.Run("writes valid JSON file with correct fields", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		tfvars := &TFVars{
-			Domain:      "example.com",
-			AccessMode:  "proxy",
-			EnableHTTPS: true,
-			Variant:     "default",
-			ComputeTier: "standard",
-			BindAddress: "0.0.0.0",
+			Domain:            "example.com",
+			NetworkSubnet:     "172.20.0.0/16",
+			EnableTraefik:     true,
+			EnableTinyauth:    true,
+			EnablePocketID:    true,
+			EnableDokploy:     true,
+			EnableDokployApps: true,
+			EnableDashboard:   false,
 		}
 
 		err := bridge.writeTFVars(tfvars, tmpDir)
@@ -377,17 +305,18 @@ func TestWriteTFVars(t *testing.T) {
 		var parsed TFVars
 		require.NoError(t, json.Unmarshal(data, &parsed))
 		assert.Equal(t, "example.com", parsed.Domain)
-		assert.Equal(t, "proxy", parsed.AccessMode)
-		assert.True(t, parsed.EnableHTTPS)
+		assert.Equal(t, "172.20.0.0/16", parsed.NetworkSubnet)
+		assert.True(t, parsed.EnableTraefik)
+		assert.True(t, parsed.EnableDokploy)
+		assert.False(t, parsed.EnableDashboard)
 	})
 
 	t.Run("fails for invalid output directory", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		// Create a file that blocks directory creation
 		blocker := filepath.Join(tmpDir, "blocker")
 		require.NoError(t, os.WriteFile(blocker, []byte("x"), 0600))
 
-		tfvars := &TFVars{Variant: "test"}
+		tfvars := &TFVars{EnableTraefik: true}
 		err := bridge.writeTFVars(tfvars, filepath.Join(blocker, "sub"))
 		assert.Error(t, err)
 	})
@@ -403,7 +332,6 @@ func TestGenerateTFVars_ErrorPaths(t *testing.T) {
 
 	t.Run("fails for directory with invalid CUE", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		// Create an invalid CUE file
 		cueContent := `package broken
 name: "test
 `
@@ -427,9 +355,8 @@ func TestValidateStackKit_ErrorPaths(t *testing.T) {
 	t.Run("returns result with errors for non-existent directory", func(t *testing.T) {
 		validator := NewValidator(".")
 		result, err := validator.ValidateStackKit("/nonexistent/dir")
-		// ValidateStackKit may return an error or a result with errors
 		if err != nil {
-			return // acceptable — hard error
+			return
 		}
 		assert.False(t, result.Valid)
 		assert.NotEmpty(t, result.Errors)
@@ -437,7 +364,6 @@ func TestValidateStackKit_ErrorPaths(t *testing.T) {
 
 	t.Run("reports load error for invalid CUE package", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		// Create a CUE file with a bad import
 		cueContent := `package broken
 import "nonexistent/module"
 x: module.Y
@@ -446,17 +372,14 @@ x: module.Y
 
 		validator := NewValidator(tmpDir)
 		result, err := validator.ValidateStackKit(tmpDir)
-		// Should return result (not error) with validation errors
 		if err == nil {
 			assert.False(t, result.Valid)
 			assert.NotEmpty(t, result.Errors)
 		}
-		// Either way the validation flags the problem
 	})
 
 	t.Run("reports validation error for non-concrete CUE", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		// Create a CUE file with non-concrete values
 		cueContent := `package test
 name: string
 version: string
@@ -468,7 +391,6 @@ version: string
 		require.NoError(t, err)
 		assert.False(t, result.Valid)
 		assert.NotEmpty(t, result.Errors)
-		// Should have VALIDATION_ERROR code
 		hasValidationError := false
 		for _, e := range result.Errors {
 			if e.Code == "VALIDATION_ERROR" {
@@ -497,7 +419,7 @@ name: string
 // --- Tests for GenerateTFVarsFromSpec ---
 
 func TestGenerateTFVarsFromSpec(t *testing.T) {
-	t.Run("generates complete tfvars from spec with domain", func(t *testing.T) {
+	t.Run("generates tfvars with domain and subnet", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		bridge := NewTerraformBridge(tmpDir)
 
@@ -505,12 +427,7 @@ func TestGenerateTFVarsFromSpec(t *testing.T) {
 			Name:     "my-homelab",
 			StackKit: "base-homelab",
 			Domain:   "homelab.example.com",
-			Email:    "admin@example.com",
-			Variant:  "beszel",
-			Compute:  models.ComputeSpec{Tier: "high"},
-			Nodes: []models.NodeSpec{
-				{Name: "server1", IP: "192.168.1.100", Role: "standalone"},
-			},
+			Network:  models.NetworkSpec{Subnet: "172.20.0.0/16"},
 		}
 
 		outputDir := filepath.Join(tmpDir, "output")
@@ -524,16 +441,16 @@ func TestGenerateTFVarsFromSpec(t *testing.T) {
 		require.NoError(t, json.Unmarshal(data, &tfvars))
 
 		assert.Equal(t, "homelab.example.com", tfvars.Domain)
-		assert.Equal(t, "admin@example.com", tfvars.ACMEEmail)
-		assert.Equal(t, "proxy", tfvars.AccessMode)
-		assert.True(t, tfvars.EnableHTTPS)
-		assert.True(t, tfvars.EnableLetsEncrypt)
-		assert.Equal(t, "beszel", tfvars.Variant)
-		assert.Equal(t, "high", tfvars.ComputeTier)
-		assert.Equal(t, "192.168.1.100", tfvars.AdvertiseHost)
+		assert.Equal(t, "172.20.0.0/16", tfvars.NetworkSubnet)
+		assert.True(t, tfvars.EnableTraefik)
+		assert.True(t, tfvars.EnableTinyauth)
+		assert.True(t, tfvars.EnablePocketID)
+		assert.True(t, tfvars.EnableDokploy)
+		assert.True(t, tfvars.EnableDokployApps)
+		assert.False(t, tfvars.EnableDashboard)
 	})
 
-	t.Run("generates minimal tfvars for local mode", func(t *testing.T) {
+	t.Run("generates minimal tfvars for empty spec", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		bridge := NewTerraformBridge(tmpDir)
 
@@ -552,72 +469,22 @@ func TestGenerateTFVarsFromSpec(t *testing.T) {
 		var tfvars TFVars
 		require.NoError(t, json.Unmarshal(data, &tfvars))
 
-		assert.Equal(t, "ports", tfvars.AccessMode)
-		assert.Equal(t, "default", tfvars.Variant)
-		assert.Equal(t, "standard", tfvars.ComputeTier)
-		assert.False(t, tfvars.EnableHTTPS)
-		assert.False(t, tfvars.EnableLetsEncrypt)
 		assert.Empty(t, tfvars.Domain)
+		assert.Empty(t, tfvars.NetworkSubnet)
+		assert.True(t, tfvars.EnableTraefik)
+		assert.True(t, tfvars.EnableDokploy)
 	})
 
-	t.Run("email without domain does not enable letsencrypt", func(t *testing.T) {
+	t.Run("service enabled=false disables service", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		bridge := NewTerraformBridge(tmpDir)
 
 		spec := &models.StackSpec{
-			Name:     "email-only",
-			StackKit: "base-homelab",
-			Email:    "admin@example.com",
-		}
-
-		outputDir := filepath.Join(tmpDir, "output")
-		err := bridge.GenerateTFVarsFromSpec(spec, outputDir)
-		require.NoError(t, err)
-
-		data, err := os.ReadFile(filepath.Join(outputDir, "terraform.tfvars.json"))
-		require.NoError(t, err)
-
-		var tfvars TFVars
-		require.NoError(t, json.Unmarshal(data, &tfvars))
-
-		assert.Equal(t, "ports", tfvars.AccessMode)
-		assert.False(t, tfvars.EnableLetsEncrypt)
-		assert.Equal(t, "admin@example.com", tfvars.ACMEEmail)
-	})
-
-	t.Run("ignores auto compute tier", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		bridge := NewTerraformBridge(tmpDir)
-
-		spec := &models.StackSpec{
-			Name:     "auto-tier",
-			StackKit: "base-homelab",
-			Compute:  models.ComputeSpec{Tier: "auto"},
-		}
-
-		outputDir := filepath.Join(tmpDir, "output")
-		err := bridge.GenerateTFVarsFromSpec(spec, outputDir)
-		require.NoError(t, err)
-
-		data, err := os.ReadFile(filepath.Join(outputDir, "terraform.tfvars.json"))
-		require.NoError(t, err)
-
-		var tfvars TFVars
-		require.NoError(t, json.Unmarshal(data, &tfvars))
-
-		assert.Equal(t, "standard", tfvars.ComputeTier)
-	})
-
-	t.Run("extracts service port overrides", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		bridge := NewTerraformBridge(tmpDir)
-
-		spec := &models.StackSpec{
-			Name:     "custom-ports",
+			Name:     "custom",
 			StackKit: "base-homelab",
 			Services: map[string]any{
-				"traefik": map[string]any{"port": 9090},
-				"dozzle":  map[string]any{"port": 9999},
+				"pocketid":  map[string]any{"enabled": false},
+				"dashboard": map[string]any{"enabled": true},
 			},
 		}
 
@@ -631,8 +498,11 @@ func TestGenerateTFVarsFromSpec(t *testing.T) {
 		var tfvars TFVars
 		require.NoError(t, json.Unmarshal(data, &tfvars))
 
-		assert.Equal(t, 9090, tfvars.TraefikDashboardPort)
-		assert.Equal(t, 9999, tfvars.DozzlePort)
+		assert.False(t, tfvars.EnablePocketID)
+		assert.True(t, tfvars.EnableDashboard)
+		// Others still default to true
+		assert.True(t, tfvars.EnableTraefik)
+		assert.True(t, tfvars.EnableTinyauth)
 	})
 }
 
@@ -643,30 +513,47 @@ func TestSpecToTFVars(t *testing.T) {
 		spec := &models.StackSpec{}
 		tfvars := bridge.specToTFVars(spec)
 
-		assert.Equal(t, "ports", tfvars.AccessMode)
-		assert.Equal(t, "default", tfvars.Variant)
-		assert.Equal(t, "standard", tfvars.ComputeTier)
-		assert.Equal(t, "0.0.0.0", tfvars.BindAddress)
-		assert.False(t, tfvars.EnableHTTPS)
-		assert.False(t, tfvars.EnableLetsEncrypt)
+		assert.Empty(t, tfvars.Domain)
+		assert.Empty(t, tfvars.NetworkSubnet)
+		assert.True(t, tfvars.EnableTraefik)
+		assert.True(t, tfvars.EnableTinyauth)
+		assert.True(t, tfvars.EnablePocketID)
+		assert.True(t, tfvars.EnableDokploy)
+		assert.True(t, tfvars.EnableDokployApps)
+		assert.False(t, tfvars.EnableDashboard)
 	})
 
-	t.Run("domain triggers proxy mode and HTTPS", func(t *testing.T) {
+	t.Run("domain is passed through", func(t *testing.T) {
 		spec := &models.StackSpec{Domain: "test.example.com"}
 		tfvars := bridge.specToTFVars(spec)
 
-		assert.Equal(t, "proxy", tfvars.AccessMode)
-		assert.True(t, tfvars.EnableHTTPS)
-		assert.False(t, tfvars.EnableLetsEncrypt)
+		assert.Equal(t, "test.example.com", tfvars.Domain)
 	})
 
-	t.Run("domain + email enables letsencrypt", func(t *testing.T) {
+	t.Run("network subnet is passed through", func(t *testing.T) {
 		spec := &models.StackSpec{
-			Domain: "test.example.com",
-			Email:  "admin@example.com",
+			Network: models.NetworkSpec{Subnet: "10.10.0.0/16"},
 		}
 		tfvars := bridge.specToTFVars(spec)
 
-		assert.True(t, tfvars.EnableLetsEncrypt)
+		assert.Equal(t, "10.10.0.0/16", tfvars.NetworkSubnet)
+	})
+
+	t.Run("service overrides apply over defaults", func(t *testing.T) {
+		spec := &models.StackSpec{
+			Services: map[string]any{
+				"traefik":  map[string]any{"enabled": false},
+				"dokploy":  map[string]any{"enabled": false},
+				"dashboard": map[string]any{"enabled": true},
+			},
+		}
+		tfvars := bridge.specToTFVars(spec)
+
+		assert.False(t, tfvars.EnableTraefik)
+		assert.False(t, tfvars.EnableDokploy)
+		assert.True(t, tfvars.EnableDashboard)
+		// Unaffected defaults remain
+		assert.True(t, tfvars.EnableTinyauth)
+		assert.True(t, tfvars.EnablePocketID)
 	})
 }

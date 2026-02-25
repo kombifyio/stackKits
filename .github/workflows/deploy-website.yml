@@ -12,137 +12,29 @@ on:
       - '.github/workflows/deploy-website.yml'
   workflow_dispatch:
 
-env:
-  ACR_NAME: acrkombifyprod
-  IMAGE_NAME: stackkits-web
-  WEBSITE_DIR: website-v2
-  WEBSITE_PORT: 80
+permissions:
+  contents: read
+  id-token: write
+  packages: write
 
 jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+  deploy:
     if: github.ref_name == 'main' || github.ref_name == 'dev0.1'
-    
-    environment:
-      name: ${{ github.ref_name == 'main' && 'production' || 'test' }}
-      url: ${{ github.ref_name == 'main' && 'https://stackkits.kombify.io' || '' }}
-
-    env:
-      RESOURCE_GROUP: rg-kombify-prod
-      CONTAINER_APP_ENV: cae-kombify-prod
-      CONTAINER_APP_NAME: ${{ github.ref_name == 'main' && 'ca-stackkits-web-prod' || 'ca-stackkits-web-test' }}
-    
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      
-      - name: Login to Azure
-        uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-      
-      - name: Login to ACR
-        uses: azure/docker-login@v2
-        with:
-          login-server: ${{ env.ACR_NAME }}.azurecr.io
-          username: ${{ secrets.ACR_USERNAME }}
-          password: ${{ secrets.ACR_PASSWORD }}
-
-      - name: Login to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: Build and push Docker image (ACR + GHCR)
-        run: |
-          docker build \
-            -f ${{ env.WEBSITE_DIR }}/Dockerfile \
-            -t ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }} \
-            -t ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:latest \
-            -t ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }} \
-            -t ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:latest \
-            ${{ env.WEBSITE_DIR }}
-          docker push ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
-          docker push ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:latest
-          docker push ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
-          docker push ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:latest
-      
-      - name: Check if Container App exists
-        id: check_app
-        run: |
-          if az containerapp show --name ${{ env.CONTAINER_APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} &>/dev/null; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-          fi
-      
-      - name: Create Container App (if not exists)
-        if: steps.check_app.outputs.exists == 'false'
-        run: |
-          az containerapp create \
-            --name ${{ env.CONTAINER_APP_NAME }} \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --environment ${{ env.CONTAINER_APP_ENV }} \
-            --image ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }} \
-            --target-port ${{ env.WEBSITE_PORT }} \
-            --ingress external \
-            --registry-server ${{ env.ACR_NAME }}.azurecr.io \
-            --registry-username ${{ secrets.ACR_USERNAME }} \
-            --registry-password ${{ secrets.ACR_PASSWORD }} \
-            --cpu 0.25 \
-            --memory 0.5Gi \
-            --min-replicas 0 \
-            --max-replicas 2
-      
-      - name: Update Container App (if exists)
-        if: steps.check_app.outputs.exists == 'true'
-        run: |
-          az containerapp update \
-            --name ${{ env.CONTAINER_APP_NAME }} \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --image ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
-      
-      - name: Get Container App URL
-        id: get_url
-        run: |
-          FQDN=$(az containerapp show \
-            --name ${{ env.CONTAINER_APP_NAME }} \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --query "properties.configuration.ingress.fqdn" -o tsv)
-          echo "fqdn=$FQDN" >> $GITHUB_OUTPUT
-
-      - name: Health check
-        id: health
-        run: |
-          FQDN="${{ steps.get_url.outputs.fqdn }}"
-          echo "Checking health at https://$FQDN"
-          for i in {1..10}; do
-            STATUS=$(curl -sL -o /dev/null -w "%{http_code}" "https://$FQDN" --max-time 10 2>/dev/null || echo "000")
-            if [ "$STATUS" -lt 400 ]; then
-              echo "Health check passed (HTTP $STATUS)"
-              exit 0
-            fi
-            echo "Attempt $i/10: HTTP $STATUS, retrying..."
-            sleep 10
-          done
-          echo "::error::Health check failed"
-          exit 1
-
-      - name: Deployment Summary
-        run: |
-          echo "## StackKits Website Deployed" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| ACR Image | \`${{ env.IMAGE_NAME }}:${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| GHCR Image | \`ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Environment | ${{ github.ref_name == 'main' && 'production' || 'test' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| ACA URL | https://${{ steps.get_url.outputs.fqdn }} |" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ github.ref_name }}" = "main" ]; then
-            echo "| Custom Domain | https://stackkits.kombify.io |" >> $GITHUB_STEP_SUMMARY
-          fi
-          echo "| Branch | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Commit | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+    uses: KombiverseLabs/.github/.github/workflows/kombify-deploy.yml@main
+    with:
+      service-name: stackkits-web
+      image-name: stackkits-web
+      dockerfile: website-v2/Dockerfile
+      docker-context: website-v2
+      container-app-name: ${{ github.ref_name == 'main' && 'ca-stackkits-web-prod' || 'ca-stackkits-web-test' }}
+      resource-group: rg-kombify-prod
+      container-app-env: cae-kombify-prod
+      min-replicas: 1
+      max-replicas: 2
+      cpu: '0.5'
+      memory: '1Gi'
+      target-port: 80
+      health-endpoint: /
+      expected-content-type: text/html
+      expected-content: kombify StackKits
+    secrets: inherit

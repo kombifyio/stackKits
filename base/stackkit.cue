@@ -213,8 +213,9 @@ package base
 	enabled: bool | *true
 
 	// Output URLs and access information
+	// url is optional — internal services (databases, caches) may omit it
 	output?: {
-		url:         string
+		url?:        string
 		description: string
 		credentials?: {
 			defaultUser?: string

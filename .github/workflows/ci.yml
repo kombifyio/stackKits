@@ -13,7 +13,6 @@ permissions:
 
 env:
   GO_VERSION: "1.24"
-  CUE_VERSION: "0.9.2"
 
 jobs:
   lint:
@@ -42,7 +41,7 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -84,7 +83,8 @@ jobs:
 
       - name: Install CUE
         run: |
-          go install cuelang.org/go/cmd/cue@v${{ env.CUE_VERSION }}
+          CUE_VERSION=$(grep 'cuelang.org/go ' go.mod | awk '{print $2}')
+          go install cuelang.org/go/cmd/cue@${CUE_VERSION}
           echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
 
       - name: Validate base schemas

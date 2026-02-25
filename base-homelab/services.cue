@@ -42,7 +42,7 @@ import "github.com/kombihq/stackkits/base"
 	type:        "reverse-proxy"
 	required:    true
 	image:       "traefik"
-	tag:         "v3.1"
+	tag:         "v3.3"
 	description: "Modern reverse proxy with automatic HTTPS via Let's Encrypt"
 
 	network: {

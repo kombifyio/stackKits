@@ -56,7 +56,7 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 	}
 
 	printInfo("Generating OpenTofu files for: %s", bold(spec.Name))
-	printInfo("StackKit: %s, Variant: %s, Mode: %s, Context: %s", spec.StackKit, spec.Variant, spec.Mode, contextOrDefault(spec.Context))
+	printInfo("StackKit: %s, Mode: %s, Context: %s", spec.StackKit, spec.Mode, contextOrDefault(spec.Context))
 
 	// Find StackKit directory
 	stackkitDir, err := loader.FindStackKitDir(spec.StackKit)
@@ -163,7 +163,8 @@ func copyOrRenderTemplates(srcDir, dstDir string, spec *models.StackSpec, stackk
 }
 
 // generateTfvarsJSON generates terraform.tfvars.json matching the template variables.
-// The template (main.tf) uses these variables to configure which services are deployed.
+// Service enablement is module-based: all base-homelab services are enabled by default.
+// Per-service overrides can be applied via spec.Services[name]["enabled"].
 func generateTfvarsJSON(spec *models.StackSpec) []byte {
 	vars := make(map[string]interface{})
 
@@ -182,35 +183,14 @@ func generateTfvarsJSON(spec *models.StackSpec) []byte {
 		vars["network_subnet"] = "172.20.0.0/16"
 	}
 
-	// Service enablement based on variant
-	variant := spec.Variant
-	if variant == "" {
-		variant = "default"
-	}
-
-	switch variant {
-	case "default", "secure":
-		vars["enable_traefik"] = true
-		vars["enable_tinyauth"] = true
-		vars["enable_pocketid"] = true
-		vars["enable_dokploy"] = true
-		vars["enable_dokploy_apps"] = true
-		vars["enable_dashboard"] = false
-	case "beszel":
-		vars["enable_traefik"] = true
-		vars["enable_tinyauth"] = true
-		vars["enable_pocketid"] = true
-		vars["enable_dokploy"] = true
-		vars["enable_dokploy_apps"] = true
-		vars["enable_dashboard"] = false
-	case "minimal":
-		vars["enable_traefik"] = true
-		vars["enable_tinyauth"] = false
-		vars["enable_pocketid"] = false
-		vars["enable_dokploy"] = false
-		vars["enable_dokploy_apps"] = false
-		vars["enable_dashboard"] = false
-	}
+	// Module-based service defaults: all base-homelab services enabled by default.
+	// Per-service overrides are applied below via spec.Services.
+	vars["enable_traefik"] = true
+	vars["enable_tinyauth"] = true
+	vars["enable_pocketid"] = true
+	vars["enable_dokploy"] = true
+	vars["enable_dokploy_apps"] = true
+	vars["enable_dashboard"] = false
 
 	// TinyAuth configuration
 	domain := vars["domain"].(string)

@@ -89,7 +89,8 @@ echo "[OK] base-homelab/"
 cue vet ./modern-homelab/... 2>/dev/null && echo "[OK] modern-homelab/" || echo "[SKIP] modern-homelab/"
 for dir in modules/*/; do
   if [ -f "$dir/module.cue" ]; then
-    cue vet "./$dir/..." && echo "[OK] $dir" || echo "[FAIL] $dir"
+    # -c=false: allow incomplete values (settings.perma require deploy-time secrets, no defaults)
+    cue vet -c=false "./$dir/..." && echo "[OK] $dir" || echo "[FAIL] $dir"
   fi
 done
 echo "=== CUE Validation Complete ==="

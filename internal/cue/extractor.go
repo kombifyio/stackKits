@@ -2,6 +2,8 @@ package cue
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"cuelang.org/go/cue"
@@ -44,8 +46,8 @@ type PortDef struct {
 // VolumeDef represents a volume mount.
 type VolumeDef struct {
 	Source   string
-	Target  string
-	Type    string // "bind" or "volume"
+	Target   string
+	Type     string // "bind" or "volume"
 	ReadOnly bool
 }
 
@@ -81,16 +83,45 @@ func NewExtractor(stackkitDir string) *Extractor {
 	}
 }
 
-// ExtractServices loads CUE definitions and extracts the service collection
-// matching the given variant.
-func (e *Extractor) ExtractServices(variant string) ([]ServiceDef, error) {
+// ExtractServicesFromModules scans the modules directory and extracts services
+// from each module's Contract. This replaces the legacy variant-based extraction.
+func (e *Extractor) ExtractServicesFromModules(modulesDir string) ([]ServiceDef, error) {
+	entries, err := os.ReadDir(modulesDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read modules directory: %w", err)
+	}
+
+	var allServices []ServiceDef
+	for _, entry := range entries {
+		if !entry.IsDir() || strings.HasPrefix(entry.Name(), "_") {
+			continue
+		}
+
+		modulePath := filepath.Join(modulesDir, entry.Name())
+		moduleCue := filepath.Join(modulePath, "module.cue")
+		if _, statErr := os.Stat(moduleCue); os.IsNotExist(statErr) {
+			continue
+		}
+
+		services, err := e.extractModuleServices(modulePath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to extract services from module %s: %w", entry.Name(), err)
+		}
+		allServices = append(allServices, services...)
+	}
+
+	return allServices, nil
+}
+
+// extractModuleServices loads a single module's CUE package and extracts its services.
+func (e *Extractor) extractModuleServices(modulePath string) ([]ServiceDef, error) {
 	cfg := &load.Config{
-		Dir: e.stackkitDir,
+		Dir: modulePath,
 	}
 
 	instances := load.Instances([]string{"."}, cfg)
 	if len(instances) == 0 {
-		return nil, fmt.Errorf("no CUE files found in %s", e.stackkitDir)
+		return nil, fmt.Errorf("no CUE files found in %s", modulePath)
 	}
 
 	inst := instances[0]
@@ -103,32 +134,13 @@ func (e *Extractor) ExtractServices(variant string) ([]ServiceDef, error) {
 		return nil, fmt.Errorf("failed to build CUE value: %w", err)
 	}
 
-	// Map variant name to CUE service collection identifier
-	collectionName := variantToCollection(variant)
-
-	// Look up the service collection
-	collection := value.LookupPath(cue.ParsePath(collectionName))
-	if !collection.Exists() {
-		return nil, fmt.Errorf("service collection %q not found in CUE (variant: %s)", collectionName, variant)
+	// Look up Contract.services — the map of service definitions in this module
+	services := value.LookupPath(cue.ParsePath("Contract.services"))
+	if !services.Exists() {
+		return nil, nil // Module with no services is valid (e.g., infrastructure-only modules)
 	}
 
-	return e.extractFromCollection(collection)
-}
-
-// variantToCollection maps a variant name to the CUE service collection.
-func variantToCollection(variant string) string {
-	switch variant {
-	case "default", "":
-		return "#DefaultServices"
-	case "beszel":
-		return "#DefaultServicesWithBeszel"
-	case "secure":
-		return "#SecureServices"
-	case "minimal":
-		return "#MinimalServices"
-	default:
-		return "#DefaultServices"
-	}
+	return e.extractFromCollection(services)
 }
 
 // extractFromCollection iterates over the fields in a service collection

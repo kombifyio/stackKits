@@ -1,6 +1,6 @@
 # StackKits Roadmap
 
-> **Last Updated:** 2026-02-21
+> **Last Updated:** 2026-02-23
 > **Status:** Active Development — Phase 1 (IaC Pipeline)
 > **Current Version:** v1.0.0-beta  
 > **Architecture:** [ARCHITECTURE_V4.md](./ARCHITECTURE_V4.md)  
@@ -27,12 +27,13 @@ This roadmap consolidates all planned work into a single milestone-based plan (M
 | Component | Status | Notes |
 |-----------|--------|-------|
 | CUE base schemas | 95% | ~2800 lines, production-quality. `base/platform/` and `base/schema/` deleted (TD-01/02) |
-| base-homelab | 75% | CUE validates, services defined, variants deleted (TD-12). Needs bridge.go rewrite for full E2E |
+| base-homelab | 85% | E2E verified (2026-02-22): 31 resources, 9 healthy containers. bridge.go TFVars aligned with main.tf |
 | modern-homelab | 0% | Entirely K8s/k3s-based — needs **complete rewrite** for Docker multi-node (TD-08) |
 | ha-homelab | 0% | Schema only, 8 explicit TODOs |
 | stackkit CLI | 95% | 12 commands functional: init (interactive), generate, validate, plan, apply, destroy, status (--json), prepare (memory), completion, version, prompt, serve |
-| Add-On system | 0% | **NEW** — replaces monolithic variants. 17 CUE schemas exist but no code generation |
-| Context system | 0% | **NEW** — replaces manual compute tier selection |
+| **Service Modules** | **65%** | **NEW** — 14 modules implemented in `modules/`, each with module.cue + reference-compose + integration tests |
+| Add-On system | 0% | Replaces monolithic variants. 17 CUE schemas exist but no code generation |
+| Context system | 0% | Replaces manual compute tier selection |
 | kombify Stack integration | 30% | Unifier pipeline exists, needs v4 alignment |
 | API server | 95% | 13 endpoints, API key auth (TD-28), rate limiting (TD-33), CORS (TD-40), 42 test cases (TD-34), structured errors (TD-32), pagination (TD-41) |
 | Documentation | 50% | v4 docs current, K8s refs removed from active docs. Cross-repo Mintlify docs still outdated |
@@ -130,17 +131,45 @@ Before implementation, a full audit identified critical inconsistencies across S
 
 **Goal:** CUE schemas produce real, deployable infrastructure. Base Kit end-to-end.
 
+#### Service Module Architecture (Active Work)
+
+Service modules are the atomic unit of a StackKit. Each module in `modules/<name>/` defines:
+- `module.cue` — `#ModuleContract` (metadata, requires, provides, settings, services)
+- `tests/reference-compose.yml` — isolated Docker Compose for testing the module in isolation
+- `tests/integration_test.sh` — test script (container health, routing, security hardening)
+
+**Modules implemented (14 of 14 Base Kit services):**
+traefik, tinyauth, pocketid, dokploy, socket-proxy, uptime-kuma, dozzle, dashboard, whoami, lldap, step-ca, crowdsec, adguard-home, unbound
+
+**Test pyramid per module:**
+1. CUE vet (`mise run test:cue`) — schema validation
+2. Module integration test (`mise run test:module <name>`) — isolated reference-compose
+3. Full-stack composition test (`mise run test:compose`) — all modules together
+4. E2E via VM (`mise run dev`) — stackkit apply on fresh server
+
+**Active work:**
+- [ ] Run and verify all module integration tests (11 tests per module) — needs Docker
+- [ ] Break monolithic `main.tf` into per-module OpenTofu fragments (StackKits-0t0.6)
+- [ ] Remove legacy variant system from `base-homelab/stackfile.cue` (StackKits-x2u)
+
 #### IaC Pipeline (Active Work)
 - [ ] CUE-as-SSoT: CUE validates + exports `tfvars.json` (not template rendering)
-- [ ] OpenTofu modularization: split `main.tf` (1130 lines) into modules (traefik, dokploy, monitoring, identity)
-- [ ] `bridge.go` rewrite: full CUE export → tfvars.json pipeline (currently only extracts ~10 fields)
 - [ ] base-homelab end-to-end: `validate → generate → plan → apply`
 - [ ] JSON schema export for IDE support (`cue export --schema`)
 - [ ] Port collision detection as CUE constraint
 - [ ] Service dependency validation (`needs[]` references enabled services)
 
 #### Completed
+- [x] **`bridge.go` TFVars aligned with `main.tf`** — `TFVars` struct rebuilt with actual main.tf variables (`enable_traefik`, `enable_tinyauth`, `enable_pocketid`, `enable_dokploy`, `enable_dokploy_apps`, `enable_dashboard`, `domain`, `network_subnet`, etc.). `specToTFVars()` now generates correct tfvars.json. (StackKits-r1p.2, 2026-02-23)
+- [x] **`bridge.go` rewrite: module-based CUE extraction** — `ExtractServicesFromModules()` replaces `variantToCollection()`. Reads `Contract.services` from each `modules/<name>/module.cue` (2026-02-23)
+- [x] **`generate.go` variant switch removed** — service enablement is now module-based (all enabled by default), per-service override via `spec.Services` (2026-02-23)
+- [x] **`extractor.go` variant cleanup** — `variantToCollection()` deleted, `ExtractServices(variant)` replaced with `ExtractServicesFromModules(modulesDir)` (StackKits-xxt, 2026-02-23)
 - [x] CI/CD pipeline: `cue vet ./...`, Go tests, lint on every push (`.github/workflows/ci.yml`)
+- [x] **E2E verified (2026-02-22):** `stackkit apply` deploys 31 resources, 9 healthy containers, TinyAuth ForwardAuth protects all services
+- [x] `#ModuleContract` CUE schema defined in `base/module.cue`
+- [x] All 14 Base Kit service modules implemented with `module.cue` + reference-compose + integration tests
+- [x] mise tasks: `test:cue`, `test:module`, `test:modules`, `test:compose`
+- [x] `modules/_integration/` full-stack composition test (all modules together)
 - [x] **API hardening: Fix filesystem write vulnerability in `handleGenerateTFVars`** (TD-27, P0 — resolved 2026-02-11)
 - [x] **API hardening: Add authentication middleware** (TD-28, P0 — resolved 2026-02-11)
 - [x] **API hardening: Fix compute tier enum mismatch in OpenAPI spec** (TD-29, P0 — resolved 2026-02-11)
@@ -149,7 +178,7 @@ Before implementation, a full audit identified critical inconsistencies across S
 - [x] **API hardening: Capture response status in logging middleware** (TD-35, P1 — resolved 2026-02-11)
 - [x] Fix `base.#Layer3Applications.services` constraint (Array vs Map — TD-09, resolved 2026-02-13)
 
-**Done Criteria:** `stackkit validate && stackkit generate && stackkit plan` works for base-homelab.
+**Done Criteria:** `stackkit validate && stackkit generate && stackkit plan` works for base-homelab. All module integration tests pass.
 
 ---
 
