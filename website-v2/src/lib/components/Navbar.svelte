@@ -18,9 +18,9 @@
 	];
 
 	const kombifyTools: NavItem[] = [
-		{ href: 'https://kombify.io', label: 'kombify Cloud', description: 'The guided platform for modern self-hosted infrastructure', external: true },
-		{ href: 'https://stack.kombify.io', label: 'kombify Stack', description: 'Hybrid cloud control plane - unify home and cloud', external: true },
-		{ href: 'https://sim.kombify.io', label: 'kombify Sim', description: 'Simulate and test your homelab before deployment', external: true }
+		{ href: import.meta.env.VITE_PORTAL_URL || 'https://kombify.io', label: 'kombify Cloud', description: 'The guided platform for modern self-hosted infrastructure', external: true },
+		{ href: import.meta.env.VITE_KOMBISTACK_URL || 'https://stack.kombify.io', label: 'kombify Stack', description: 'Hybrid cloud control plane - unify home and cloud', external: true },
+		{ href: import.meta.env.VITE_KOMBISIM_URL || 'https://simulate.kombify.io', label: 'kombify Sim', description: 'Simulate and test your homelab before deployment', external: true }
 	];
 
 	const mobileNavItems: NavItem[] = [
@@ -204,7 +204,7 @@
 								<!-- Bottom featured -->
 								<div class="mt-4 border-t border-border pt-4">
 									<a
-										href="https://kombify.io"
+										href={import.meta.env.VITE_PORTAL_URL || 'https://kombify.io'}
 										target="_blank"
 										rel="noopener"
 										class="flex items-center gap-3 rounded-lg bg-linear-to-r from-primary/10 to-primary/5 p-3 transition-colors hover:from-primary/20 hover:to-primary/10"
@@ -281,7 +281,7 @@
 				</div>
 				<div class="mt-3 pt-3 border-t border-border">
 					<a
-						href="https://kombify.io"
+						href={import.meta.env.VITE_PORTAL_URL || 'https://kombify.io'}
 						target="_blank"
 						rel="noopener"
 						onclick={() => (mobileMenuOpen = false)}

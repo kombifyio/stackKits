@@ -20,9 +20,11 @@
 		{ label: 'How It Works', href: '/how-it-works' }
 	];
 
+	const portalUrl = import.meta.env.VITE_PORTAL_URL || 'https://kombify.io';
+
 	const companyLinks = [
-		{ label: 'kombify Platform', href: 'https://kombify.io', external: true },
-		{ label: 'About', href: 'https://kombify.io', external: true },
+		{ label: 'kombify Platform', href: portalUrl, external: true },
+		{ label: 'About', href: portalUrl, external: true },
 		{ label: 'Contact', href: 'mailto:info@kombify.io', external: true }
 	];
 
