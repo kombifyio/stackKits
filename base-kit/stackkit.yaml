@@ -1,0 +1,211 @@
+# StackKit Metadata and Mode Configuration
+apiVersion: stackkit/v1
+kind: StackKit
+
+metadata:
+  name: base-kit
+  version: "4.0.0"
+  description: "Single-environment deployment with Docker, Dokploy and monitoring"
+  author: "kombify Stack Team"
+  license: "Apache-2.0"
+  repository: "https://github.com/kombihq/stackkits"
+  tags:
+    - homelab
+    - single-node
+    - docker
+    - traefik
+    - dokploy
+    - professional
+
+# Supported operating systems
+supportedOS:
+  - ubuntu-24
+  - ubuntu-22
+  - debian-12
+
+# Resource requirements
+requirements:
+  minimum:
+    cpu: 2
+    memory: 4
+    disk: 50
+  recommended:
+    cpu: 4
+    memory: 8
+    disk: 100
+
+# =============================================================================
+# DEPLOYMENT MODES (Available for all StackKits)
+# =============================================================================
+modes:
+  # Simple Mode: OpenTofu-only with Go integration
+  simple:
+    description: "OpenTofu-only deployment via kombify Stack Core"
+    templateDir: "templates/simple"
+    engine: "opentofu"
+    features:
+      - "Direct OpenTofu execution"
+      - "Go-based state management"
+      - "Simple rollback via state"
+    recommended_for:
+      - "Single node deployments"
+      - "Quick setup without drift detection"
+      - "Users new to infrastructure-as-code"
+      - "Development and testing"
+
+  # Advanced Mode: Terramate with drift detection
+  advanced:
+    description: "Terramate-orchestrated deployment with drift detection"
+    templateDir: "templates/advanced"
+    engine: "terramate"
+    requires:
+      - "terramate >= 0.5.0"
+    features:
+      - "Drift detection on schedule"
+      - "Granular stack orchestration"
+      - "Day-2 operations support"
+      - "Gradual rollouts"
+    recommended_for:
+      - "Production environments"
+      - "Compliance requirements"
+      - "Multi-stack coordination"
+    stacks:
+      - name: network
+        order: 1
+        description: "Docker networks and DNS"
+      - name: services
+        order: 2
+        after: [network]
+        description: "Core services (Traefik, monitoring)"
+      - name: applications
+        order: 3
+        after: [services]
+        description: "User applications via Dokploy"
+
+# Auto-selection rules
+autoSelect:
+  advancedWhen:
+    - "driftDetection.enabled == true"
+    - "autoUpdates.enabled == true"
+    - "compliance.required == true"
+  default: simple
+
+# =============================================================================
+# VARIANTS (Service Set Choices)
+# =============================================================================
+variants:
+  # Default: Dokploy-based PaaS stack
+  default:
+    name: "Standard"
+    description: "Dokploy PaaS with Uptime Kuma monitoring"
+    serviceCollection: "DefaultServices"
+    services:
+      - traefik       # Core: Reverse Proxy (required)
+      - dokploy       # Platform: PaaS deployment
+      - uptime-kuma   # Monitoring: Uptime & status pages
+      - dozzle        # Observability: Log viewer
+      - whoami        # Test: Proxy verification
+
+  # Alternative monitoring with Beszel
+  beszel:
+    name: "Standard with Beszel"
+    description: "Dokploy PaaS with Beszel metrics monitoring"
+    serviceCollection: "DefaultServicesWithBeszel"
+    services:
+      - traefik       # Core: Reverse Proxy (required)
+      - dokploy       # Platform: PaaS deployment
+      - beszel        # Monitoring: Server metrics
+      - dozzle        # Observability: Log viewer
+      - whoami        # Test: Proxy verification
+
+  # Minimal: Traditional compose-based management
+  minimal:
+    name: "Minimal"
+    description: "Classic Dockge + Portainer stack for simple management"
+    serviceCollection: "MinimalServices"
+    services:
+      - traefik       # Core: Reverse Proxy (required)
+      - dockge        # Management: Compose UI
+      - portainer     # Management: Container UI
+      - netdata       # Monitoring: System metrics
+      - dozzle        # Observability: Log viewer
+
+# Default variant selection
+defaultVariant: default
+
+# Feature flags
+features:
+  multiNode: false
+  cloudProviders: false
+  vpnOverlay: false
+  gpuSupport: false
+  highAvailability: false
+
+# Compute tier adjustments
+computeTiers:
+  high:
+    requirements:
+      cpu: 8
+      memory: 16
+    additionalServices:
+      - prometheus
+      - grafana
+  standard:
+    requirements:
+      cpu: 4
+      memory: 8
+    additionalServices: []
+  low:
+    requirements:
+      cpu: 2
+      memory: 4
+    variantOverride: minimal
+    serviceOverrides:
+      dokploy: disabled
+      uptime-kuma: disabled
+      beszel: enabled
+
+# =============================================================================
+# SERVICE OUTPUTS (URLs and Credentials)
+# =============================================================================
+outputs:
+  format: "markdown"
+  include:
+    - serviceUrls
+    - credentials
+    - healthEndpoints
+  template: |
+    # 🏠 Base Kit - Deployed Services
+    
+    ## Service URLs
+    {{range .services}}
+    - **{{.displayName}}**: [{{.output.url}}]({{.output.url}})
+      {{.output.description}}
+    {{end}}
+    
+    ## Quick Access
+    | Service | URL | Notes |
+    |---------|-----|-------|
+    {{range .services}}
+    | {{.displayName}} | {{.output.url}} | {{.output.credentials.note}} |
+    {{end}}
+
+# Changelog
+changelog:
+  - version: "2.0.0"
+    date: "2025-01-27"
+    changes:
+      - "NEW: Dokploy as default PaaS platform"
+      - "NEW: Uptime Kuma for monitoring (default)"
+      - "NEW: Beszel as alternative monitoring option"
+      - "NEW: Whoami test container for verification"
+      - "NEW: Variant system (default, beszel, minimal)"
+      - "NEW: Service URLs output in deployment summary"
+      - "CHANGED: Dockge/Portainer moved to 'minimal' variant"
+      - "CHANGED: Two deployment modes (simple/advanced) standardized"
+  - version: "1.0.0"
+    date: "2025-01-08"
+    changes:
+      - "Initial release"
+      - "Ubuntu 24.04 support"
+      - "Core services: Traefik, Dockge, Dozzle, Netdata"

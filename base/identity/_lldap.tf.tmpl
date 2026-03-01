@@ -1,0 +1,231 @@
+# =============================================================================
+# CORE: IDENTITY - LLDAP (Lightweight LDAP)
+# =============================================================================
+# Layer 1 (CORE): Applied to ALL deployments
+#
+# This template deploys LLDAP for centralized identity management:
+# - Lightweight LDAP server for user/group management
+# - Web UI for administration
+# - LDAP/LDAPS ports for service authentication
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# VARIABLES
+# -----------------------------------------------------------------------------
+
+variable "lldap_enabled" {
+  description = "Enable LLDAP identity server"
+  type        = bool
+  default     = true
+}
+
+variable "lldap_version" {
+  description = "LLDAP Docker image version"
+  type        = string
+  default     = "stable"
+}
+
+variable "lldap_domain_base" {
+  description = "Base domain for LDAP (e.g., dc=example,dc=com)"
+  type        = string
+  default     = "dc=stack,dc=local"
+}
+
+variable "lldap_admin_email" {
+  description = "Admin email address"
+  type        = string
+  default     = "admin@stack.local"
+}
+
+variable "lldap_admin_username" {
+  description = "Admin username"
+  type        = string
+  default     = "admin"
+}
+
+variable "lldap_http_port" {
+  description = "HTTP port for LLDAP web UI"
+  type        = number
+  default     = 17170
+}
+
+variable "lldap_ldap_port" {
+  description = "LDAP port"
+  type        = number
+  default     = 3890
+}
+
+variable "lldap_ldaps_port" {
+  description = "LDAPS (TLS) port"
+  type        = number
+  default     = 6360
+}
+
+variable "lldap_traefik_host" {
+  description = "Traefik host rule for LLDAP web UI"
+  type        = string
+  default     = "lldap.stack.local"
+}
+
+variable "lldap_admin_password" {
+  description = "Admin password (use secret management in production)"
+  type        = string
+  sensitive   = true
+  default     = "changeme"
+}
+
+variable "lldap_jwt_secret" {
+  description = "JWT secret for LLDAP (use secret management in production)"
+  type        = string
+  sensitive   = true
+  default     = "change-me-in-production"
+}
+
+# -----------------------------------------------------------------------------
+# DOCKER NETWORK
+# -----------------------------------------------------------------------------
+
+resource "docker_network" "identity_net" {
+  count = var.lldap_enabled ? 1 : 0
+  name  = "identity_net"
+  driver = "bridge"
+
+  ipam_config {
+    subnet = "172.28.0.0/16"
+  }
+}
+
+# -----------------------------------------------------------------------------
+# LLDAP VOLUME
+# -----------------------------------------------------------------------------
+
+resource "docker_volume" "lldap_data" {
+  count = var.lldap_enabled ? 1 : 0
+  name  = "lldap-data"
+}
+
+# -----------------------------------------------------------------------------
+# LLDAP CONTAINER
+# -----------------------------------------------------------------------------
+
+resource "docker_container" "lldap" {
+  count = var.lldap_enabled ? 1 : 0
+
+  name  = "lldap"
+  image = "ghcr.io/lldap/lldap:${var.lldap_version}"
+
+  restart = "unless-stopped"
+
+  networks_advanced {
+    name = docker_network.identity_net[0].name
+  }
+
+  # Ports
+  ports {
+    internal = 17170
+    external = var.lldap_http_port
+    protocol = "tcp"
+  }
+
+  ports {
+    internal = 3890
+    external = var.lldap_ldap_port
+    protocol = "tcp"
+  }
+
+  ports {
+    internal = 6360
+    external = var.lldap_ldaps_port
+    protocol = "tcp"
+  }
+
+  # Volumes
+  volumes {
+    volume_name    = docker_volume.lldap_data[0].name
+    container_path = "/data"
+  }
+
+  # Environment
+  env = [
+    "LLDAP_VERBOSE=false",
+    "LLDAP_LOG_FORMAT=text",
+    "LLDAP_SMTP_ENABLE=false",
+    "LLDAP_LDAP_HOST=0.0.0.0",
+    "LLDAP_HTTP_HOST=0.0.0.0",
+    "LLDAP_LDAP_BASE_DN=${var.lldap_domain_base}",
+    "LLDAP_LDAP_USER_DN=admin",
+    "LLDAP_LDAP_USER_EMAIL=${var.lldap_admin_email}",
+    "LLDAP_LDAP_USER_PASS=${var.lldap_admin_password}",
+    "LLDAP_JWT_SECRET=${var.lldap_jwt_secret}",
+  ]
+
+  # Healthcheck
+  healthcheck {
+    test     = ["CMD", "wget", "-q", "--spider", "http://localhost:17170/health"]
+    interval = "30s"
+    timeout  = "5s"
+    retries  = 3
+  }
+
+  # Labels
+  labels {
+    label = "traefik.enable"
+    value = "true"
+  }
+
+  labels {
+    label = "traefik.http.routers.lldap.rule"
+    value = "Host(`${var.lldap_traefik_host}`)"
+  }
+
+  labels {
+    label = "traefik.http.routers.lldap.entrypoints"
+    value = "web"
+  }
+
+  labels {
+    label = "traefik.http.services.lldap.loadbalancer.server.port"
+    value = "17170"
+  }
+
+  labels {
+    label = "stackkit.layer"
+    value = "1-foundation"
+  }
+
+  labels {
+    label = "stackkit.managed-by"
+    value = "terraform"
+  }
+
+  labels {
+    label = "stackkit.identity-provider"
+    value = "lldap"
+  }
+
+  depends_on = [docker_volume.lldap_data, docker_network.identity_net]
+}
+
+# -----------------------------------------------------------------------------
+# OUTPUT
+# -----------------------------------------------------------------------------
+
+output "lldap_enabled" {
+  value       = var.lldap_enabled
+  description = "Whether LLDAP is enabled"
+}
+
+output "lldap_url" {
+  value       = var.lldap_enabled ? "http://${var.lldap_traefik_host}" : ""
+  description = "LLDAP web UI URL"
+}
+
+output "lldap_ldap_url" {
+  value       = var.lldap_enabled ? "ldap://localhost:${var.lldap_ldap_port}" : ""
+  description = "LDAP connection URL"
+}
+
+output "lldap_ldaps_url" {
+  value       = var.lldap_enabled ? "ldaps://localhost:${var.lldap_ldaps_port}" : ""
+  description = "LDAPS connection URL"
+}

@@ -1,0 +1,27 @@
+# Build artifacts
+build/
+*.exe
+
+# Deployment output (generated, not committed)
+deploy/
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate*
+*.tfplan
+.stackkit/
+
+# Test artifacts
+test-rollout/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Beads (task tracking, local)
+.beads/

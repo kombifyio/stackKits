@@ -1,0 +1,178 @@
+# kombify StackKits - mise configuration
+# https://mise.jdx.dev/
+min_version = "2024.11.1"
+
+[tools]
+go = "1.24.1"
+node = "22"
+dagger = "latest"
+opentofu = "latest"
+
+[env]
+PROJECT_NAME = "kombify-stackkits"
+_.file = [".env", ".env.local"]
+GOTOOLCHAIN = "auto"
+
+[tasks.setup]
+description = "Install dependencies and configure git hooks"
+run = [
+  "go mod download",
+  "go mod tidy",
+  "git config core.hooksPath .githooks",
+]
+
+[tasks.build]
+description = "Build CLI + server, start Docker Compose, run tests"
+run = [
+  "docker info > /dev/null 2>&1 || (echo 'ERROR: Docker Desktop is not running!' && exit 1)",
+  "go build -o build/stackkit ./cmd/stackkit",
+  "go build -o build/stackkit-server ./cmd/stackkit-server",
+  "docker compose up -d --build",
+  "go test -v -race -short ./pkg/... ./internal/...",
+  "cue vet ./base/...",
+  "cue vet ./base-kit/...",
+  "cue vet ./modern-homelab/...",
+]
+
+[tasks."build:cli"]
+description = "Build CLI binary only"
+run = "go build -o build/stackkit ./cmd/stackkit"
+
+[tasks."build:website"]
+description = "Build website, start Docker, run tests"
+dir = "website-v2"
+run = [
+  "docker info > /dev/null 2>&1 || (echo 'ERROR: Docker Desktop is not running!' && exit 1)",
+  "bun install",
+  "bun run build",
+  "bun run test",
+]
+
+[tasks.dev]
+description = "Run CLI in dev mode"
+run = "go run ./cmd/stackkit"
+
+[tasks.test]
+description = "Run all tests (unit + integration + CUE)"
+run = [
+  "go test -v -race -short ./pkg/... ./internal/...",
+  "go test -v -race ./tests/integration/..."
+]
+
+[tasks."test:unit"]
+description = "Run Go unit tests"
+run = "go test -v -race -short ./pkg/... ./internal/..."
+
+[tasks."test:cue"]
+description = "Run CUE schema validation"
+run = [
+  "cue vet ./base/...",
+  "cue vet ./base-kit/...",
+  "cue vet ./modern-homelab/..."
+]
+
+[tasks."test:validation"]
+description = "Run 3-layer validation suite"
+run = "./tests/run_validation.sh"
+
+[tasks."test:coverage"]
+description = "Run tests with coverage"
+run = [
+  "mkdir -p coverage",
+  "go test -v -race -coverprofile=coverage/coverage.out -covermode=atomic ./pkg/... ./internal/...",
+  "go tool cover -html=coverage/coverage.out -o coverage/coverage.html"
+]
+
+[tasks.lint]
+description = "Run Go linters"
+run = "golangci-lint run ./..."
+
+[tasks.fmt]
+description = "Format code"
+run = "go fmt ./..."
+
+[tasks.deps]
+description = "Download dependencies"
+run = [
+  "go mod download",
+  "go mod tidy"
+]
+
+[tasks.clean]
+description = "Remove build artifacts"
+run = [
+  "rm -rf build/",
+  "rm -rf coverage/"
+]
+
+[tasks.install]
+description = "Install CLI to GOPATH/bin"
+run = [
+  "go build -o build/stackkit ./cmd/stackkit",
+  "cp build/stackkit $(go env GOPATH)/bin/"
+]
+
+# --- Website Tasks ---
+
+[tasks."dev:website"]
+description = "Start website dev server"
+dir = "website-v2"
+run = "bun run dev"
+
+[tasks."preview:website"]
+description = "Preview production build"
+dir = "website-v2"
+run = "bun run preview"
+
+[tasks."test:e2e:website"]
+description = "Run website E2E tests"
+dir = "website-v2"
+run = "bunx playwright test"
+
+[tasks."test:visual:website"]
+description = "Run website visual regression tests"
+dir = "website-v2"
+run = "bunx playwright test --config=playwright.visual.config.ts"
+
+[tasks."docker:website"]
+description = "Build and run website Docker container locally"
+run = [
+  "docker build -t stackkits-web:local -f website-v2/Dockerfile website-v2",
+  "docker run --rm -p 8081:80 stackkits-web:local"
+]
+
+# --- Docker Tasks ---
+
+[tasks."docker:up"]
+description = "Start services in Docker"
+run = "docker compose up -d --build"
+
+[tasks."docker:down"]
+description = "Stop Docker services"
+run = "docker compose down"
+
+# --- CI/CD Tasks (Dagger) ---
+
+[tasks."ci:build"]
+description = "Build Go binaries via Dagger"
+run = "dagger call build --src=."
+
+[tasks."ci:test"]
+description = "Run tests via Dagger"
+run = "dagger call test --src=."
+
+[tasks."ci:lint"]
+description = "Run linter via Dagger"
+run = "dagger call lint --src=."
+
+[tasks."ci:validate"]
+description = "Validate CUE schemas via Dagger"
+run = "dagger call validate --src=."
+
+[tasks."ci:publish"]
+description = "Build and publish Docker image via Dagger"
+run = "dagger call publish --src=."
+
+[tasks."ci:all"]
+description = "Run full CI pipeline via Dagger"
+run = "dagger call build --src=. && dagger call test --src=. && dagger call lint --src=. && dagger call validate --src=."

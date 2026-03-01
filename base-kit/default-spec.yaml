@@ -1,0 +1,72 @@
+# base-kit Stack Specification
+#
+# Single-server homelab with identity, reverse proxy, PaaS, and monitoring.
+#
+# Usage:
+#   1. Copy: cp default-spec.yaml stack-spec.yaml
+#   2. Adjust: IP, SSH user, domain (optional)
+#   3. Deploy: stackkit generate && stackkit apply
+#
+# Architecture:
+#   L1 Foundation  - PocketID (OIDC), TinyAuth (ForwardAuth)
+#   L2 Platform    - Traefik, Dokploy + PostgreSQL + Redis, Dashboard
+#   L3 Application - Uptime Kuma, Whoami (deployed via Compose)
+#
+# All services accessible at <service>.stack.local (or your domain).
+# All protected by TinyAuth ForwardAuth middleware.
+
+name: my-homelab
+stackkit: base-kit
+variant: default
+mode: simple
+domain: stack.local
+email: admin@stack.local
+
+network:
+  mode: local
+  subnet: 172.20.0.0/16
+
+compute:
+  tier: standard
+
+ssh:
+  user: admin
+  port: 22
+  keyPath: ~/.ssh/id_ed25519
+
+nodes:
+  - name: homelab-server
+    role: standalone
+    ip: 192.168.1.100  # ADJUST: Your server IP
+
+# What to adjust:
+#
+#   Required:
+#     nodes[0].ip      - Your server's IP address
+#     ssh.user         - Your SSH username (e.g. "admin", "ubuntu")
+#     ssh.keyPath      - Path to your SSH private key
+#
+#   Optional:
+#     domain           - Your domain (default: stack.local)
+#     email            - ACME email for Let's Encrypt certificates
+#
+# DNS setup (add to /etc/hosts or use dnsmasq):
+#   192.168.1.100  auth.stack.local
+#   192.168.1.100  id.stack.local
+#   192.168.1.100  traefik.stack.local
+#   192.168.1.100  dokploy.stack.local
+#   192.168.1.100  base.stack.local
+#   192.168.1.100  kuma.stack.local
+#   192.168.1.100  whoami.stack.local
+#   Or wildcard: *.stack.local -> 192.168.1.100
+#
+# First login:
+#   1. Open http://auth.stack.local -> TinyAuth
+#      Username: admin  |  Password: admin123
+#      CHANGE PASSWORD IMMEDIATELY
+#   2. Open http://dokploy.stack.local (redirects through TinyAuth)
+#   3. Uptime Kuma and Whoami are auto-deployed
+#
+# Secrets:
+#   Generated automatically by OpenTofu (random_password).
+#   No manual secret setup required.
