@@ -83,18 +83,11 @@ $RootFiles = @(
 # NOTE: README.md is NOT synced — the public repo has its own custom README.
 
 # Public docs whitelist (everything else in docs/ is internal)
+# Keep this minimal — only reference docs that help users of the CLI.
+# ADRs, roadmaps, architecture, identity, deployment guides are internal.
 $PublicDocs = @(
-    "ARCHITECTURE_V4.md"
-    "CHANGELOG.md"
     "CLI.md"
-    "creating-stackkits.md"
-    "DEPLOYMENT.md"
-    "DEVELOPMENT.md"
-    "IDENTITY-PLATFORM.md"
-    "README.md"
-    "ROADMAP.md"
     "stack-spec-reference.md"
-    "TESTING.md"
 )
 
 # --- Helpers ------------------------------------------------------------------
@@ -262,17 +255,8 @@ if (-not $SkipShared) {
     if ($rootChanges -eq 0) { Write-Ok "Root files up to date" }
     if ($rootChanges -gt 0) { $totalChanges++ }
 
-    # 5. Docs (whitelist approach)
+    # 5. Docs (whitelist approach — minimal public docs only)
     Write-Header "Syncing docs (public subset)"
-
-    # Sync ADR subdirectory fully
-    $adrSrc = Join-Path $DevRepo "docs\ADR"
-    $adrDst = Join-Path $PubRepo "docs\ADR"
-    if (Test-Path $adrSrc) {
-        Write-Step "Syncing docs/ADR/"
-        $n = Invoke-Robocopy -Source $adrSrc -Dest $adrDst -IsDryRun:$DryRun
-        if ($n -gt 0) { Write-Ok "changes detected"; $totalChanges++ } else { Write-Ok "up to date" }
-    }
 
     # Copy individual public docs
     $docChanges = 0
@@ -301,7 +285,7 @@ if (-not $SkipShared) {
     if ($docChanges -eq 0) { Write-Ok "Docs up to date" }
     if ($docChanges -gt 0) { $totalChanges++ }
 
-    # Clean stale docs: remove docs in public that are NOT in the whitelist and NOT in ADR/
+    # Clean stale docs: remove docs in public that are NOT in the whitelist
     $pubDocs = Get-ChildItem (Join-Path $PubRepo "docs") -File -ErrorAction SilentlyContinue
     foreach ($existing in $pubDocs) {
         if ($existing.Name -notin $PublicDocs) {
@@ -314,6 +298,19 @@ if (-not $SkipShared) {
             }
             $totalChanges++
         }
+    }
+
+    # Remove ADR subdirectory if it exists (ADRs are internal)
+    $adrDst = Join-Path $PubRepo "docs\ADR"
+    if (Test-Path $adrDst) {
+        Write-Warn "Stale directory in public repo: docs/ADR/"
+        if (-not $DryRun) {
+            Remove-Item $adrDst -Recurse -Force
+            Write-Ok "Removed docs/ADR/"
+        } else {
+            Write-Ok "Would remove docs/ADR/"
+        }
+        $totalChanges++
     }
 }
 
