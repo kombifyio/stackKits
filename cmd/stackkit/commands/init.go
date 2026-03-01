@@ -33,8 +33,8 @@ StackKit selection, variant, compute tier, domain, and email.
 
 Examples:
   stackkit init                         Interactive mode
-  stackkit init base-homelab            Initialize with base-homelab
-  stackkit init base-homelab --variant minimal
+  stackkit init base-kit            Initialize with base-kit
+  stackkit init base-kit --variant minimal
   stackkit init ./my-stackkit           Initialize from local path
   stackkit init --non-interactive       Fail if arguments are missing`,
 	Args: cobra.MaximumNArgs(1),

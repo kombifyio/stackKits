@@ -1,8 +1,8 @@
 #!/bin/bash
 # =============================================================================
-# E2E TEST SUITE: BASE-HOMELAB
+# E2E TEST SUITE: base-kit
 # =============================================================================
-# End-to-end tests for the base-homelab StackKit
+# End-to-end tests for the base-kit StackKit
 #
 # These tests verify:
 # 1. CUE schema validation
@@ -50,7 +50,7 @@ TEST_USER="${TEST_USER:-root}"
 TEST_SSH_KEY="${TEST_SSH_KEY:-~/.ssh/id_rsa}"
 
 echo -e "${BLUE}========================================${NC}"
-echo -e "${BLUE}    Base-Homelab E2E Test Suite        ${NC}"
+echo -e "${BLUE}    base-kit E2E Test Suite        ${NC}"
 echo -e "${BLUE}========================================${NC}"
 echo ""
 
@@ -84,12 +84,12 @@ fail() {
 echo -e "\n${YELLOW}Test 1: Schema Validation${NC}"
 echo "-------------------------------------------"
 
-echo -n "Validating base-homelab schema... "
-if cue vet "$PROJECT_ROOT/stackkits/base-homelab/stackfile.cue" 2>/dev/null; then
+echo -n "Validating base-kit schema... "
+if cue vet "$PROJECT_ROOT/stackkits/base-kit/stackfile.cue" 2>/dev/null; then
     pass
 else
     fail
-    cue vet "$PROJECT_ROOT/stackkits/base-homelab/stackfile.cue" 2>&1 || true
+    cue vet "$PROJECT_ROOT/stackkits/base-kit/stackfile.cue" 2>&1 || true
 fi
 
 # =============================================================================
@@ -123,7 +123,7 @@ EOF
 
 echo -n "Validating test spec against schema... "
 # Use CUE to validate the spec (this is a simplified check)
-if cue export "$PROJECT_ROOT/stackkits/base-homelab/stackfile.cue" -e '#BaseHomelabKit' >/dev/null 2>&1; then
+if cue export "$PROJECT_ROOT/stackkits/base-kit/stackfile.cue" -e '#BaseKitKit' >/dev/null 2>&1; then
     pass
 else
     fail
@@ -142,9 +142,9 @@ test_variant() {
     cat > "$TEMP_DIR/variant-$variant.cue" << EOF
 package test
 
-import "kombistack.io/stackkits/base-homelab"
+import "kombistack.io/stackkits/base-kit"
 
-_test: base_homelab.#BaseHomelabKit & {
+_test: base_kit.#BaseKitKit & {
     variant: "$variant"
     nodes: [{
         name: "test"
@@ -157,7 +157,7 @@ _test: base_homelab.#BaseHomelabKit & {
 }
 EOF
     
-    if cue vet "$TEMP_DIR/variant-$variant.cue" "$PROJECT_ROOT/stackkits/base-homelab/stackfile.cue" 2>/dev/null; then
+    if cue vet "$TEMP_DIR/variant-$variant.cue" "$PROJECT_ROOT/stackkits/base-kit/stackfile.cue" 2>/dev/null; then
         pass
     else
         fail
@@ -224,10 +224,10 @@ generate_terraform() {
     echo -n "Generating Layer 3 (SERVICES) templates... "
     missing=0
     for template in \
-        "stackkits/base-homelab/templates/services/_dokploy.tf.tmpl" \
-        "stackkits/base-homelab/templates/services/_uptimekuma.tf.tmpl" \
-        "stackkits/base-homelab/templates/services/_beszel.tf.tmpl" \
-        "stackkits/base-homelab/templates/services/_minimal.tf.tmpl"
+        "stackkits/base-kit/templates/services/_dokploy.tf.tmpl" \
+        "stackkits/base-kit/templates/services/_uptimekuma.tf.tmpl" \
+        "stackkits/base-kit/templates/services/_beszel.tf.tmpl" \
+        "stackkits/base-kit/templates/services/_minimal.tf.tmpl"
     do
         if [ ! -f "$PROJECT_ROOT/$template" ]; then
             echo -e "\n${RED}Missing: $template${NC}"
@@ -304,12 +304,12 @@ test_service_def() {
     fi
 }
 
-test_service_def "Dokploy" "dokploy/dokploy" "$PROJECT_ROOT/stackkits/base-homelab/templates/services/_dokploy.tf.tmpl"
-test_service_def "Uptime Kuma" "louislam/uptime-kuma" "$PROJECT_ROOT/stackkits/base-homelab/templates/services/_uptimekuma.tf.tmpl"
-test_service_def "Beszel" "henrygd/beszel" "$PROJECT_ROOT/stackkits/base-homelab/templates/services/_beszel.tf.tmpl"
-test_service_def "Dockge" "louislam/dockge" "$PROJECT_ROOT/stackkits/base-homelab/templates/services/_minimal.tf.tmpl"
-test_service_def "Portainer" "portainer/portainer-ce" "$PROJECT_ROOT/stackkits/base-homelab/templates/services/_minimal.tf.tmpl"
-test_service_def "Netdata" "netdata/netdata" "$PROJECT_ROOT/stackkits/base-homelab/templates/services/_minimal.tf.tmpl"
+test_service_def "Dokploy" "dokploy/dokploy" "$PROJECT_ROOT/stackkits/base-kit/templates/services/_dokploy.tf.tmpl"
+test_service_def "Uptime Kuma" "louislam/uptime-kuma" "$PROJECT_ROOT/stackkits/base-kit/templates/services/_uptimekuma.tf.tmpl"
+test_service_def "Beszel" "henrygd/beszel" "$PROJECT_ROOT/stackkits/base-kit/templates/services/_beszel.tf.tmpl"
+test_service_def "Dockge" "louislam/dockge" "$PROJECT_ROOT/stackkits/base-kit/templates/services/_minimal.tf.tmpl"
+test_service_def "Portainer" "portainer/portainer-ce" "$PROJECT_ROOT/stackkits/base-kit/templates/services/_minimal.tf.tmpl"
+test_service_def "Netdata" "netdata/netdata" "$PROJECT_ROOT/stackkits/base-kit/templates/services/_minimal.tf.tmpl"
 
 # =============================================================================
 # TEST 7: Network Mode Tests

@@ -1,12 +1,12 @@
 # StackKits Comparison
 
-Side-by-side comparison of all three StackKits: Base Homelab, Modern Homelab, and HA Homelab.
+Side-by-side comparison of all three StackKits: Base Kit, Modern Homelab, and High Availability Kit.
 
 ---
 
 ## Quick Comparison
 
-| | Base Homelab | Modern Homelab | HA Homelab |
+| | Base Kit | Modern Homelab | High Availability Kit |
 |---|---|---|---|
 | **One-liner** | Professional single-environment deployment | Bridge home and cloud | No single point of failure |
 | **Nodes** | 1 | 2+ | 3+ (odd number) |
@@ -31,7 +31,7 @@ Side-by-side comparison of all three StackKits: Base Homelab, Modern Homelab, an
 
 ## Architecture Diagrams
 
-### Base Homelab
+### Base Kit
 
 ```
     ┌─────────────────────────────────────────────┐
@@ -98,7 +98,7 @@ Side-by-side comparison of all three StackKits: Base Homelab, Modern Homelab, an
 - Docker Compose on each node, PaaS coordinates deployments
 - No auto-failover -- if a node goes down, its services are offline until manually addressed
 
-### HA Homelab
+### High Availability Kit
 
 ```
                         ┌──────────────────────┐
@@ -215,7 +215,7 @@ Side-by-side comparison of all three StackKits: Base Homelab, Modern Homelab, an
 
 ## Choosing the Right StackKit
 
-### Choose Base Homelab if:
+### Choose Base Kit if:
 
 - You have **one server** (physical or VPS)
 - You want a **professional, hardened single-environment setup** out of the box
@@ -231,7 +231,7 @@ Side-by-side comparison of all three StackKits: Base Homelab, Modern Homelab, an
 - You want to keep data at home but serve it through the cloud
 - You are a **growing homelab** ready for multi-node
 
-### Choose HA Homelab if:
+### Choose High Availability Kit if:
 
 - You run **services that cannot go down** (family depends on them, small business, SLA)
 - You have **3+ machines** (physical or cloud)
@@ -245,7 +245,7 @@ Side-by-side comparison of all three StackKits: Base Homelab, Modern Homelab, an
 ## Upgrade Path
 
 ```
-Base Homelab ──► Modern Homelab ──► HA Homelab
+Base Kit ──► Modern Homelab ──► High Availability Kit
    (1 node)        (2+ nodes)       (3+ nodes)
 ```
 

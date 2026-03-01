@@ -331,7 +331,7 @@ Files **deleted** (2026-02-23):
 - [ ] Level 4: E2E tests (`stackkit apply` on VM, full verification)
 
 ### E7.3: CI/CD Pipeline
-- [x] CUE validation on every PR (base/, base-homelab/, modern-homelab/, all modules/)
+- [x] CUE validation on every PR (base/, base-kit/, modern-homelab/, all modules/)
 - [x] Module integration tests — 14-module matrix (traefik, tinyauth, pocketid, dokploy, uptime-kuma, dozzle, whoami, dashboard, socket-proxy, crowdsec, lldap, step-ca, adguard-home, unbound)
 - [x] Full-stack composition test (all base kit modules together, ~60 tests)
 - [x] ci-passed gate: lint + test + cue-validation + module-tests + composition-test
@@ -341,14 +341,14 @@ Files **deleted** (2026-02-23):
 
 ## EPIC 8: StackKit Composition
 
-### E8.1: base-homelab Refactor
+### E8.1: base-kit Refactor
 > **Depends on**: E6 (CUE generation pipeline)
-- [ ] Rewrite `base-homelab/stackfile.cue` to import from `modules/`
-- [ ] Update `base-homelab/services.cue` to reference module definitions
+- [ ] Rewrite `base-kit/stackfile.cue` to import from `modules/`
+- [ ] Update `base-kit/services.cue` to reference module definitions
 - [ ] Verify full deploy: `stackkit generate` + `stackkit apply`
 
 ### E8.2: Remove Monolithic Template
-- [ ] Delete `base-homelab/templates/simple/main.tf` (1352-line monolith)
+- [ ] Delete `base-kit/templates/simple/main.tf` (1352-line monolith)
 - [ ] Replace with per-module fragment templates
 
 ---
@@ -610,7 +610,7 @@ Files **deleted** (2026-02-23):
 
 ### E10.2: Monitoring Add-On
 - [ ] `addons/monitoring/` — Prometheus + Grafana
-- [ ] Integration test: base-homelab + monitoring add-on
+- [ ] Integration test: base-kit + monitoring add-on
 
 ### E10.3: Backup Add-On
 - [ ] `addons/backup/` — Restic + targets
@@ -637,10 +637,10 @@ Files **deleted** (2026-02-23):
 
 ## EPIC 12: Multi-Node (Future)
 
-### E12.1: Modern Homelab Kit
+### E12.1: Modern Homelab
 - [ ] Docker multi-node, hybrid (local + cloud), Compose per node (no Swarm)
 
-### E12.2: HA Homelab Kit
+### E12.2: High Availability Kit
 - [ ] Docker Swarm, 3+ nodes, Keepalived VIP, quorum consensus
 
 ---
@@ -676,7 +676,7 @@ UC10 (Website)              ← Simple, public-facing (no auth)
 UC5-UC9 (remaining)         ← Smart Home, Gameserver, Dev, Remote Desktop
     |
 E6 (CUE Pipeline)          ← Bridge rewrite, per-module generation
-E8 (Composition)            ← base-homelab imports from modules/
+E8 (Composition)            ← base-kit imports from modules/
 E9 (Contexts)               ← local/cloud/pi differentiation
 E10 (Add-Ons)               ← Composable extensions
 ```

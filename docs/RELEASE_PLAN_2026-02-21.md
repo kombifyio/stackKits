@@ -21,7 +21,7 @@
 
 ### What's Open (Remaining Beads Epics)
 - **v1.1** (StackKits-2r8) — modern-homelab, Multi-Node, Coolify, VPN (Juli 2026)
-- **v1.2** (StackKits-ci5) — ha-homelab, Docker Swarm HA (Oktober 2026)
+- **v1.2** (StackKits-ci5) — ha-kit, Docker Swarm HA (Oktober 2026)
 - **modern-homelab** (StackKits-j83) — Individual task, unstarted
 
 ### Critical Gaps Identified
@@ -29,7 +29,7 @@
 2. **modern-homelab**: Entirely K8s/k3s-based — needs complete Docker rewrite
 3. **Add-On System**: Designed in ARCHITECTURE_V4 but not wired into CLI/runtime
 4. **Context System**: Defined but not implemented
-5. **E2E Testing**: base-homelab not tested end-to-end
+5. **E2E Testing**: base-kit not tested end-to-end
 6. **ROADMAP.md outdated**: Many M0/M1 items marked unchecked but actually completed
 
 ---
@@ -37,18 +37,18 @@
 ## Execution Plan — 4 Phases
 
 ### Phase 1: Foundation & IaC Pipeline (2 weeks)
-**Goal:** base-homelab works end-to-end: `validate → generate → plan → apply`
+**Goal:** base-kit works end-to-end: `validate → generate → plan → apply`
 
 | # | Task | Priority | Effort | Depends On |
 |---|------|----------|--------|------------|
 | 1.1 | Update ROADMAP.md — sync checkboxes with actual completion state | P1 | 2h | — |
 | 1.2 | CUE→tfvars.json pipeline: rewrite bridge.go to use `cue export` | P0 | 3d | — |
 | 1.3 | OpenTofu modularization: split main.tf into modules | P1 | 2d | — |
-| 1.4 | base-homelab E2E test: validate→generate→plan works | P0 | 2d | 1.2, 1.3 |
+| 1.4 | base-kit E2E test: validate→generate→plan works | P0 | 2d | 1.2, 1.3 |
 | 1.5 | CI pipeline: cue vet + Go tests on every push | P1 | 1d | — |
 | 1.6 | JSON schema export for IDE support | P2 | 1d | 1.2 |
 
-**Done Criteria:** `stackkit validate && stackkit generate && stackkit plan` succeeds for base-homelab.
+**Done Criteria:** `stackkit validate && stackkit generate && stackkit plan` succeeds for base-kit.
 
 ---
 
@@ -82,10 +82,10 @@
 | 3.4 | modern-homelab: E2E test with 2-node config | P1 | 2d | 3.2 |
 | 3.5 | dev-homelab: Fix package conflicts, restructure | P1 | 1d | — |
 | 3.6 | dev-homelab: Write schema tests | P2 | 1d | 3.5 |
-| 3.7 | ha-homelab: Complete Docker Swarm schema stubs | P2 | 3d | Phase 2 |
+| 3.7 | ha-kit: Complete Docker Swarm schema stubs | P2 | 3d | Phase 2 |
 | 3.8 | StackKit × Context matrix validation (8/9 combos) | P1 | 2d | 3.2, 3.7 |
 | 3.9 | Migrate old variants → Add-Ons + Contexts | P1 | 2d | Phase 2, 3.5 |
-| 3.10 | Delete `base-homelab/variants/` directory | P2 | 0.5d | 3.9 |
+| 3.10 | Delete `base-kit/variants/` directory | P2 | 0.5d | 3.9 |
 
 **Done Criteria:** `cue vet` passes for all 4 StackKits. modern-homelab is Docker-based. 8/9 StackKit×Context combinations validate.
 

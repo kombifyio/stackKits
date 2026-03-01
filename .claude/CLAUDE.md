@@ -128,14 +128,14 @@ StackKits/
 │   ├── layers.cue        # Layer model
 │   └── ...               # network, identity, security, observability
 │
-├── base-homelab/         # Base Kit — single environment
+├── base-kit/         # Base Kit — single environment
 │   ├── stackfile.cue     # Main CUE definition (THE definition)
 │   ├── services.cue      # Service definitions in CUE
 │   ├── defaults.cue      # Default values in CUE
 │   └── default-spec.yaml # Input spec example
 │
-├── modern-homelab/       # Modern Homelab Kit — hybrid (local + cloud)
-├── ha-homelab/           # High-Availability Kit
+├── modern-homelab/       # Modern Homelab — hybrid (local + cloud)
+├── ha-kit/           # High-Availability Kit
 │
 ├── addons/               # Composable add-ons (each is CUE)
 │   ├── monitoring/addon.cue
@@ -304,7 +304,7 @@ stackkit apply          # Deploy everything, fully automated
 cue vet ./...
 
 # Evaluate a specific kit
-cue eval ./base-homelab/
+cue eval ./base-kit/
 ```
 
 ### Git Workflow
@@ -401,8 +401,8 @@ prometheus: #MonitoringService & {
 1. **Define in CUE**:
 ```bash
 # Edit the relevant stackfile or services.cue
-# e.g. for base-homelab:
-# base-homelab/services.cue   ← add the service definition here
+# e.g. for base-kit:
+# base-kit/services.cue   ← add the service definition here
 
 # Example CUE service definition:
 # myService: base.#ServiceDefinition & {
@@ -414,7 +414,7 @@ prometheus: #MonitoringService & {
 2. **Validate CUE**:
 ```bash
 cue vet ./...
-cue eval ./base-homelab/    # check the resolved output
+cue eval ./base-kit/    # check the resolved output
 ```
 
 3. **Generate artifacts** (do not edit the output):
@@ -429,8 +429,8 @@ stackkit apply   # must produce a fully working stack with zero manual steps
 
 5. **Commit**:
 ```bash
-git add base-homelab/services.cue
-git commit -m "Add myService to base-homelab"
+git add base-kit/services.cue
+git commit -m "Add myService to base-kit"
 ```
 
 ### Modifying Existing Schemas
@@ -438,7 +438,7 @@ git commit -m "Add myService to base-homelab"
 1. **Read Current CUE**:
 ```bash
 # Read the relevant .cue files — use Read tool, not cat
-# e.g. base-homelab/services.cue, base/stackkit.cue
+# e.g. base-kit/services.cue, base/stackkit.cue
 ```
 
 2. **Check Existing Usage**:
@@ -461,9 +461,9 @@ cue vet ./...
 
 5. **Validate All Kits**:
 ```bash
-cue vet ./base-homelab/...
+cue vet ./base-kit/...
 cue vet ./modern-homelab/...
-cue vet ./ha-homelab/...
+cue vet ./ha-kit/...
 ```
 
 6. **Consider ADR** (if significant change):
@@ -778,13 +778,13 @@ bd create "Consolidate CUE base schemas" --epic
 bd create "Define new base.Service schema" --parent bd-a1b2c3
 # Returns: Created bd-a1b2c3.1
 
-bd create "Migrate base-homelab stack" --parent bd-a1b2c3
+bd create "Migrate base-kit stack" --parent bd-a1b2c3
 # Returns: Created bd-a1b2c3.2
 
 bd create "Migrate monitoring stack" --parent bd-a1b2c3
 # Returns: Created bd-a1b2c3.3
 
-# Add dependency: monitoring depends on base-homelab
+# Add dependency: monitoring depends on base-kit
 bd dep add bd-a1b2c3.3 bd-a1b2c3.2
 
 # Check what's ready to work on
@@ -863,7 +863,7 @@ bd close bd-a1b2c3.1
 
 # Check next ready task
 bd ready
-# Output: bd-a1b2c3.2 "Migrate base-homelab stack"
+# Output: bd-a1b2c3.2 "Migrate base-kit stack"
 ```
 
 ### Common Beads Commands
@@ -894,7 +894,7 @@ bd ready
 **Stack Development**:
 - Create task per stack
 - Link to relevant schemas in comments
-- Dependencies for shared infrastructure (base-homelab → other stacks)
+- Dependencies for shared infrastructure (base-kit → other stacks)
 
 **ADR Integration**:
 - Create task for ADR creation

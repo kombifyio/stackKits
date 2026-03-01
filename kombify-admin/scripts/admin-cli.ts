@@ -399,7 +399,7 @@ Examples:
   npx ts-node scripts/admin-cli.ts context show CLOUD
   npx ts-node scripts/admin-cli.ts context create LOCAL --paas=docker --tls=self-signed
   npx ts-node scripts/admin-cli.ts tool list --layer=PLATFORM
-  npx ts-node scripts/admin-cli.ts tool assign traefik base-homelab
+  npx ts-node scripts/admin-cli.ts tool assign traefik base-kit
 `);
 }
 

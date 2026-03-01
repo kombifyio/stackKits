@@ -250,7 +250,7 @@ bd ready
 
 ```bash
 # 1. Create bug task
-bd create "Fix schema validation error in base-homelab stack"
+bd create "Fix schema validation error in base-kit stack"
 # Returns: StackKits-bugfix001
 
 # 2. Investigation
@@ -261,7 +261,7 @@ bd comment StackKits-bugfix001 "Root cause: incorrect field type in service defi
 bd comment StackKits-bugfix001 "Fixed in commit: abc123def"
 
 # 4. Validation
-bd comment StackKits-bugfix001 "Verified with: cue vet ./stacks/base-homelab/..."
+bd comment StackKits-bugfix001 "Verified with: cue vet ./stacks/base-kit/..."
 
 # 5. Complete
 bd close StackKits-bugfix001

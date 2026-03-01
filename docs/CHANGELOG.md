@@ -49,7 +49,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Initial StackKit structure.
-- `base-homelab` StackKit (v1).
+- `base-kit` StackKit (v1).
 - CUE schema definitions and validation logic.
 - Basic OpenTofu templates for Docker provisioning.
 - CLI scaffold.

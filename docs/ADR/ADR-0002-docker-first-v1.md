@@ -12,9 +12,9 @@
 The StackKits repository originally planned a 3-layer architecture where:
 - Layer 1 (CORE): Shared OS-level configuration
 - Layer 2 (PLATFORM): Container orchestration (Docker OR Kubernetes)
-- Layer 3 (STACKKIT): Use-case configurations (base, modern, ha homelabs)
+- Layer 3 (STACKKIT): Use-case configurations (Base Kit, Modern Homelab, High Availability Kit)
 
-The `ha-homelab` StackKit was designed for Kubernetes (k3s) while `base-homelab` and `modern-homelab` used Docker. This created:
+The `ha-kit` StackKit was designed for Kubernetes (k3s) while `base-kit` and `modern-homelab` used Docker. This created:
 
 1. **Implementation complexity** - Two completely different tech stacks
 2. **Maintenance burden** - Kubernetes templates require different expertise
@@ -27,9 +27,9 @@ The `ha-homelab` StackKit was designed for Kubernetes (k3s) while `base-homelab`
 
 | StackKit | Before (Planned) | After (v1.0) |
 |----------|-----------------|--------------|
-| `base-homelab` | Docker + Dokploy | Docker + Dokploy ✓ |
+| `base-kit` | Docker + Dokploy | Docker + Dokploy ✓ |
 | `modern-homelab` | Docker + Coolify | Docker + Dokploy |
-| `ha-homelab` | Kubernetes (k3s) | Docker Swarm + Dokploy |
+| `ha-kit` | Kubernetes (k3s) | Docker Swarm + Dokploy |
 
 ### Key Enabler: Dokploy Native Swarm Support
 
@@ -110,7 +110,7 @@ We **keep the 3-layer architecture** but with Docker as the only implemented pla
 
 ## StackKit Differentiation (v1.0)
 
-| Feature | base-homelab | modern-homelab | ha-homelab |
+| Feature | base-kit | modern-homelab | ha-kit |
 |---------|--------------|----------------|------------|
 | **Nodes** | 1 | 2-5 | 3+ |
 | **Swarm** | No | Yes | Yes (HA) |
@@ -150,7 +150,7 @@ This approach:
 
 1. **No k8s for v1.0** - Users wanting k3s must wait or self-configure
 2. **Swarm limitations** - Not as feature-rich as k8s for edge cases
-3. **Refactoring ha-homelab** - Need to rewrite from k3s to Swarm
+3. **Refactoring ha-kit** - Need to rewrite from k3s to Swarm
 
 ### Mitigations
 

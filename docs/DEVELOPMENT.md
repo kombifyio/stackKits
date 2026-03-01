@@ -42,8 +42,8 @@ cmd/stackkit/         # CLI entry point + commands
 internal/             # Go internal packages (cue, docker, validation, ...)
 pkg/models/           # Public Go models
 base/                 # Core CUE schemas (imported by all kits)
-base-homelab/         # Single Environment Kit
-ha-homelab/           # High-Availability Kit
+base-kit/         # Single Environment Kit
+ha-kit/           # High-Availability Kit
 modern-homelab/       # Multi-Node Kit (planned)
 docs/                 # Documentation
 website-v2/           # Documentation site (SvelteKit)
@@ -66,6 +66,6 @@ See [SETTINGS-CLASSIFICATION.md](SETTINGS-CLASSIFICATION.md) for the full settin
 make build            # Build binary → ./bin/stackkit
 make test             # Run Go tests
 cue vet ./...         # Validate all CUE schemas
-cue eval ./base-homelab/  # Evaluate a schema
+cue eval ./base-kit/  # Evaluate a schema
 go test ./...         # Run tests directly
 ```

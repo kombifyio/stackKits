@@ -8,7 +8,7 @@
 
 ## Context
 
-The original StackKits architecture defined services in large CUE collections (`#DefaultServices`, `#MinimalServices`, etc.) inside `base-homelab/services.cue`. This created several problems:
+The original StackKits architecture defined services in large CUE collections (`#DefaultServices`, `#MinimalServices`, etc.) inside `base-kit/services.cue`. This created several problems:
 
 1. **No isolation testing** — Services could only be tested as part of a full StackKit deployment. A misconfigured TinyAuth required a full 30-resource deploy to discover.
 

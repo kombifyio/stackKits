@@ -145,9 +145,9 @@ modern-homelab/
 - Stack ordering: foundation → platform → tunnel → services
 - Day-2 operations: drift detection, rolling updates, change sets
 
-## Comparison with base-homelab
+## Comparison with base-kit
 
-| Feature | base-homelab | modern-homelab |
+| Feature | base-kit | modern-homelab |
 |---------|-------------|----------------|
 | Nodes | Single server | Multi-server (cloud + local) |
 | PaaS | Dokploy (default) | Coolify or Dokploy (context-driven) |
@@ -159,8 +159,8 @@ modern-homelab/
 
 ## See Also
 
-- [`base-homelab`](../base-homelab/) - Single-node homelab with Dokploy
-- [`ha-homelab`](../ha-homelab/) - High-availability homelab (planned)
+- [`base-kit`](../base-kit/) - Single-node homelab with Dokploy
+- [`ha-kit`](../ha-kit/) - High-availability homelab (planned)
 - [`addons/`](../addons/) - Composable add-on ecosystem
 
 ## License

@@ -35,7 +35,7 @@ StackKits are **architecture patterns**, not node-count definitions.
 | StackKit | Pattern | Core Idea | Status |
 | --- | --- | --- | --- |
 | **Base Kit** | Single environment | All services in one deployment target — local or cloud VPS. | ✅ Available |
-| **Modern Homelab Kit** | Hybrid infrastructure | Bridges local + cloud. Zero-trust access via identity stack. | 🚧 Schema Only |
+| **Modern Homelab** | Hybrid infrastructure | Bridges local + cloud. Zero-trust access via identity stack. | 🚧 Schema Only |
 | **High Availability Kit** | HA cluster | Redundancy, failover, quorum. Cluster-first architecture. | 🚧 Schema Only |
 
 ### Node-Context (Auto-Detected)
@@ -79,9 +79,9 @@ StackKits uses a strict **3-layer architecture** for maximum reusability:
 ┌─────────────────────────────────────────────────────────────┐
 │  LAYER 3: STACKKITS (stackkits/)                            │
 │  Use-case specific configurations with services             │
-│  • base-homelab: Single-environment Docker + Dokploy        │
+│  • base-kit: Single-environment Docker + Dokploy        │
 │  • modern-homelab: Hybrid Docker + identity stack            │
-│  • ha-homelab: Docker Swarm HA cluster                       │
+│  • ha-kit: Docker Swarm HA cluster                       │
 ├─────────────────────────────────────────────────────────────┤
 │  LAYER 2: PLATFORMS (platforms/)                            │
 │  Container orchestration layer                              │
@@ -100,9 +100,9 @@ StackKits/
 ├── base/                       # Layer 1: CORE (Shared)
 │   ├── stackkit.cue
 │   └── ...
-├── base-homelab/               # Base Kit
-├── modern-homelab/             # Modern Homelab Kit
-├── ha-homelab/                 # High Availability Kit
+├── base-kit/               # Base Kit
+├── modern-homelab/             # Modern Homelab
+├── ha-kit/                 # High Availability Kit
 │
 ├── docs/                       # Canonical project docs
 │   └── ADR/                    # Architectural Decision Records
@@ -117,7 +117,7 @@ StackKits/
 
 ### Development/Testing with VM (Recommended for Local Dev)
 
-Deploy the **base-homelab** StackKit inside an Ubuntu VM for isolated testing:
+Deploy the **base-kit** StackKit inside an Ubuntu VM for isolated testing:
 
 ```bash
 # 1) Start ONLY the VM (no services on host)
@@ -125,7 +125,7 @@ docker compose up -d vm
 
 # 2) Deploy all services INSIDE the VM via StackKit CLI
 docker compose run --rm -e DOCKER_HOST=tcp://vm:2375 cli \
-  ./stackkit init base-homelab --non-interactive
+  ./stackkit init base-kit --non-interactive
 docker compose run --rm -e DOCKER_HOST=tcp://vm:2375 cli \
   ./stackkit apply --auto-approve
 
@@ -143,7 +143,7 @@ docker compose exec vm docker ps    # VM: should show ALL services
 - **TinyAuth**: http://auth.stack.local → `admin` / `admin123`
 - **Dokploy**: http://dokploy.stack.local (via TinyAuth SSO)
 
-See [base-homelab/README.md](base-homelab/README.md) for complete documentation.
+See [base-kit/README.md](base-kit/README.md) for complete documentation.
 
 ### CLI-Only (Standalone)
 
@@ -154,7 +154,7 @@ mkdir my-homelab
 cd my-homelab
 
 # 1) Create a spec
-stackkit init base-homelab
+stackkit init base-kit
 
 # 2) Check prerequisites + validate spec
 stackkit prepare
@@ -176,7 +176,7 @@ StackKits are automatically loaded by kombify Stack. Simply specify your intent:
 ```yaml
 # kombination.yaml (User Intent - created via UI Wizard)
 name: my-homelab
-kit: base-homelab
+kit: base-kit
 
 nodes:
   - name: server-1
@@ -203,10 +203,10 @@ kombify Stack will automatically:
 
 ```bash
 # Validate spec against StackKit schema
-cue vet ./base-homelab/... my-spec.cue
+cue vet ./base-kit/... my-spec.cue
 
 # Export resolved configuration
-cue export ./base-homelab/... -e resolvedSpec
+cue export ./base-kit/... -e resolvedSpec
 ```
 
 ## 📋 StackKit Specification
@@ -219,7 +219,7 @@ Each StackKit contains:
 apiVersion: stackkit/v1
 kind: StackKit
 metadata:
-  name: base-homelab
+  name: base-kit
   version: "1.0.0"
   description: "Single-environment homelab"
   pattern: base       # Architecture pattern
@@ -228,13 +228,13 @@ metadata:
 ### stackfile.cue - Main Schema
 
 ```cue
-package base_homelab
+package base_kit
 
 import "github.com/kombihq/stackkits/base"
 
-#BaseHomelabKit: base.#BaseStackKit & {
+#BaseKitKit: base.#BaseStackKit & {
     metadata: {
-        name: "base-homelab"
+        name: "base-kit"
     }
     nodes: [#MainNode]
     services: { traefik: #TraefikService, dokploy: #DokployService, ... }
@@ -309,7 +309,7 @@ We welcome contributions! Priority areas:
 
 1. **Add-Ons** - Create composable extensions for common use cases
 2. **Context modules** - Improve hardware-aware defaults
-3. **StackKits** - Implement modern-homelab and ha-homelab patterns
+3. **StackKits** - Implement modern-homelab and ha-kit patterns
 4. **Documentation** - Improve guides and examples
 5. **CLI** - Add-On management commands
 

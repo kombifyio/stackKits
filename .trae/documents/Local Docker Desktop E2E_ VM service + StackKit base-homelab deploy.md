@@ -1,10 +1,10 @@
 ## What I found (current repo state)
-- This workspace contains **StackKits** (the `stackkit` Go CLI + StackKits like `base-homelab`). It does **not** include the **kombify Stack/kombifyStack** repository or its Docker Compose startup files, so I can’t start “kombifyStack” from within this repo as-is.
+- This workspace contains **StackKits** (the `stackkit` Go CLI + StackKits like `base-kit`). It does **not** include the **kombify Stack/kombifyStack** repository or its Docker Compose startup files, so I can’t start “kombifyStack” from within this repo as-is.
 - A “prep-tool” already exists here: `stackkit prepare` (alias `stackkit prep`) supports **remote host preparation over SSH** and can install **Docker + OpenTofu** on Ubuntu/Debian.
-- `base-homelab` templates currently point the Docker provider at `unix:///var/run/docker.sock`, which means deployments target the Docker Engine where `tofu` runs.
+- `base-kit` templates currently point the Docker provider at `unix:///var/run/docker.sock`, which means deployments target the Docker Engine where `tofu` runs.
 
 ## Key gap vs your request
-To “apply the base-homelab StackKit to a VM-service (Ubuntu) started via Docker Compose”, we need a local **Ubuntu “VM-like” service** that:
+To “apply the base-kit StackKit to a VM-service (Ubuntu) started via Docker Compose”, we need a local **Ubuntu “VM-like” service** that:
 - exposes **SSH** (for `stackkit prepare --host ...`), and
 - runs a **Docker Engine** whose API is reachable from the host (so `tofu` can deploy to it), and
 - exposes the service ports from inside that “VM” back to your host for verification.
@@ -22,11 +22,11 @@ To “apply the base-homelab StackKit to a VM-service (Ubuntu) started via Docke
   - a `docker-compose.yml` that runs the container **privileged**, exposes:
     - SSH (host `2222` → container `22`)
     - Docker API (host `2375` → container `2375`, dev-only)
-    - base-homelab ports (80, 443, 3000, 3001, 8080, 8888, 9080, 5001, 9000, 19999, 8090)
+    - base-kit ports (80, 443, 3000, 3001, 8080, 8888, 9080, 5001, 9000, 19999, 8090)
 - Ensure the VM service accepts an SSH public key via a bind-mounted `authorized_keys` file (no secrets committed).
 
 ### 3) Make StackKits deploy target selectable (local vs VM)
-- Adjust `base-homelab` OpenTofu templates so the Docker provider does **not hardcode** the unix socket.
+- Adjust `base-kit` OpenTofu templates so the Docker provider does **not hardcode** the unix socket.
   - Preferred: rely on `DOCKER_HOST` (and optional `DOCKER_TLS_VERIFY`) so StackKits can target either local Docker Desktop or the VM-service Docker API without template changes per environment.
 - Keep default behavior unchanged: if `DOCKER_HOST` is not set, it still targets local Docker Desktop.
 
@@ -40,7 +40,7 @@ To “apply the base-homelab StackKit to a VM-service (Ubuntu) started via Docke
 ### 5) End-to-end CLI run against the VM-service (Ubuntu)
 - Create a fresh test workspace folder.
 - Run the full CLI flow:
-  - `stackkit init base-homelab`
+  - `stackkit init base-kit`
   - `stackkit prepare --host localhost --user root --key <dev-key> --dry-run` (then real run)
   - Set `DOCKER_HOST=tcp://localhost:2375` for the session
   - `stackkit generate`
@@ -63,5 +63,5 @@ To “apply the base-homelab StackKit to a VM-service (Ubuntu) started via Docke
 
 ## Outputs you’ll get
 - A working Docker Desktop local environment that starts an Ubuntu VM-like service.
-- A verified end-to-end run of `stackkit prepare + generate + plan + apply` deploying `base-homelab` into that VM-service.
+- A verified end-to-end run of `stackkit prepare + generate + plan + apply` deploying `base-kit` into that VM-service.
 - If kombifyStack exists locally, it gets started and verified in the same startup check; otherwise I’ll document what’s missing and how to add it cleanly.

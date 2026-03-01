@@ -1,8 +1,8 @@
 # =============================================================================
-# HA Kit Demo — 3-Node High-Availability Simulation (self-contained)
+# High Availability Kit Demo — 3-Node High-Availability Simulation (self-contained)
 # =============================================================================
 #
-# Simulates the ha-homelab architecture:
+# Simulates the ha-kit architecture:
 #   Main node:     Traefik, TinyAuth, PocketID, PostgreSQL, Prometheus, Grafana
 #   Worker node 1: Dokploy (PaaS)
 #   Worker node 2: Uptime Kuma, Whoami
@@ -326,7 +326,7 @@ services:
       - |
         cat > /usr/share/nginx/html/index.html << 'DASHBOARD'
         <!DOCTYPE html>
-        <html><head><meta charset="utf-8"><title>kombify HA Kit</title>
+        <html><head><meta charset="utf-8"><title>kombify High Availability Kit</title>
         <style>
         *{margin:0;padding:0;box-sizing:border-box}
         body{font-family:system-ui,-apple-system,sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh;display:flex;align-items:center;justify-content:center}
@@ -356,7 +356,7 @@ services:
         .topo-node p{font-size:.65rem;color:#94a3b8}
         </style></head><body>
         <div class="container">
-        <h1>kombify HA Kit</h1>
+        <h1>kombify High Availability Kit</h1>
         <p class="subtitle">High-Availability — 3-node topology with monitoring</p>
         <div class="topology">
         <div class="topo-node topo-main"><h4>Main Node</h4><p>Traefik, Auth, DB, Monitoring</p></div>
@@ -377,7 +377,7 @@ services:
         <a class="card" href="http://status.kombify.me:8180"><span class="badge w2">Worker 2</span><h3>Uptime Kuma</h3><p>Status Monitor</p></a>
         <a class="card" href="http://whoami.kombify.me:8180"><span class="badge w2">Worker 2</span><h3>Whoami</h3><p>Network Diagnostic</p></a>
         </div></div>
-        <footer>kombify StackKits &mdash; HA Kit Demo (3-node topology)</footer>
+        <footer>kombify StackKits &mdash; High Availability Kit Demo (3-node topology)</footer>
         </div></body></html>
         DASHBOARD
         nginx -g "daemon off;"

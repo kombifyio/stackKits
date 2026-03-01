@@ -108,13 +108,13 @@ func TestCLIInitCommand(t *testing.T) {
 	t.Run("initializes with stackkit", func(t *testing.T) {
 		tmpDir := t.TempDir()
 
-		// Copy base-homelab to temp dir for testing
-		stackkitSrc := filepath.Join(projectRoot, "base-homelab")
-		stackkitDst := filepath.Join(tmpDir, "base-homelab")
+		// Copy base-kit to temp dir for testing
+		stackkitSrc := filepath.Join(projectRoot, "base-kit")
+		stackkitDst := filepath.Join(tmpDir, "base-kit")
 		copyDir(t, stackkitSrc, stackkitDst)
 
 		//nolint:gosec // G204: test binary paths are controlled
-		cmd := exec.Command(binary, "init", "base-homelab", "-C", tmpDir)
+		cmd := exec.Command(binary, "init", "base-kit", "-C", tmpDir)
 		output, err := cmd.CombinedOutput()
 
 		if err != nil {
@@ -137,7 +137,7 @@ func TestCLIValidateCommand(t *testing.T) {
 
 		// Create a valid spec file
 		specContent := `name: test-deployment
-stackkit: base-homelab
+stackkit: base-kit
 variant: default
 mode: simple
 network:

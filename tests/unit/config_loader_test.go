@@ -85,7 +85,7 @@ func TestLoader_LoadStackSpec_ValidYAML(t *testing.T) {
 
 	// Create a valid stack-spec.yaml matching the actual StackSpec struct
 	specContent := `name: test-spec
-stackkit: base-homelab
+stackkit: base-kit
 variant: default
 mode: simple
 domain: example.com
@@ -108,7 +108,7 @@ nodes:
 	require.NoError(t, err)
 	assert.NotNil(t, spec)
 	assert.Equal(t, "test-spec", spec.Name)
-	assert.Equal(t, "base-homelab", spec.StackKit)
+	assert.Equal(t, "base-kit", spec.StackKit)
 }
 
 func TestLoader_SaveStackSpec(t *testing.T) {
@@ -116,7 +116,7 @@ func TestLoader_SaveStackSpec(t *testing.T) {
 
 	spec := &models.StackSpec{
 		Name:     "saved-spec",
-		StackKit: "base-homelab",
+		StackKit: "base-kit",
 		Variant:  "default",
 		Mode:     "simple",
 	}

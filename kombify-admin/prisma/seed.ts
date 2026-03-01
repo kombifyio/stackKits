@@ -311,10 +311,10 @@ async function main() {
 
   const stackkits = await Promise.all([
     prisma.stackKit.upsert({
-      where: { name: 'base-homelab' },
+      where: { name: 'base-kit' },
       update: {},
       create: {
-        name: 'base-homelab',
+        name: 'base-kit',
         displayName: 'Base Kit',
         description: 'Single-environment homelab with Docker, Dokploy/Coolify PAAS, and monitoring. Everything runs in one logical deployment target — local server or cloud VPS.',
         version: '4.0.0',
@@ -359,7 +359,7 @@ async function main() {
       update: {},
       create: {
         name: 'modern-homelab',
-        displayName: 'Modern Homelab Kit',
+        displayName: 'Modern Homelab',
         description: 'Hybrid infrastructure pattern — bridges local and cloud environments via VPN overlay. Distributed services with public endpoints and private data.',
         version: '4.0.0',
         architecturePattern: ArchitecturePattern.MODERN,
@@ -377,10 +377,10 @@ async function main() {
       },
     }),
     prisma.stackKit.upsert({
-      where: { name: 'ha-homelab' },
+      where: { name: 'ha-kit' },
       update: {},
       create: {
-        name: 'ha-homelab',
+        name: 'ha-kit',
         displayName: 'High Availability Kit',
         description: 'HA cluster pattern with Docker Swarm — redundancy, failover, quorum-based consensus. No single point of failure.',
         version: '4.0.0',
@@ -406,37 +406,37 @@ async function main() {
   // STACKKIT-TOOL RELATIONSHIPS
   // ==========================================================================
 
-  const baseHomelabKit = stackkits.find(s => s.name === 'base-homelab')!;
+  const BaseKitKit = stackkits.find(s => s.name === 'base-kit')!;
   const devHomelabKit = stackkits.find(s => s.name === 'dev-homelab')!;
 
   const toolMap = new Map(tools.map(t => [t.name, t]));
 
-  // Base Homelab tool associations
-  const baseHomelabTools = await Promise.all([
+  // Base Kit tool associations
+  const BaseKitTools = await Promise.all([
     // Required tools (all variants)
-    upsertStackKitTool({ stackkitId: baseHomelabKit.id, toolId: toolMap.get('lldap')!.id, isRequired: true, isDefault: true, deployOrder: 1 }),
-    upsertStackKitTool({ stackkitId: baseHomelabKit.id, toolId: toolMap.get('step-ca')!.id, isRequired: true, isDefault: true, deployOrder: 2 }),
-    upsertStackKitTool({ stackkitId: baseHomelabKit.id, toolId: toolMap.get('traefik')!.id, isRequired: true, isDefault: true, deployOrder: 10 }),
+    upsertStackKitTool({ stackkitId: BaseKitKit.id, toolId: toolMap.get('lldap')!.id, isRequired: true, isDefault: true, deployOrder: 1 }),
+    upsertStackKitTool({ stackkitId: BaseKitKit.id, toolId: toolMap.get('step-ca')!.id, isRequired: true, isDefault: true, deployOrder: 2 }),
+    upsertStackKitTool({ stackkitId: BaseKitKit.id, toolId: toolMap.get('traefik')!.id, isRequired: true, isDefault: true, deployOrder: 10 }),
     // Default variant: Dokploy + Uptime Kuma
-    upsertStackKitTool({ stackkitId: baseHomelabKit.id, toolId: toolMap.get('dokploy')!.id, variantName: 'default', isDefault: true, deployOrder: 20 }),
-    upsertStackKitTool({ stackkitId: baseHomelabKit.id, toolId: toolMap.get('uptime-kuma')!.id, variantName: 'default', isDefault: true, deployOrder: 30 }),
+    upsertStackKitTool({ stackkitId: BaseKitKit.id, toolId: toolMap.get('dokploy')!.id, variantName: 'default', isDefault: true, deployOrder: 20 }),
+    upsertStackKitTool({ stackkitId: BaseKitKit.id, toolId: toolMap.get('uptime-kuma')!.id, variantName: 'default', isDefault: true, deployOrder: 30 }),
     // Coolify variant
-    upsertStackKitTool({ stackkitId: baseHomelabKit.id, toolId: toolMap.get('coolify')!.id, variantName: 'coolify', isDefault: true, deployOrder: 20 }),
+    upsertStackKitTool({ stackkitId: BaseKitKit.id, toolId: toolMap.get('coolify')!.id, variantName: 'coolify', isDefault: true, deployOrder: 20 }),
     // Beszel variant
-    upsertStackKitTool({ stackkitId: baseHomelabKit.id, toolId: toolMap.get('dokploy')!.id, variantName: 'beszel', isDefault: true, deployOrder: 20 }),
-    upsertStackKitTool({ stackkitId: baseHomelabKit.id, toolId: toolMap.get('beszel')!.id, variantName: 'beszel', isDefault: true, deployOrder: 30 }),
+    upsertStackKitTool({ stackkitId: BaseKitKit.id, toolId: toolMap.get('dokploy')!.id, variantName: 'beszel', isDefault: true, deployOrder: 20 }),
+    upsertStackKitTool({ stackkitId: BaseKitKit.id, toolId: toolMap.get('beszel')!.id, variantName: 'beszel', isDefault: true, deployOrder: 30 }),
     // Minimal variant
-    upsertStackKitTool({ stackkitId: baseHomelabKit.id, toolId: toolMap.get('dockge')!.id, variantName: 'minimal', isDefault: true, deployOrder: 20 }),
-    upsertStackKitTool({ stackkitId: baseHomelabKit.id, toolId: toolMap.get('portainer')!.id, variantName: 'minimal', isDefault: true, deployOrder: 21 }),
-    upsertStackKitTool({ stackkitId: baseHomelabKit.id, toolId: toolMap.get('netdata')!.id, variantName: 'minimal', isDefault: true, deployOrder: 30 }),
+    upsertStackKitTool({ stackkitId: BaseKitKit.id, toolId: toolMap.get('dockge')!.id, variantName: 'minimal', isDefault: true, deployOrder: 20 }),
+    upsertStackKitTool({ stackkitId: BaseKitKit.id, toolId: toolMap.get('portainer')!.id, variantName: 'minimal', isDefault: true, deployOrder: 21 }),
+    upsertStackKitTool({ stackkitId: BaseKitKit.id, toolId: toolMap.get('netdata')!.id, variantName: 'minimal', isDefault: true, deployOrder: 30 }),
     // Secure variant adds TinyAuth
-    upsertStackKitTool({ stackkitId: baseHomelabKit.id, toolId: toolMap.get('tinyauth')!.id, variantName: 'secure', isDefault: true, deployOrder: 15 }),
+    upsertStackKitTool({ stackkitId: BaseKitKit.id, toolId: toolMap.get('tinyauth')!.id, variantName: 'secure', isDefault: true, deployOrder: 15 }),
     // Optional tools (all variants)
-    upsertStackKitTool({ stackkitId: baseHomelabKit.id, toolId: toolMap.get('dozzle')!.id, isDefault: false, deployOrder: 50 }),
-    upsertStackKitTool({ stackkitId: baseHomelabKit.id, toolId: toolMap.get('whoami')!.id, isDefault: false, deployOrder: 99 }),
+    upsertStackKitTool({ stackkitId: BaseKitKit.id, toolId: toolMap.get('dozzle')!.id, isDefault: false, deployOrder: 50 }),
+    upsertStackKitTool({ stackkitId: BaseKitKit.id, toolId: toolMap.get('whoami')!.id, isDefault: false, deployOrder: 99 }),
   ]);
 
-  console.log(`Created ${baseHomelabTools.length} base-homelab tool associations`);
+  console.log(`Created ${BaseKitTools.length} base-kit tool associations`);
 
   // ==========================================================================
   // VALIDATION RULES
@@ -892,7 +892,7 @@ async function main() {
         alternativesConsidered: ['Dokploy only (rejected: limited for domain users)', 'Coolify only (rejected: complex for local-only)'],
         status: DecisionStatus.APPROVED,
         affectedLayers: [LayerType.PLATFORM],
-        affectedStackKits: ['base-homelab', 'dev-homelab'],
+        affectedStackKits: ['base-kit', 'dev-homelab'],
         proposedBy: 'Architecture Team',
         decidedBy: 'Architecture Team',
         decidedAt: new Date(),

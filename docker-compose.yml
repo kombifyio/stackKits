@@ -7,7 +7,7 @@
 #
 # CORRECT DEPLOYMENT FLOW:
 #   1. docker compose up -d vm        # Start VM only
-#   2. docker compose run --rm -e DOCKER_HOST=tcp://vm:2375 cli stackkit init base-homelab --non-interactive
+#   2. docker compose run --rm -e DOCKER_HOST=tcp://vm:2375 cli stackkit init base-kit --non-interactive
 #   3. docker compose run --rm -e DOCKER_HOST=tcp://vm:2375 cli stackkit apply --auto-approve
 #
 # VERIFICATION:
@@ -44,7 +44,7 @@ services:
       - "${VM_HTTP_PORT:-80}:80"        # HTTP
       - "${VM_HTTPS_PORT:-443}:443"     # HTTPS
       - "${VM_TRAEFIK_PORT:-8080}:8080" # Traefik dashboard
-      # Layer 3: Base-homelab services (running inside VM)
+      # Layer 3: base-kit services (running inside VM)
       - "${VM_WHOAMI_PORT:-9080}:9080"   # Whoami service
       - "${VM_KUMA_PORT:-4001}:4001"     # Uptime Kuma
       - "${VM_DOKPLOY_PORT:-4000}:4000"  # Dokploy
@@ -264,6 +264,58 @@ services:
       - stackkits-net
 
   # ---------------------------------------------------------------------------
+  # Persistent VM: Ubuntu reference environment (survives restarts)
+  # ---------------------------------------------------------------------------
+  # Unlike the demo VM, this environment is PERSISTENT:
+  #   - Docker data, home directory, and /etc survive restarts
+  #   - Use 'docker compose stop vm-persistent' — NEVER 'down -v'
+  #   - Deploy your reference StackKit here and iterate on it
+  #
+  # Access:
+  #   SSH:    ssh -p 2223 root@localhost
+  #   Docker: DOCKER_HOST=tcp://localhost:2376 docker ps
+  #   HTTP:   http://localhost:81  (Traefik in VM)
+  # ---------------------------------------------------------------------------
+  vm-persistent:
+    build:
+      context: ./dev/vm
+      dockerfile: Dockerfile
+    container_name: stackkits-vm-persistent
+    restart: unless-stopped
+    privileged: true
+    environment:
+      DOCKER_TLS_CERTDIR: ""
+    ports:
+      - "${PERSISTENT_SSH_PORT:-2223}:22"
+      - "${PERSISTENT_DOCKER_PORT:-2376}:2375"
+      - "${PERSISTENT_HTTP_PORT:-81}:80"
+      - "${PERSISTENT_HTTPS_PORT:-444}:443"
+      - "${PERSISTENT_TRAEFIK_PORT:-8081}:8080"
+    volumes:
+      # ALL persistent data — survives 'docker compose down' (without -v)
+      - persistent_vm_docker:/var/lib/docker
+      - persistent_vm_home:/root
+      - persistent_vm_etc:/etc/ssh
+      - ./dev/vm/authorized_keys:/authorized_keys:ro
+      - .:/workspace:rw
+    healthcheck:
+      test: ["CMD", "docker", "info"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    networks:
+      stackkits-net:
+        aliases:
+          - vm-persistent
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+      - 1.1.1.1
+    profiles:
+      - persistent
+
+  # ---------------------------------------------------------------------------
   # DNS Service: Local DNS for .stack.local domains
   # ---------------------------------------------------------------------------
   dns:
@@ -355,7 +407,7 @@ services:
     volumes:
       - .:/workspace:rw
     working_dir: /workspace
-    command: ["./base-homelab/tests/e2e_test.sh"]
+    command: ["./base-kit/tests/e2e_test.sh"]
     depends_on:
       vm:
         condition: service_healthy
@@ -385,6 +437,13 @@ services:
 volumes:
   # VM Docker data - stores all containers/images inside the VM
   vm_docker:
+    driver: local
+  # Persistent VM volumes — NEVER use 'down -v' on these
+  persistent_vm_docker:
+    driver: local
+  persistent_vm_home:
+    driver: local
+  persistent_vm_etc:
     driver: local
 
 # =============================================================================

@@ -123,8 +123,8 @@ enum JobType {
 enum AddOnScope {
   ALL_KITS   // Compatible with all StackKits
   BASE_ONLY  // Only for Base Kit
-  MODERN_ONLY // Only for Modern Homelab Kit
-  HA_ONLY    // Only for HA Kit
+  MODERN_ONLY // Only for Modern Homelab
+  HA_ONLY    // Only for High Availability Kit
 }
 
 // =============================================================================
@@ -134,7 +134,7 @@ enum AddOnScope {
 /// StackKit definitions - the main product catalog (v4: architecture patterns)
 model StackKit {
   id               String              @id @default(uuid())
-  /// Unique machine-readable name (e.g., "base-homelab")
+  /// Unique machine-readable name (e.g., "base-kit")
   name             String              @unique
   /// Human-readable display name
   displayName      String

@@ -163,7 +163,7 @@ func copyOrRenderTemplates(srcDir, dstDir string, spec *models.StackSpec, stackk
 }
 
 // generateTfvarsJSON generates terraform.tfvars.json matching the template variables.
-// Service enablement is module-based: all base-homelab services are enabled by default.
+// Service enablement is module-based: all base-kit services are enabled by default.
 // Per-service overrides can be applied via spec.Services[name]["enabled"].
 func generateTfvarsJSON(spec *models.StackSpec) []byte {
 	vars := make(map[string]interface{})
@@ -183,7 +183,7 @@ func generateTfvarsJSON(spec *models.StackSpec) []byte {
 		vars["network_subnet"] = "172.20.0.0/16"
 	}
 
-	// Module-based service defaults: all base-homelab services enabled by default.
+	// Module-based service defaults: all base-kit services enabled by default.
 	// Per-service overrides are applied below via spec.Services.
 	vars["enable_traefik"] = true
 	vars["enable_tinyauth"] = true

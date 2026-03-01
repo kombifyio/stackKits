@@ -33,7 +33,7 @@ export const stackkits: StackKit[] = [
 	},
 	{
 		id: 'modern',
-		name: 'Modern Homelab Kit',
+		name: 'Modern Homelab',
 		tagline: 'Hybrid infrastructure pattern',
 		description:
 			'Bridge local and cloud environments with zero-trust identity access. Distributed services across heterogeneous nodes with Coolify management.',

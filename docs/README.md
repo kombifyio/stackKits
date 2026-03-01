@@ -37,7 +37,7 @@ This folder contains the **canonical** project docs for StackKits Architecture v
 
 | Document | Purpose |
 |----------|---------|
-| [ha-homelab-research.md](ha-homelab-research.md) | HA Kit research notes |
+| [ha-kit-research.md](ha-kit-research.md) | High Availability Kit research notes |
 | [docker-swarm-ecosystem.md](docker-swarm-ecosystem.md) | Docker Swarm ecosystem analysis |
 | [stackkits-comparison.md](stackkits-comparison.md) | StackKit pattern comparison |
 

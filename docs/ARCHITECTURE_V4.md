@@ -28,10 +28,10 @@ A StackKit defines **how infrastructure is architecturally organized**, not how 
 | StackKit | Architecture Pattern | Core Idea |
 |----------|---------------------|-----------|
 | **Base Kit** | Single environment | All services in one deployment target — local server or cloud VPS. Docker Compose, one logical unit. |
-| **Modern Homelab Kit** | Hybrid infrastructure | Bridges local and cloud. VPN overlay, distributed services, public endpoints. |
+| **Modern Homelab** | Hybrid infrastructure | Bridges local and cloud. VPN overlay, distributed services, public endpoints. |
 | **High Availability Kit** | HA cluster | Redundancy, failover, quorum-based consensus. Cluster-first architecture. |
 
-**Key Insight:** A Base Kit can run on a single cloud VPS or a home server — the environment doesn't change the architecture pattern. A Modern Homelab Kit requires at least one local node (the "homelab" part) bridged with cloud. The StackKit defines the *pattern*, not the *scale*.
+**Key Insight:** A Base Kit can run on a single cloud VPS or a home server — the environment doesn't change the architecture pattern. A Modern Homelab requires at least one local node (the "homelab" part) bridged with cloud. The StackKit defines the *pattern*, not the *scale*.
 
 ```
 StackKit ≠ Server Count
@@ -70,7 +70,7 @@ Add-Ons replace the old monolithic "variants" system. Each Add-On is a self-cont
 
 **Old (Variants — monolithic, mutually exclusive):**
 ```
-base-homelab/variants/
+base-kit/variants/
 ├── coolify.cue          # Replaces entire PAAS
 ├── beszel.cue           # Replaces monitoring
 ├── minimal-compute.cue  # Conflicts with standard
@@ -80,7 +80,7 @@ base-homelab/variants/
 **New (Add-Ons — composable, stackable):**
 ```
 addons/
-├── ha/                  # Full infrastructure HA (extends ha-homelab StackKit)
+├── ha/                  # Full infrastructure HA (extends ha-kit StackKit)
 │   └── addon.cue
 ├── monitoring/          # Prometheus + Grafana + Alertmanager
 │   └── addon.cue
@@ -241,7 +241,7 @@ The `stackkit` CLI operates completely independently. No network access, no API,
 
 ```bash
 # Full workflow at Level 0
-stackkit init base-homelab          # Create kombination.yaml with Base Kit defaults
+stackkit init base-kit          # Create kombination.yaml with Base Kit defaults
 stackkit validate                   # CUE validation
 stackkit generate                   # Produce OpenTofu files
 stackkit apply                      # Provision infrastructure
@@ -439,17 +439,17 @@ github.com/kombihq/stackkits/
 │   ├── cloud.cue                  # Cloud provider defaults
 │   └── pi.cue                     # Raspberry Pi defaults
 │
-├── base-homelab/                   # Base Kit
+├── base-kit/                   # Base Kit
 │   ├── stackfile.cue
 │   ├── services.cue
 │   └── defaults.cue
 │
-├── modern-homelab/                 # Modern Homelab Kit
+├── modern-homelab/                 # Modern Homelab
 │   ├── stackfile.cue
 │   ├── services.cue
 │   └── defaults.cue
 │
-└── ha-homelab/                     # High Availability Kit
+└── ha-kit/                     # High Availability Kit
     ├── stackfile.cue
     ├── services.cue
     └── defaults.cue
@@ -496,7 +496,7 @@ The proven 3-layer architecture remains the structural backbone:
 | **Node Count** | Typically 1, but supports N (all running same stack) |
 | **Best For** | First homelab, single VPS, learning, solo server |
 
-### Modern Homelab Kit (Hybrid Infrastructure Pattern)
+### Modern Homelab (Hybrid Infrastructure Pattern)
 
 **Philosophy:** Bridge multiple environments. Always includes a local component ("homelab") bridged with cloud resources. Identity-aware proxies make VPN optional.
 
@@ -525,9 +525,9 @@ The proven 3-layer architecture remains the structural backbone:
 | **Node Count** | 3+ (odd number for quorum) recommended |
 | **Best For** | Production workloads, critical services, uptime SLAs, startups |
 
-**HA Add-On (extends HA Kit to full infrastructure HA):**
+**HA Add-On (extends High Availability Kit to full infrastructure HA):**
 
-When the `ha` add-on is activated on top of the HA Kit, it adds:
+When the `ha` add-on is activated on top of the High Availability Kit, it adds:
 - **Storage replication**: GlusterFS (default, file-level) or DRBD + OpenZFS (block-level)
 - **SQLite HA**: Litestream (async backup) or LiteFS (real-time replication)
 - **Advanced VIP**: Three modes auto-detected from context (VRRP for local, floating-IP for cloud, DNS failover as universal fallback)
@@ -646,15 +646,15 @@ services:
 
 1. Create `addons/` directory structure with CUE schema
 2. Create `contexts/` directory with local/cloud/pi defaults
-3. Refactor `base-homelab/` variants into add-ons (Base Kit)
+3. Refactor `base-kit/` variants into add-ons (Base Kit)
 4. Fix CUE package declaration bugs (`base/platform/*.cue`, `base/schema/*.cue`)
 5. Align Go↔CUE naming (compute tiers, platform types)
 6. Complete Base Kit E2E testing
 
 ### P1: StackKit Alignment (Weeks 5–8)
 
-7. Redefine `modern-homelab` as Modern Homelab Kit (hybrid infrastructure pattern)
-8. Redefine `ha-homelab` as High Availability Kit (HA cluster pattern)
+7. Redefine `modern-homelab` as Modern Homelab (hybrid infrastructure pattern)
+8. Redefine `ha-kit` as High Availability Kit (HA cluster pattern)
 9. Implement context-driven defaults resolution in CUE
 10. Update `stackkit` CLI for Add-On support (`stackkit addon add/list/remove`)
 11. Align CUE module path with kombify Stack (`github.com/kombihq/stackkits`)

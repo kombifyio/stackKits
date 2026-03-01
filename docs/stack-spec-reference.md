@@ -23,7 +23,7 @@ version: "1.0"  # Spec version
 
 stack:
   name: string           # Stack identifier (DNS-compatible)
-  kit: string            # StackKit name (e.g., "base-homelab")
+  kit: string            # StackKit name (e.g., "base-kit")
   context: string        # Node context (e.g., "local", "cloud", "pi")
   addons: [string]       # Add-on list (e.g., ["monitoring"])
 
@@ -93,14 +93,14 @@ metadata:
 
 ## Examples
 
-### Example 1: base-homelab (Single Server)
+### Example 1: base-kit (Single Server)
 
 ```yaml
 version: "1.0"
 
 stack:
   name: my-homelab
-  kit: base-homelab
+  kit: base-kit
   variant: os/ubuntu-24
   addons: []
 
@@ -156,14 +156,14 @@ metadata:
   stackkit_version: "1.0.0"
 ```
 
-### Example 2: ha-homelab (3-Node Docker Swarm)
+### Example 2: ha-kit (3-Node Docker Swarm)
 
 ```yaml
 version: "1.0"
 
 stack:
-  name: ha-homelab
-  kit: ha-homelab
+  name: ha-kit
+  kit: ha-kit
   context: local
   addons: [monitoring]
 
@@ -376,7 +376,7 @@ kombify Stack apply my-stack
 
 ```bash
 # Start from template
-cp base-homelab/default-spec.yaml my-stack-spec.yaml
+cp base-kit/default-spec.yaml my-stack-spec.yaml
 
 # Edit configuration
 nano my-stack-spec.yaml

@@ -1,7 +1,7 @@
 // Package addons - VPN Overlay Add-On
 //
 // Provides Headscale/Tailscale mesh VPN for multi-node communication.
-// Required for modern-homelab and recommended for ha-homelab.
+// Required for modern-homelab and recommended for ha-kit.
 //
 // Usage in stackfile.cue:
 //   import "github.com/kombihq/stackkits/addons/vpn-overlay"
@@ -26,7 +26,7 @@ package vpnoverlay
 	}
 
 	_compatibility: {
-		stackkits: ["modern-homelab", "ha-homelab"]
+		stackkits: ["modern-homelab", "ha-kit"]
 		contexts:  ["local", "cloud"]
 		requires:  []
 		conflicts: []

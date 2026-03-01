@@ -33,9 +33,9 @@ We will support **both** PaaS options with clear selection criteria:
 
 ### Default Behavior
 
-- **base-homelab** defaults to `Dokploy` (simpler, works without domain)
+- **base-kit** defaults to `Dokploy` (simpler, works without domain)
 - **modern-homelab** requires `Coolify` (multi-node management)
-- Users can explicitly choose `coolify` variant in base-homelab if they prefer
+- Users can explicitly choose `coolify` variant in base-kit if they prefer
 
 ## Consequences
 
@@ -65,9 +65,9 @@ We will support **both** PaaS options with clear selection criteria:
 
 ## Implementation
 
-1. ✅ Add `#CoolifyService` to `base-homelab/services.cue`
-2. ✅ Add `coolify` variant to `base-homelab/stackfile.cue`
-3. ✅ Update `base-homelab/README.md` with PaaS selection guide
+1. ✅ Add `#CoolifyService` to `base-kit/services.cue`
+2. ✅ Add `coolify` variant to `base-kit/stackfile.cue`
+3. ✅ Update `base-kit/README.md` with PaaS selection guide
 4. ✅ Mark `modern-homelab` as Coolify-only (requires own domain)
 5. [ ] Create Coolify variant Terraform templates
 6. [ ] Add domain detection logic to CLI

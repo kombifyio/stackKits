@@ -59,7 +59,7 @@ Items are categorized by severity and mapped to roadmap milestones.
 
 > Moved to [Resolved](#resolved) on 2026-02-12.
 
-### ~~TD-07: Dual Main Schemas in base-homelab~~ → RESOLVED
+### ~~TD-07: Dual Main Schemas in base-kit~~ → RESOLVED
 
 > Moved to [Resolved](#resolved) on 2026-02-12.
 
@@ -81,7 +81,7 @@ Items are categorized by severity and mapped to roadmap milestones.
 **Problem:** `bridge.go` only generated basic tfvars. Two separate code paths existed for tfvars generation.
 **Status:** Partially resolved (2026-02-21). `bridge.go` rewritten with:
 - `GenerateTFVarsFromSpec()` — canonical path accepting StackSpec, covers all main.tf variables
-- Full TFVars struct matching all base-homelab/templates/simple/main.tf variables (domain, acme_email, access_mode, ports, etc.)
+- Full TFVars struct matching all base-kit/templates/simple/main.tf variables (domain, acme_email, access_mode, ports, etc.)
 - Service port override extraction from spec
 - Derivation logic (domain → proxy mode, email → Let's Encrypt)
 - `generate.go` now uses bridge exclusively (removed duplicate `generateTfvarsJSON`)
@@ -142,7 +142,7 @@ Items are categorized by severity and mapped to roadmap milestones.
 
 ### ~~TD-12: Variants Directory Still Exists~~ → RESOLVED
 
-> Moved to [Resolved](#resolved) on 2026-02-14. Deleted `base-homelab/variants/` directory (8 CUE files across `os/`, `compute/`, `service/`). v4 architecture uses Add-Ons + Contexts instead.
+> Moved to [Resolved](#resolved) on 2026-02-14. Deleted `base-kit/variants/` directory (8 CUE files across `os/`, `compute/`, `service/`). v4 architecture uses Add-Ons + Contexts instead.
 
 ### ~~TD-13: Version Metadata Inconsistency (W11)~~ → RESOLVED
 
@@ -245,7 +245,7 @@ Items are categorized by severity and mapped to roadmap milestones.
 |-----|------------|----------|-----|
 | TD-01 | CUE package declarations in subdirs | 2026-02-12 | Deleted `base/platform/` and `base/schema/` — unreachable duplicate packages |
 | TD-02 | Schema duplication (PAASConfig etc.) | 2026-02-12 | Canonical source is `base/layers.cue`; deleted `base/platform/` duplicates |
-| TD-07 | Dual schemas in base-homelab | 2026-02-12 | Deleted `#BaseHomelabKit` (unused); `#BaseHomelabStack` is canonical (all tests use it) |
+| TD-07 | Dual schemas in base-kit | 2026-02-12 | Deleted `#BaseKitKit` (unused); `#BaseKitStack` is canonical (all tests use it) |
 | TD-13 | Version metadata inconsistency | 2026-02-12 | Aligned to `4.0.0` in both `stackkit.yaml` and `stackfile.cue` |
 | TD-18 | HealthCheck snake_case vs camelCase | 2026-02-12 | Fixed `start_period` → `startPeriod` in CUE service definitions |
 | TD-16 | Coolify image typo (`coolabsio` → `coollabsio`) | 2026-02-11 | Fixed in `base/platform/paas.cue` |
@@ -255,7 +255,7 @@ Items are categorized by severity and mapped to roadmap milestones.
 | — | License inconsistency (K2) | 2026-02-10 | Apache 2.0 unified in LICENSE + README |
 | — | `modern-homelab/stackkit.cue` naming | 2026-02-11 | Renamed to `stackfile.cue` for consistency |
 | — | `stack-spec.yaml` deprecated fields | 2026-02-11 | Removed `variant`/`mode`, added `context`, fixed tier naming |
-| — | ha-homelab `object-storage` missing from ServiceType | 2026-02-12 | Added to `#ServiceType` enum in `base/stackkit.cue` |
+| — | ha-kit `object-storage` missing from ServiceType | 2026-02-12 | Added to `#ServiceType` enum in `base/stackkit.cue` |
 | — | CUE import alias shadowing | 2026-02-12 | Changed import to `dockerplatform "..."` |
 | — | CUE schema mismatches (14 errors) | 2026-02-12 | Fixed base schemas (middlewares, tinyauth, category, driver) + service values (maxFile, retention struct, paths) |
 | TD-04 | Compute tier naming (`minimal/performance` → `low/high`) | 2026-02-12 | Aligned Go models, validator, tests, and CLI to CUE naming (`low/standard/high`) |
@@ -264,7 +264,7 @@ Items are categorized by severity and mapped to roadmap milestones.
 | — | K8s refs in docs (stack-spec-reference, TARGET_STATE) | 2026-02-12 | Removed K8s schema sections, examples, and references from active docs |
 | TD-22 | plans/ and missions/ directories | 2026-02-11 | Archived to `docs/_archive/plans/` and `docs/_archive/missions/` |
 | TD-26 | Dokploy/Coolify selection logic | 2026-02-11 | Source doc archived; ROADMAP M2 clarifies: local→Dokploy, cloud→Coolify |
-| TD-09 | Services format inconsistency (list vs map) | 2026-02-13 | Standardized to map `[string]: #ServiceDefinition` in base/stackkit.cue, base-homelab/services.cue — matches ha/modern-homelab and Go `StackSpec.Services` |
+| TD-09 | Services format inconsistency (list vs map) | 2026-02-13 | Standardized to map `[string]: #ServiceDefinition` in base/stackkit.cue, base-kit/services.cue — matches ha/modern-homelab and Go `StackSpec.Services` |
 | TD-14 | OpenTofu validation not executed | 2026-02-13 | `cmd/stackkit/commands/validate.go` now uses `tofu.Executor.Validate()` with JSON error parsing, init-if-needed, and install check |
 | TD-25 | Domain validation inconsistency | 2026-02-14 | HA regex changed to positive hostname format; `step-ca` TLS provider added for local domains. See ADR-0004 |
 | TD-27 | API arbitrary filesystem write | 2026-02-11 | Removed `outputDir` from request; `handleGenerateTFVars` uses temp dir + returns content |
@@ -285,7 +285,7 @@ Items are categorized by severity and mapped to roadmap milestones.
 | TD-43 | No shell completion command | 2026-02-12 | Added `stackkit completion bash\|zsh\|fish\|powershell` via Cobra generators |
 | TD-44 | tfvars format inconsistency | 2026-02-12 | Standardized on JSON `.tfvars.json` in both CLI and API |
 | TD-38 | Interactive init is a stub | 2026-02-12 | Interactive wizard with StackKit/variant/mode/compute-tier selection + domain/email prompts (zero new deps) |
-| TD-12 | Variants directory still exists | 2026-02-14 | Deleted `base-homelab/variants/` (8 CUE files). v4 uses Add-Ons + Contexts instead |
+| TD-12 | Variants directory still exists | 2026-02-14 | Deleted `base-kit/variants/` (8 CUE files). v4 uses Add-Ons + Contexts instead |
 | TD-21 | Two website projects | 2026-02-14 | `marketing/` archived to `docs/_archive/`. `website-v2/` (SvelteKit) is canonical for `stackkits.kombify.io` |
 
 ---

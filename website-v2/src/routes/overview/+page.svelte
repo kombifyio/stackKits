@@ -20,7 +20,7 @@
 
 <svelte:head>
 	<title>StackKits Overview - kombify</title>
-	<meta name="description" content="Explore the three StackKits: Base Kit, Modern Homelab Kit, and High Availability Kit. Find the right architecture pattern for your infrastructure." />
+	<meta name="description" content="Explore the three StackKits: Base Kit, Modern Homelab, and High Availability Kit. Find the right architecture pattern for your infrastructure." />
 </svelte:head>
 
 <!-- Header -->

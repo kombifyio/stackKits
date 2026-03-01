@@ -26,7 +26,7 @@ Before evaluating licenses, we must define what kombify does with each piece of 
 - **B)** "kombify runs Consul as part of its SaaS platform" (managed service)
 - **C)** "kombify distributes a Docker image containing Consul" (distribution)
 
-For the ha-homelab StackKit, kombify primarily does **(A)**: generates configuration files that customers then use to deploy software on their own hardware. This is the most defensible position.
+For the ha-kit StackKit, kombify primarily does **(A)**: generates configuration files that customers then use to deploy software on their own hardware. This is the most defensible position.
 
 ---
 
@@ -107,8 +107,8 @@ kombify is a SaaS product that orchestrates infrastructure. It generates configs
 
 | HashiCorp Product | HashiCorp's Offering | kombify's Use | Competitive? |
 |-------------------|---------------------|---------------|-------------|
-| **Consul** | Service mesh, service discovery, distributed KV | Service discovery in HA homelab configs | **GRAY AREA** -- kombify provides infrastructure orchestration that includes Consul functionality |
-| **Nomad** | Workload orchestration, job scheduling | Orchestration option in ha-homelab | **LIKELY YES** -- kombify orchestrating workloads via Nomad is directly competitive |
+| **Consul** | Service mesh, service discovery, distributed KV | Service discovery in High Availability Kit configs | **GRAY AREA** -- kombify provides infrastructure orchestration that includes Consul functionality |
+| **Nomad** | Workload orchestration, job scheduling | Orchestration option in ha-kit | **LIKELY YES** -- kombify orchestrating workloads via Nomad is directly competitive |
 | **Vault** | Secrets management | Not currently used (we use SOPS+age) | Not applicable |
 | **Terraform** | Infrastructure as Code | Not currently used (we use CUE) | Not applicable |
 
@@ -127,7 +127,7 @@ kombify is a SaaS product that orchestrates infrastructure. It generates configs
 3. **USE OLD VERSIONS** -- Consul/Nomad versions released >4 years ago are now MPL-2.0 (open source). But they lack security patches.
 4. **USE FORKS** -- OpenTofu exists for Terraform; no equivalent for Consul/Nomad
 
-**Recommendation**: **AVOID Consul and Nomad in the default ha-homelab StackKit**. Offer them only as an opt-in add-on with clear license warnings, or negotiate a commercial license with HashiCorp.
+**Recommendation**: **AVOID Consul and Nomad in the default ha-kit StackKit**. Offer them only as an opt-in add-on with clear license warnings, or negotiate a commercial license with HashiCorp.
 
 ### 2.5 RSALv2 (BLOCKED for SaaS)
 
@@ -195,7 +195,7 @@ kombify is a SaaS product that orchestrates infrastructure. It generates configs
 
 ---
 
-## 4. Required Changes to ha-homelab StackKit
+## 4. Required Changes to ha-kit StackKit
 
 Based on this analysis, the following changes are needed:
 
@@ -248,13 +248,13 @@ Consul is the most significant tool we lose. Alternatives:
 
 ### Recommendation
 
-**Option A (CoreDNS + etcd)** for ha-homelab. etcd is already required for Patroni, so adding CoreDNS is one additional component with zero license risk.
+**Option A (CoreDNS + etcd)** for ha-kit. etcd is already required for Patroni, so adding CoreDNS is one additional component with zero license risk.
 
 ---
 
 ## 6. Orchestration Without Nomad
 
-Without Nomad, the ha-homelab uses the "compose-manual" approach:
+Without Nomad, the ha-kit uses the "compose-manual" approach:
 
 1. Docker Compose per node (as in modern-homelab)
 2. Keepalived + health check scripts for automatic failover
@@ -288,7 +288,7 @@ This is the foundation of kombify's license safety. The argument:
 
 ### Immediate Actions
 1. **Default to Valkey over Redis** in all StackKits (BSD-3, zero risk)
-2. **Replace Consul with CoreDNS + etcd** in ha-homelab
+2. **Replace Consul with CoreDNS + etcd** in ha-kit
 3. **Drop Nomad as default orchestration** -- use compose-manual
 4. **Never bundle/mirror container images** -- always reference upstream
 

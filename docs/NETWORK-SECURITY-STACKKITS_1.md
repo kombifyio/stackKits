@@ -128,8 +128,8 @@ services:
     environment:
       CONTAINERS: 1        # Traefik needs container listing
       NETWORKS: 1          # Traefik needs network info
-      SERVICES: 1          # Swarm service discovery (HA Kit)
-      TASKS: 1             # Swarm task info (HA Kit)
+      SERVICES: 1          # Swarm service discovery (High Availability Kit)
+      TASKS: 1             # Swarm task info (High Availability Kit)
       POST: 0              # Block all write operations
       BUILD: 0
       COMMIT: 0
@@ -249,7 +249,7 @@ Applied via `/etc/docker/daemon.json` during Layer 1 provisioning (OpenTofu):
 | `live-restore: true` | Containers keep running during Docker daemon restarts (important for updates). |
 | `default-address-pools` | Uses a non-default IP range to avoid conflicts with homelab VLANs and VPN subnets. |
 
-**HA Kit addition:** For Docker Swarm clusters, add:
+**High Availability Kit addition:** For Docker Swarm clusters, add:
 ```json
 {
   "iptables": true,
@@ -305,7 +305,7 @@ services:
     networks: [socket-proxy]        # Only reachable by Traefik
 ```
 
-**HA Kit extension:** Swarm overlay networks with encryption:
+**High Availability Kit extension:** Swarm overlay networks with encryption:
 ```yaml
 networks:
   frontend:
@@ -613,7 +613,7 @@ The combination of StackKit pattern and Node-Context produces specific security 
 | **Secrets** | SOPS + age | SOPS + age | SOPS + age |
 | **Monitoring** | Uptime Kuma | Uptime Kuma | Uptime Kuma |
 
-### Modern Homelab Kit (inherits all Base Kit controls, adds:)
+### Modern Homelab (inherits all Base Kit controls, adds:)
 
 | Control | `local` | `cloud` |
 |---------|---------|---------|
@@ -629,7 +629,7 @@ The combination of StackKit pattern and Node-Context produces specific security 
 | **VPN** | Headscale/Tailscale for admin access | Headscale/Tailscale |
 | **Alerting** | ntfy (self-hosted push) | ntfy |
 
-### High Availability Kit (inherits all Modern Homelab Kit controls, adds:)
+### High Availability Kit (inherits all Modern Homelab controls, adds:)
 
 | Control | `local` | `cloud` |
 |---------|---------|---------|
@@ -662,7 +662,7 @@ The combination of StackKit pattern and Node-Context produces specific security 
 | **Uptime Kuma** | Service availability monitoring | ~100MB RAM | MIT |
 | **SOPS + age** | Secrets encryption (CLI tools, no daemon) | 0 (CLI only) | MPL-2.0 / BSD-3 |
 
-### Modern Homelab Kit additions
+### Modern Homelab additions
 
 | Tool | Purpose | Resource Impact | License |
 |------|---------|----------------|---------|
@@ -768,19 +768,19 @@ github.com/kombihq/stackkits/
 │   └── pi.cue                         # pi: reduced limits, Cloudflare DoH
 │
 ├── addons/
-│   ├── siem/                          # Wazuh SIEM (HA Kit, optional)
+│   ├── siem/                          # Wazuh SIEM (High Availability Kit, optional)
 │   │   └── addon.cue
 │   ├── vulnerability-scanning/        # Trivy + Nuclei
 │   │   └── addon.cue
 │   └── runtime-security/             # Tetragon eBPF
 │       └── addon.cue
 │
-├── base-homelab/
+├── base-kit/
 │   └── defaults.cue                   # Base Kit security presets
 ├── modern-homelab/
-│   └── defaults.cue                   # Modern Kit security presets (inherits Base)
-└── ha-homelab/
-    └── defaults.cue                   # HA Kit security presets (inherits Modern)
+│   └── defaults.cue                   # Modern Homelab security presets (inherits Base)
+└── ha-kit/
+    └── defaults.cue                   # High Availability Kit security presets (inherits Modern)
 ```
 
 ---

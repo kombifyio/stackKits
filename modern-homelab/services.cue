@@ -7,7 +7,7 @@
 // - Tunnel (Cloudflare/Pangolin) for CGNAT bypass
 // - VPN is optional (not required, identity stack provides zero-trust)
 //
-// KEY DIFFERENCES FROM BASE-HOMELAB:
+// KEY DIFFERENCES FROM base-kit:
 // - Multi-node Docker Compose (not single-node, no Swarm)
 // - PaaS context-driven: domain+wildcard → Coolify, else → Dokploy
 // - Identity-aware proxies make VPN optional

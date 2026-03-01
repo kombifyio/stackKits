@@ -61,14 +61,14 @@ func TestCLI_Version(t *testing.T) {
 }
 
 func TestCLI_Init(t *testing.T) {
-	out, err := execInCli(t, "stackkit", "init", "base-homelab",
+	out, err := execInCli(t, "stackkit", "init", "base-kit",
 		"--non-interactive", "-C", "/workspace", "--force")
 	require.NoError(t, err, "init failed: %s", out)
 
 	// Verify stack-spec.yaml was created
 	specOut, err := execInCli(t, "cat", "/workspace/stack-spec.yaml")
 	require.NoError(t, err, "reading spec failed: %s", specOut)
-	assert.Contains(t, specOut, "base-homelab", "spec should reference base-homelab stackkit")
+	assert.Contains(t, specOut, "base-kit", "spec should reference base-kit stackkit")
 	assert.Contains(t, specOut, "variant", "spec should contain variant field")
 }
 

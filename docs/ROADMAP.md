@@ -27,9 +27,9 @@ This roadmap consolidates all planned work into a single milestone-based plan (M
 | Component | Status | Notes |
 |-----------|--------|-------|
 | CUE base schemas | 95% | ~2800 lines, production-quality. `base/platform/` and `base/schema/` deleted (TD-01/02) |
-| base-homelab | 85% | E2E verified (2026-02-22): 31 resources, 9 healthy containers. bridge.go TFVars aligned with main.tf |
+| base-kit | 85% | E2E verified (2026-02-22): 31 resources, 9 healthy containers. bridge.go TFVars aligned with main.tf |
 | modern-homelab | 0% | Entirely K8s/k3s-based — needs **complete rewrite** for Docker multi-node (TD-08) |
-| ha-homelab | 0% | Schema only, 8 explicit TODOs |
+| ha-kit | 0% | Schema only, 8 explicit TODOs |
 | stackkit CLI | 95% | 12 commands functional: init (interactive), generate, validate, plan, apply, destroy, status (--json), prepare (memory), completion, version, prompt, serve |
 | **Service Modules** | **65%** | **NEW** — 14 modules implemented in `modules/`, each with module.cue + reference-compose + integration tests |
 | Add-On system | 0% | Replaces monolithic variants. 17 CUE schemas exist but no code generation |
@@ -52,7 +52,7 @@ Before implementation, a full audit identified critical inconsistencies across S
 | K2 | **License inconsistency** — different licenses cited in different places | docs, StackKits, Stack | High (✅ fixed) |
 | K3 | **Naming inconsistency** — "kombifyStack", "kombify Stack", "kombify Stack" etc. | all | High |
 | K4 | **Duplicate concept pages** — 3× StackKits explanations, 2× spec-driven pages | docs | Medium |
-| K5 | **ha-homelab description** — docs say K8s, code is Docker Swarm | docs | High |
+| K5 | **ha-kit description** — docs say K8s, code is Docker Swarm | docs | High |
 | K6 | **modern-homelab.mdx** — 591 lines entirely about K8s/k3s/FluxCD/Longhorn | docs | High |
 | K7 | **GitHub org references** — kombify, kombifyLabs, Soulcreek, kombihq mixed | docs, Stack | Medium |
 | K8 | **URL casing** — /Cloud/ vs /cloud/ mixed | docs | Low |
@@ -108,7 +108,7 @@ Before implementation, a full audit identified critical inconsistencies across S
 - [x] Compute tier naming: Go `minimal/standard/performance` → CUE `low/standard/high` (align to CUE)
 - [x] Platform type: remove `kubernetes` from Go validator (ADR-0002)
 - [x] Fix Layer 3 PAAS validation logic (currently inverted in Go)
-- [x] Consolidate `#BaseHomelabStack` vs `#BaseHomelabKit` → single canonical schema
+- [x] Consolidate `#BaseKitStack` vs `#BaseKitKit` → single canonical schema
 - [x] Fix Coolify image typo: `coolabsio` → `coollabsio`
 - [x] Fix whoami service missing `host` port in PortMapping
 
@@ -121,9 +121,9 @@ Before implementation, a full audit identified critical inconsistencies across S
 - [ ] Update service names: Authelia → TinyAuth/PocketID, Portainer → Dokploy (K9)
 - [ ] Unify GitHub org references (K7)
 - [ ] Rewrite `modern-homelab.mdx` for Docker multi-node (K6)
-- [ ] Update `ha-homelab.mdx` for Docker Swarm (K5)
+- [ ] Update `ha-kit.mdx` for Docker Swarm (K5)
 
-**Done Criteria:** `cue vet ./base/... ./base-homelab/...` passes. No K8s/variant references in active docs. Consistent naming everywhere.
+**Done Criteria:** `cue vet ./base/... ./base-kit/...` passes. No K8s/variant references in active docs. Consistent naming everywhere.
 
 ---
 
@@ -150,11 +150,11 @@ traefik, tinyauth, pocketid, dokploy, socket-proxy, uptime-kuma, dozzle, dashboa
 **Active work:**
 - [ ] Run and verify all module integration tests (11 tests per module) — needs Docker
 - [ ] Break monolithic `main.tf` into per-module OpenTofu fragments (StackKits-0t0.6)
-- [ ] Remove legacy variant system from `base-homelab/stackfile.cue` (StackKits-x2u)
+- [ ] Remove legacy variant system from `base-kit/stackfile.cue` (StackKits-x2u)
 
 #### IaC Pipeline (Active Work)
 - [ ] CUE-as-SSoT: CUE validates + exports `tfvars.json` (not template rendering)
-- [ ] base-homelab end-to-end: `validate → generate → plan → apply`
+- [ ] base-kit end-to-end: `validate → generate → plan → apply`
 - [ ] JSON schema export for IDE support (`cue export --schema`)
 - [ ] Port collision detection as CUE constraint
 - [ ] Service dependency validation (`needs[]` references enabled services)
@@ -178,7 +178,7 @@ traefik, tinyauth, pocketid, dokploy, socket-proxy, uptime-kuma, dozzle, dashboa
 - [x] **API hardening: Capture response status in logging middleware** (TD-35, P1 — resolved 2026-02-11)
 - [x] Fix `base.#Layer3Applications.services` constraint (Array vs Map — TD-09, resolved 2026-02-13)
 
-**Done Criteria:** `stackkit validate && stackkit generate && stackkit plan` works for base-homelab. All module integration tests pass.
+**Done Criteria:** `stackkit validate && stackkit generate && stackkit plan` works for base-kit. All module integration tests pass.
 
 ---
 
@@ -198,7 +198,7 @@ traefik, tinyauth, pocketid, dokploy, socket-proxy, uptime-kuma, dozzle, dashboa
 
 #### Backend Split
 
-- [ ] `base-homelab-local` vs `base-homelab-cloud` CUE differentiation
+- [ ] `base-kit-local` vs `base-kit-cloud` CUE differentiation
 - [ ] `#NodeDefinition.type` extension: `"local" | "cloud"` with different SSH defaults
 - [ ] Cloud provider abstraction: Hetzner module as first cloud backend
 - [ ] VPN bridging schema for hybrid setups (Headscale/WireGuard)
@@ -214,11 +214,11 @@ traefik, tinyauth, pocketid, dokploy, socket-proxy, uptime-kuma, dozzle, dashboa
 #### Base Kit Refinement
 
 - [x] Remove old `variants/` directory (replaced by Add-Ons and Contexts) — TD-12, resolved 2026-02-14
-- [x] Consolidate to single schema (`#BaseHomelabStack` only) — TD-07, resolved 2026-02-12
+- [x] Consolidate to single schema (`#BaseKitStack` only) — TD-07, resolved 2026-02-12
 - [ ] Update spec format to v2 `kombination.yaml`
 - [ ] Context × base matrix tests (local, cloud, pi)
 
-#### Modern Homelab Kit — COMPLETE REWRITE
+#### Modern Homelab — COMPLETE REWRITE
 
 Current state: entirely K8s/k3s-based. Must be rewritten as **hybrid Docker multi-node**.
 
@@ -256,13 +256,13 @@ Current state: entirely K8s/k3s-based. Must be rewritten as **hybrid Docker mult
 
 #### Migrate Variants → Add-Ons
 
-- [ ] `base-homelab/variants/service/coolify.cue` → `addons/coolify-paas/`
-- [ ] `base-homelab/variants/service/beszel.cue` → `addons/monitoring/` (subset)
-- [ ] `base-homelab/variants/service/minimal.cue` → `contexts/pi.cue` defaults (fold in)
-- [ ] `base-homelab/variants/service/default.cue` → base defaults (fold in)
-- [ ] `base-homelab/variants/compute/compute.cue` → Context system
-- [ ] `base-homelab/variants/os/*.cue` → OS detection (auto, not user-chosen)
-- [ ] Delete `base-homelab/variants/` directory after migration
+- [ ] `base-kit/variants/service/coolify.cue` → `addons/coolify-paas/`
+- [ ] `base-kit/variants/service/beszel.cue` → `addons/monitoring/` (subset)
+- [ ] `base-kit/variants/service/minimal.cue` → `contexts/pi.cue` defaults (fold in)
+- [ ] `base-kit/variants/service/default.cue` → base defaults (fold in)
+- [ ] `base-kit/variants/compute/compute.cue` → Context system
+- [ ] `base-kit/variants/os/*.cue` → OS detection (auto, not user-chosen)
+- [ ] Delete `base-kit/variants/` directory after migration
 
 #### Core Add-Ons
 
@@ -365,7 +365,7 @@ Current state: entirely K8s/k3s-based. Must be rewritten as **hybrid Docker mult
 - [ ] Health score calculation (0–100)
 - [ ] Anomaly detection baseline
 
-**Done Criteria:** Base-homelab deployment sends status via gRPC agent and creates DNS record at Cloudflare.
+**Done Criteria:** base-kit deployment sends status via gRPC agent and creates DNS record at Cloudflare.
 
 ---
 
@@ -452,7 +452,7 @@ M0 (Hygiene)
 | Risk | Probability | Impact | Mitigation |
 |------|:-----------:|:------:|------------|
 | CUE export complexity underestimated | Medium | High | Prototype with 1 service first, not all at once |
-| modern-homelab rewrite scope | High | Medium | Clear differentiation from ha-homelab in M3 |
+| modern-homelab rewrite scope | High | Medium | Clear differentiation from ha-kit in M3 |
 | AI features too ambitious | High | Low | M8 explicitly scoped as prototype |
 | Cross-repo synchronization drift | Medium | Medium | M0 creates the basis, M9 maintains |
 | Single-developer bottleneck | High | High | Small milestones, feedback loops, pipeline automation |

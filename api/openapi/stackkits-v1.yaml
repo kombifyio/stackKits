@@ -281,7 +281,7 @@ components:
       name: name
       in: path
       required: true
-      description: StackKit name (e.g., base-homelab, ha-homelab)
+      description: StackKit name (e.g., base-kit, ha-kit)
       schema:
         type: string
         pattern: "^[a-z0-9][a-z0-9-]*[a-z0-9]$"
@@ -325,10 +325,10 @@ components:
       properties:
         name:
           type: string
-          example: base-homelab
+          example: base-kit
         displayName:
           type: string
-          example: Base Homelab
+          example: Base Kit
         description:
           type: string
         version:
@@ -480,7 +480,7 @@ components:
           type: string
         stackkit:
           type: string
-          example: base-homelab
+          example: base-kit
         variant:
           type: string
         mode:

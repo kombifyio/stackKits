@@ -34,7 +34,7 @@ package backup
 	}
 
 	_compatibility: {
-		stackkits: ["base-homelab", "dev-homelab", "modern-homelab", "ha-homelab"]
+		stackkits: ["base-kit", "dev-homelab", "modern-homelab", "ha-kit"]
 		contexts:  ["local", "cloud", "pi"]
 		requires:  []
 		conflicts: []

@@ -67,7 +67,7 @@ run = [
   "go test -v -race -short ./pkg/... ./internal/...",
   "go test -v -race ./tests/integration/...",
   "cue vet ./base/...",
-  "cue vet ./base-homelab/...",
+  "cue vet ./base-kit/...",
   "cue vet ./modern-homelab/...",
 ]
 
@@ -84,8 +84,8 @@ run = '''
 echo "=== CUE Validation ==="
 cue vet ./base/...
 echo "[OK] base/"
-cue vet ./base-homelab/...
-echo "[OK] base-homelab/"
+cue vet ./base-kit/...
+echo "[OK] base-kit/"
 cue vet ./modern-homelab/... 2>/dev/null && echo "[OK] modern-homelab/" || echo "[SKIP] modern-homelab/"
 for dir in modules/*/; do
   if [ -f "$dir/module.cue" ]; then

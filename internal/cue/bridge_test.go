@@ -25,8 +25,8 @@ func TestTerraformBridge_GenerateTFVars(t *testing.T) {
 		wantErr     bool
 	}{
 		{
-			name:        "base-homelab valid",
-			stackkitDir: filepath.Join("..", "..", "base-homelab"),
+			name:        "base-kit valid",
+			stackkitDir: filepath.Join("..", "..", "base-kit"),
 			wantErr:     false,
 		},
 	}
@@ -63,8 +63,8 @@ func TestTerraformBridge_ValidateBeforeGeneration(t *testing.T) {
 		wantErr     bool
 	}{
 		{
-			name:        "base-homelab valid CUE",
-			stackkitDir: filepath.Join("..", "..", "base-homelab"),
+			name:        "base-kit valid CUE",
+			stackkitDir: filepath.Join("..", "..", "base-kit"),
 			wantErr:     false,
 		},
 	}
@@ -85,7 +85,7 @@ func TestTerraformBridge_ValidateBeforeGeneration(t *testing.T) {
 }
 
 func TestTerraformBridge_GenerateWithValidation(t *testing.T) {
-	stackkitDir := filepath.Join("..", "..", "base-homelab")
+	stackkitDir := filepath.Join("..", "..", "base-kit")
 	if _, err := os.Stat(stackkitDir); os.IsNotExist(err) {
 		t.Skipf("StackKit directory not found: %s", stackkitDir)
 	}
@@ -118,7 +118,7 @@ func TestTerraformBridge_GenerateWithValidation(t *testing.T) {
 }
 
 func TestTerraformBridge_GenerateTFVars_OutputCreation(t *testing.T) {
-	stackkitDir := filepath.Join("..", "..", "base-homelab")
+	stackkitDir := filepath.Join("..", "..", "base-kit")
 	if _, err := os.Stat(stackkitDir); os.IsNotExist(err) {
 		t.Skipf("StackKit directory not found: %s", stackkitDir)
 	}
@@ -425,7 +425,7 @@ func TestGenerateTFVarsFromSpec(t *testing.T) {
 
 		spec := &models.StackSpec{
 			Name:     "my-homelab",
-			StackKit: "base-homelab",
+			StackKit: "base-kit",
 			Domain:   "homelab.example.com",
 			Network:  models.NetworkSpec{Subnet: "172.20.0.0/16"},
 		}
@@ -456,7 +456,7 @@ func TestGenerateTFVarsFromSpec(t *testing.T) {
 
 		spec := &models.StackSpec{
 			Name:     "local-homelab",
-			StackKit: "base-homelab",
+			StackKit: "base-kit",
 		}
 
 		outputDir := filepath.Join(tmpDir, "output")
@@ -481,7 +481,7 @@ func TestGenerateTFVarsFromSpec(t *testing.T) {
 
 		spec := &models.StackSpec{
 			Name:     "custom",
-			StackKit: "base-homelab",
+			StackKit: "base-kit",
 			Services: map[string]any{
 				"pocketid":  map[string]any{"enabled": false},
 				"dashboard": map[string]any{"enabled": true},

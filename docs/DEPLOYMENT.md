@@ -31,8 +31,8 @@
 │  ┌──────────────────────────────────────────────────────┐  │
 │  │              CUE Schema Repository                    │  │
 │  │  base/          - Core service definitions           │  │
-│  │  base-homelab/  - Single Environment Kit             │  │
-│  │  ha-homelab/    - High-Availability Kit              │  │
+│  │  base-kit/  - Single Environment Kit             │  │
+│  │  ha-kit/    - High-Availability Kit              │  │
 │  └──────────────────────────────────────────────────────┘  │
 │                          │                                  │
 │                          ▼                                  │
@@ -144,13 +144,13 @@ go build -ldflags "-X main.version=v1.0.0" -o bin/stackkit ./cmd/stackkit
 cue vet ./...
 
 # Validate specific stack
-cue vet ./base-homelab/...
+cue vet ./base-kit/...
 
 # Evaluate a schema
-cue eval ./base-homelab/
+cue eval ./base-kit/
 
 # Export as YAML
-cue export ./base-homelab/ --out yaml
+cue export ./base-kit/ --out yaml
 
 # Format CUE files
 cue fmt ./...
@@ -174,9 +174,9 @@ StackKits artifacts are published to ACR as OCI artifacts:
 az acr login --name acrkombifyprod
 
 # Push as OCI artifact
-oras push acrkombifyprod.azurecr.io/stackkits/base-homelab:v1.0.0 \
+oras push acrkombifyprod.azurecr.io/stackkits/base-kit:v1.0.0 \
   --artifact-type application/vnd.kombify.stackkit.v1 \
-  ./base-homelab/:application/vnd.cuelang.cue
+  ./base-kit/:application/vnd.cuelang.cue
 ```
 
 ---
@@ -197,10 +197,10 @@ oras push acrkombifyprod.azurecr.io/stackkits/base-homelab:v1.0.0 \
 
 ```bash
 # Get detailed error output
-cue vet -c ./base-homelab/...
+cue vet -c ./base-kit/...
 
 # Check specific file
-cue vet ./base-homelab/stackfile.cue
+cue vet ./base-kit/stackfile.cue
 ```
 
 ### Import resolution issues

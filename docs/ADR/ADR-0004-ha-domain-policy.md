@@ -6,7 +6,7 @@
 
 ## Context
 
-The `ha-homelab` StackKit previously rejected local/private TLD domains (`.local`, `.lan`, `.home`, `.internal`, `.test`) via a negative regex constraint. The `base-homelab` StackKit accepted any string. This created confusion about whether HA deployments required public domains.
+The `ha-kit` StackKit previously rejected local/private TLD domains (`.local`, `.lan`, `.home`, `.internal`, `.test`) via a negative regex constraint. The `base-kit` StackKit accepted any string. This created confusion about whether HA deployments required public domains.
 
 Many homelab users operate entirely on private networks with `.local` or `.lan` domains. Requiring a public domain was an unnecessary barrier.
 

@@ -76,9 +76,9 @@ ENV STACKKITS_BASE_DIR=/workspace
 
 # Copy StackKit directories
 COPY base/ /workspace/base/
-COPY base-homelab/ /workspace/base-homelab/
+COPY base-kit/ /workspace/base-kit/
 COPY modern-homelab/ /workspace/modern-homelab/
-COPY ha-homelab/ /workspace/ha-homelab/
+COPY ha-kit/ /workspace/ha-kit/
 
 # Expose HTTP API port
 EXPOSE 8082

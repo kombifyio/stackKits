@@ -17,7 +17,7 @@ app.use(express.json());
 const DEMOS = {
   'base-kit':        { prefix: 'demo-',    dir: 'demos/base-kit',        label: 'Base Kit',        port: 7880, apiPort: 7090 },
   'modern-homelab':  { prefix: 'modern-',  dir: 'demos/modern-homelab',  label: 'Modern Homelab',  port: 7980, apiPort: 7190 },
-  'ha-kit':          { prefix: 'ha-',      dir: 'demos/ha-kit',          label: 'HA Kit',          port: 8180, apiPort: 8290 },
+  'ha-kit':          { prefix: 'ha-',      dir: 'demos/ha-kit',          label: 'High Availability Kit',          port: 8180, apiPort: 8290 },
 };
 
 // GET /api/demos — status of all demos
@@ -118,7 +118,7 @@ app.get('/api/portal/deployment', (_req, res) => {
     ? `https://${kombifyBase}-${subdomain}.kombify.me`
     : `https://${subdomain}.${domain}`;
   res.json({
-    kit: { name: 'Base Homelab Kit', version: '1.0.0' },
+    kit: { name: 'Base Kit', version: '1.0.0' },
     domain: kombifyBase ? `${kombifyBase}.kombify.me` : domain,
     nodeCount: 1,
     services: PORTAL_SERVICES.map(s => ({ ...s, url: serviceUrl(s.subdomain) })),

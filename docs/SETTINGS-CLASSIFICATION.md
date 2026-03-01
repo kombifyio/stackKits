@@ -133,7 +133,7 @@ Applications are deployed and configured through the PAAS dashboard, not through
 ```bash
 # 1. Update the stack-spec.yaml or kombination.yaml
 # 2. Run validation
-cue vet ./base/... ./base-homelab/...
+cue vet ./base/... ./base-kit/...
 
 # 3. Apply changes
 # Simple mode:
@@ -152,7 +152,7 @@ terramate run -- tofu apply
 1. **Backup all data** before attempting changes
 2. **Plan migration path** for dependent services
 3. **Schedule maintenance window** for service disruption
-4. **Test in base-homelab** before production changes
+4. **Test in base-kit** before production changes
 
 #### Example: Changing LLDAP Base DN
 

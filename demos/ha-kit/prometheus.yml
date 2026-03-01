@@ -1,4 +1,4 @@
-# HA Kit Demo — Prometheus configuration
+# High Availability Kit Demo — Prometheus configuration
 # Scrapes metrics from all demo services
 
 global:

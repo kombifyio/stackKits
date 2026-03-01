@@ -11,7 +11,7 @@ package tests
 import (
 	"github.com/kombihq/stackkits/base"
 	"github.com/kombihq/stackkits/platforms/docker"
-	base_homelab "github.com/kombihq/stackkits/base-homelab"
+	base_kit "github.com/kombihq/stackkits/base-kit"
 )
 
 // =============================================================================
@@ -149,11 +149,11 @@ _test_docker_service: docker.#DockerService & {
 }
 
 // =============================================================================
-// LAYER 3 (STACKKIT) TESTS - BASE-HOMELAB
+// LAYER 3 (STACKKIT) TESTS - base-kit
 // =============================================================================
 
-// Test: Complete base-homelab configuration with default variant
-_test_base_homelab_default: base_homelab.#BaseHomelabKit & {
+// Test: Complete base-kit configuration with default variant
+_test_base_kit_default: base_kit.#BaseKitKit & {
 	variant: "default"
 	
 	system: {
@@ -178,8 +178,8 @@ _test_base_homelab_default: base_homelab.#BaseHomelabKit & {
 	}]
 }
 
-// Test: Base-homelab with beszel variant
-_test_base_homelab_beszel: base_homelab.#BaseHomelabKit & {
+// Test: base-kit with beszel variant
+_test_base_kit_beszel: base_kit.#BaseKitKit & {
 	variant: "beszel"
 	
 	nodes: [{
@@ -200,8 +200,8 @@ _test_base_homelab_beszel: base_homelab.#BaseHomelabKit & {
 	}]
 }
 
-// Test: Base-homelab with minimal variant
-_test_base_homelab_minimal: base_homelab.#BaseHomelabKit & {
+// Test: base-kit with minimal variant
+_test_base_kit_minimal: base_kit.#BaseKitKit & {
 	variant: "minimal"
 	
 	nodes: [{
@@ -227,14 +227,14 @@ _test_base_homelab_minimal: base_homelab.#BaseHomelabKit & {
 // =============================================================================
 
 // Test: Invalid OS should fail
-// _test_invalid_os: base_homelab.#BaseHomelabKit & {
+// _test_invalid_os: base_kit.#BaseKitKit & {
 //     nodes: [{
 //         os: "windows-11"  // Not in allowed values
 //     }]
 // }
 
 // Test: Resources below minimum should fail
-// _test_invalid_resources: base_homelab.#BaseHomelabKit & {
+// _test_invalid_resources: base_kit.#BaseKitKit & {
 //     nodes: [{
 //         resources: {
 //             cpu: 1     // Below minimum of 2
@@ -244,6 +244,6 @@ _test_base_homelab_minimal: base_homelab.#BaseHomelabKit & {
 // }
 
 // Test: Invalid variant should fail
-// _test_invalid_variant: base_homelab.#BaseHomelabKit & {
+// _test_invalid_variant: base_kit.#BaseKitKit & {
 //     variant: "enterprise"  // Not a valid variant
 // }

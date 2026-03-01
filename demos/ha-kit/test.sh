@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# HA Kit Demo — Integration Test
+# High Availability Kit Demo — Integration Test
 # =============================================================================
 # Tests 3-node HA topology: main + worker1 + worker2, auth, monitoring stack.
 #
@@ -58,7 +58,7 @@ if [ "$WAIT" = "--wait" ]; then
 fi
 
 echo ""
-echo "=== HA Kit Integration Tests (port ${PORT}) ==="
+echo "=== High Availability Kit Integration Tests (port ${PORT}) ==="
 echo ""
 
 # ---------------------------------------------------------------------------

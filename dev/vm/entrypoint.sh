@@ -15,6 +15,9 @@ ssh-keygen -A >/dev/null 2>&1 || true
 
 mkdir -p /var/run/sshd
 
+# Clean up stale Docker PID file from previous runs (persistent volumes)
+rm -f /var/run/docker.pid
+
 dockerd \
   --host=unix:///var/run/docker.sock \
   --host=tcp://0.0.0.0:2375 \

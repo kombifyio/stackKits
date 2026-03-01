@@ -26,7 +26,7 @@ func TestLoadStackSpec(t *testing.T) {
 
 	t.Run("loads valid spec file", func(t *testing.T) {
 		specContent := `name: test-deployment
-stackkit: base-homelab
+stackkit: base-kit
 variant: default
 mode: simple
 domain: homelab.local
@@ -48,7 +48,7 @@ ssh:
 
 		require.NoError(t, err)
 		assert.Equal(t, "test-deployment", spec.Name)
-		assert.Equal(t, "base-homelab", spec.StackKit)
+		assert.Equal(t, "base-kit", spec.StackKit)
 		assert.Equal(t, "default", spec.Variant)
 		assert.Equal(t, "local", spec.Network.Mode)
 	})
@@ -62,7 +62,7 @@ ssh:
 
 	t.Run("applies defaults", func(t *testing.T) {
 		specContent := `name: minimal
-stackkit: base-homelab
+stackkit: base-kit
 `
 		specPath := filepath.Join(tmpDir, "minimal-spec.yaml")
 		err := os.WriteFile(specPath, []byte(specContent), 0600)
@@ -102,7 +102,7 @@ func TestSaveStackSpec(t *testing.T) {
 	t.Run("saves spec file", func(t *testing.T) {
 		spec := &models.StackSpec{
 			Name:     "saved-deployment",
-			StackKit: "base-homelab",
+			StackKit: "base-kit",
 			Variant:  "default",
 			Mode:     "simple",
 			Network: models.NetworkSpec{
@@ -130,7 +130,7 @@ func TestSaveStackSpec(t *testing.T) {
 	t.Run("creates directory if needed", func(t *testing.T) {
 		spec := &models.StackSpec{
 			Name:     "nested",
-			StackKit: "base-homelab",
+			StackKit: "base-kit",
 		}
 
 		loader := NewLoader(tmpDir)
@@ -228,7 +228,7 @@ func TestDeploymentState(t *testing.T) {
 
 	t.Run("saves and loads deployment state", func(t *testing.T) {
 		state := &models.DeploymentState{
-			StackKit: "base-homelab",
+			StackKit: "base-kit",
 			Variant:  "default",
 			Mode:     "simple",
 			Status:   models.StatusRunning,
@@ -249,7 +249,7 @@ func TestDeploymentState(t *testing.T) {
 
 		loaded, err := loader.LoadDeploymentState(statePath)
 		require.NoError(t, err)
-		assert.Equal(t, "base-homelab", loaded.StackKit)
+		assert.Equal(t, "base-kit", loaded.StackKit)
 		assert.Equal(t, models.StatusRunning, loaded.Status)
 		assert.Len(t, loaded.Services, 1)
 	})
@@ -352,7 +352,7 @@ func TestValidateStackKitName(t *testing.T) {
 	})
 
 	t.Run("accepts valid names", func(t *testing.T) {
-		validNames := []string{"base-homelab", "ha-homelab", "modern-homelab", "my_stack"}
+		validNames := []string{"base-kit", "ha-kit", "modern-homelab", "my_stack"}
 		for _, name := range validNames {
 			err := validateStackKitName(name)
 			assert.NoError(t, err, "name %q should be valid", name)
@@ -422,7 +422,7 @@ func TestSaveStackSpecEdgeCases(t *testing.T) {
 	t.Run("saves and reloads spec", func(t *testing.T) {
 		spec := &models.StackSpec{
 			Name:     "round-trip-test",
-			StackKit: "base-homelab",
+			StackKit: "base-kit",
 			Variant:  "default",
 			Network: models.NetworkSpec{
 				Mode:   "local",
@@ -437,7 +437,7 @@ func TestSaveStackSpecEdgeCases(t *testing.T) {
 		loaded, err := loader.LoadStackSpec(specPath)
 		require.NoError(t, err)
 		assert.Equal(t, "round-trip-test", loaded.Name)
-		assert.Equal(t, "base-homelab", loaded.StackKit)
+		assert.Equal(t, "base-kit", loaded.StackKit)
 	})
 
 	t.Run("fails for invalid output path", func(t *testing.T) {
@@ -445,7 +445,7 @@ func TestSaveStackSpecEdgeCases(t *testing.T) {
 		blocker := filepath.Join(tmpDir, "blocker")
 		require.NoError(t, os.WriteFile(blocker, []byte("x"), 0600))
 
-		spec := &models.StackSpec{Name: "test", StackKit: "base-homelab"}
+		spec := &models.StackSpec{Name: "test", StackKit: "base-kit"}
 		err := loader.SaveStackSpec(spec, filepath.Join(blocker, "sub", "spec.yaml"))
 		assert.Error(t, err)
 	})

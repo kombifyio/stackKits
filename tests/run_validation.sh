@@ -92,11 +92,11 @@ run_test "Docker platform schema" "platforms/docker/platform.cue"
 echo -e "\n${YELLOW}Layer 3 - STACKKIT Tests${NC}"
 echo "-------------------------------------------"
 
-run_test "base-homelab stackfile" "stackkits/base-homelab/stackfile.cue"
+run_test "base-kit stackfile" "stackkits/base-kit/stackfile.cue"
 
 # Check if old location still exists (backward compatibility)
-if [ -f "base-homelab/stackfile.cue" ]; then
-    run_test "base-homelab (legacy location)" "base-homelab/stackfile.cue"
+if [ -f "base-kit/stackfile.cue" ]; then
+    run_test "base-kit (legacy location)" "base-kit/stackfile.cue"
 fi
 
 # =============================================================================
@@ -147,10 +147,10 @@ check_template "platforms/docker/_docker.tf.tmpl"
 check_template "platforms/docker/_traefik.tf.tmpl"
 
 # Layer 3 templates
-check_template "stackkits/base-homelab/templates/services/_dokploy.tf.tmpl"
-check_template "stackkits/base-homelab/templates/services/_uptimekuma.tf.tmpl"
-check_template "stackkits/base-homelab/templates/services/_beszel.tf.tmpl"
-check_template "stackkits/base-homelab/templates/services/_minimal.tf.tmpl"
+check_template "stackkits/base-kit/templates/services/_dokploy.tf.tmpl"
+check_template "stackkits/base-kit/templates/services/_uptimekuma.tf.tmpl"
+check_template "stackkits/base-kit/templates/services/_beszel.tf.tmpl"
+check_template "stackkits/base-kit/templates/services/_minimal.tf.tmpl"
 
 # =============================================================================
 # SUMMARY

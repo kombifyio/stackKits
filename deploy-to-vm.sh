@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# StackKit Base Homelab - VM Deployment Script (Robust Version)
+# StackKit Base Kit - VM Deployment Script (Robust Version)
 # =============================================================================
 # This script automates the correct deployment flow with comprehensive
 # validation, error handling, and recovery mechanisms.
@@ -392,11 +392,11 @@ step_start_dns() {
 step_init_stackkit() {
     log_step "4" "Initialize StackKit INSIDE the VM"
 
-    log_info "Running: stackkit init base-homelab --non-interactive"
+    log_info "Running: stackkit init base-kit --non-interactive"
     log_info "Target: DOCKER_HOST=tcp://vm:2375"
 
     docker compose run --rm -e DOCKER_HOST=tcp://vm:2375 cli \
-        ./stackkit init base-homelab --non-interactive
+        ./stackkit init base-kit --non-interactive
 
     log_success "StackKit initialized in VM"
 }
@@ -489,7 +489,7 @@ main() {
     echo ""
     echo -e "${CYAN}╔════════════════════════════════════════════════════════════════╗${NC}"
     echo -e "${CYAN}║${NC}                                                                ${CYAN}║${NC}"
-    echo -e "${CYAN}║${NC}   ${BOLD}StackKit Base Homelab - VM Deployment${NC}                        ${CYAN}║${NC}"
+    echo -e "${CYAN}║${NC}   ${BOLD}StackKit Base Kit - VM Deployment${NC}                            ${CYAN}║${NC}"
     echo -e "${CYAN}║${NC}                                                                ${CYAN}║${NC}"
     echo -e "${CYAN}╚════════════════════════════════════════════════════════════════╝${NC}"
     echo ""

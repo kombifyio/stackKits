@@ -1,4 +1,4 @@
-# HA Kit Demo — Traefik dynamic configuration
+# High Availability Kit Demo — Traefik dynamic configuration
 # 3-node HA topology: main + worker-1 + worker-2
 # Domains: *.ha.local
 

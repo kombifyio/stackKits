@@ -45,7 +45,7 @@ func TestStackSpec(t *testing.T) {
 	t.Run("creates valid spec", func(t *testing.T) {
 		spec := StackSpec{
 			Name:     "my-homelab",
-			StackKit: "base-homelab",
+			StackKit: "base-kit",
 			Variant:  "default",
 			Mode:     "simple",
 			Domain:   "homelab.local",
@@ -60,15 +60,15 @@ func TestStackSpec(t *testing.T) {
 		}
 
 		assert.Equal(t, "my-homelab", spec.Name)
-		assert.Equal(t, "base-homelab", spec.StackKit)
+		assert.Equal(t, "base-kit", spec.StackKit)
 		assert.Equal(t, "local", spec.Network.Mode)
 		assert.Equal(t, "172.20.0.0/16", spec.Network.Subnet)
 	})
 
 	t.Run("supports multi-node configuration", func(t *testing.T) {
 		spec := StackSpec{
-			Name:     "ha-homelab",
-			StackKit: "ha-homelab",
+			Name:     "ha-kit",
+			StackKit: "ha-kit",
 			Nodes: []NodeSpec{
 				{Name: "control-1", Role: "control-plane", IP: "192.168.1.10"},
 				{Name: "worker-1", Role: "worker", IP: "192.168.1.11"},
@@ -84,7 +84,7 @@ func TestStackSpec(t *testing.T) {
 	t.Run("supports service configuration", func(t *testing.T) {
 		spec := StackSpec{
 			Name:     "custom",
-			StackKit: "base-homelab",
+			StackKit: "base-kit",
 			Services: map[string]any{
 				"traefik": map[string]any{
 					"dashboard": true,
@@ -99,7 +99,7 @@ func TestStackSpec(t *testing.T) {
 func TestDeploymentState(t *testing.T) {
 	t.Run("creates valid deployment state", func(t *testing.T) {
 		state := DeploymentState{
-			StackKit:    "base-homelab",
+			StackKit:    "base-kit",
 			Variant:     "default",
 			Mode:        "simple",
 			Status:      StatusRunning,

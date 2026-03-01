@@ -34,15 +34,15 @@ func testServer(t *testing.T) (*Server, string) {
 	t.Helper()
 	tmpDir := t.TempDir()
 
-	// Create a minimal stackkit fixture: base-homelab
-	baseDir := filepath.Join(tmpDir, "base-homelab")
+	// Create a minimal stackkit fixture: base-kit
+	baseDir := filepath.Join(tmpDir, "base-kit")
 	require.NoError(t, os.MkdirAll(baseDir, 0750))
 	stackkitYAML := `metadata:
   apiVersion: v1
   kind: StackKit
-  name: base-homelab
+  name: base-kit
   version: "4.0.0"
-  displayName: "Base Homelab Kit"
+  displayName: "Base Kit"
   description: "Single-node homelab stack"
   license: "MIT"
   tags:
@@ -83,12 +83,12 @@ variants:
 	require.NoError(t, os.WriteFile(filepath.Join(baseDir, "stackkit.yaml"), []byte(stackkitYAML), 0600))
 
 	// Create a minimal CUE schema file
-	schemaCUE := `package base_homelab
+	schemaCUE := `package base_kit
 
 import "github.com/kombihq/stackkits/base"
 
-#BaseHomelabStack: base.#StackConfig & {
-  metadata: name: "base-homelab"
+#BaseKitStack: base.#StackConfig & {
+  metadata: name: "base-kit"
 }
 `
 	require.NoError(t, os.WriteFile(filepath.Join(baseDir, "stackfile.cue"), []byte(schemaCUE), 0600))
@@ -184,8 +184,8 @@ func TestHandleListStackKits(t *testing.T) {
 	assert.Len(t, page.Items, 1)
 	assert.Equal(t, 1, page.Total)
 	assert.Equal(t, 0, page.Offset)
-	assert.Equal(t, "base-homelab", page.Items[0].Name)
-	assert.Equal(t, "Base Homelab Kit", page.Items[0].DisplayName)
+	assert.Equal(t, "base-kit", page.Items[0].Name)
+	assert.Equal(t, "Base Kit", page.Items[0].DisplayName)
 }
 
 func TestHandleListStackKits_AutoDiscover(t *testing.T) {
@@ -329,13 +329,13 @@ func TestHandleGetStackKit(t *testing.T) {
 	srv, _ := testServer(t)
 
 	t.Run("found", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/api/v1/stackkits/base-homelab", nil)
+		req := httptest.NewRequest("GET", "/api/v1/stackkits/base-kit", nil)
 		rec := httptest.NewRecorder()
 		srv.Handler().ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusOK, rec.Code)
 		resp := parseResponse(t, rec)
-		assert.Contains(t, string(resp["data"]), `"base-homelab"`)
+		assert.Contains(t, string(resp["data"]), `"base-kit"`)
 	})
 
 	t.Run("not found", func(t *testing.T) {
@@ -367,7 +367,7 @@ func TestHandleGetStackKitSchema(t *testing.T) {
 	srv, _ := testServer(t)
 
 	t.Run("found", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/api/v1/stackkits/base-homelab/schema", nil)
+		req := httptest.NewRequest("GET", "/api/v1/stackkits/base-kit/schema", nil)
 		rec := httptest.NewRecorder()
 		srv.Handler().ServeHTTP(rec, req)
 
@@ -390,7 +390,7 @@ func TestHandleGetStackKitDefaults(t *testing.T) {
 	srv, _ := testServer(t)
 
 	t.Run("returns defaults", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/api/v1/stackkits/base-homelab/defaults", nil)
+		req := httptest.NewRequest("GET", "/api/v1/stackkits/base-kit/defaults", nil)
 		rec := httptest.NewRecorder()
 		srv.Handler().ServeHTTP(rec, req)
 
@@ -398,7 +398,7 @@ func TestHandleGetStackKitDefaults(t *testing.T) {
 		resp := parseResponse(t, rec)
 		var data map[string]interface{}
 		require.NoError(t, json.Unmarshal(resp["data"], &data))
-		assert.Equal(t, "base-homelab", data["stackkit"])
+		assert.Equal(t, "base-kit", data["stackkit"])
 		assert.Equal(t, "default", data["variant"])
 	})
 
@@ -417,7 +417,7 @@ func TestHandleGetStackKitVariants(t *testing.T) {
 	srv, _ := testServer(t)
 
 	t.Run("returns variants", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/api/v1/stackkits/base-homelab/variants", nil)
+		req := httptest.NewRequest("GET", "/api/v1/stackkits/base-kit/variants", nil)
 		rec := httptest.NewRecorder()
 		srv.Handler().ServeHTTP(rec, req)
 
@@ -444,7 +444,7 @@ func TestHandleValidateSpec(t *testing.T) {
 	handler := srv.Handler()
 
 	t.Run("valid spec", func(t *testing.T) {
-		body := `{"name":"test","stackkit":"base-homelab","domain":"example.com","email":"a@b.com","network":{"mode":"local"},"compute":{"tier":"standard"}}`
+		body := `{"name":"test","stackkit":"base-kit","domain":"example.com","email":"a@b.com","network":{"mode":"local"},"compute":{"tier":"standard"}}`
 		testValidationEndpoint(t, handler, "POST", "/api/v1/validate", body, http.StatusOK, true)
 	})
 
@@ -475,7 +475,7 @@ func TestHandleValidatePartial(t *testing.T) {
 	handler := srv.Handler()
 
 	t.Run("valid stackkit", func(t *testing.T) {
-		testValidationEndpoint(t, handler, "POST", "/api/v1/validate/partial", `{"stackkit":"base-homelab"}`, http.StatusOK, true)
+		testValidationEndpoint(t, handler, "POST", "/api/v1/validate/partial", `{"stackkit":"base-kit"}`, http.StatusOK, true)
 	})
 
 	t.Run("unknown stackkit", func(t *testing.T) {
@@ -483,7 +483,7 @@ func TestHandleValidatePartial(t *testing.T) {
 	})
 
 	t.Run("unknown variant", func(t *testing.T) {
-		testValidationEndpoint(t, handler, "POST", "/api/v1/validate/partial", `{"stackkit":"base-homelab","variant":"nonexistent"}`, http.StatusOK, false)
+		testValidationEndpoint(t, handler, "POST", "/api/v1/validate/partial", `{"stackkit":"base-kit","variant":"nonexistent"}`, http.StatusOK, false)
 	})
 
 	t.Run("invalid mode", func(t *testing.T) {

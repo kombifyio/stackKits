@@ -140,9 +140,9 @@ addons: {
 
 ## StackKit Integration
 
-### Modern Homelab Kit
+### Modern Homelab
 
-The VPN overlay is **required** for Modern Homelab Kit deployments:
+The VPN overlay is **required** for Modern Homelab deployments:
 
 ```yaml
 # stack-spec.yaml
@@ -159,7 +159,7 @@ Optional but recommended for HA deployments:
 
 ```yaml
 # stack-spec.yaml
-stackkit: ha-homelab
+stackkit: ha-kit
 addons:
   vpn-overlay:
     enabled: true

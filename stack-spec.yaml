@@ -1,5 +1,5 @@
 name: workspace
-stackkit: base-homelab
+stackkit: base-kit
 variant: default
 mode: simple
 domain: stack.local

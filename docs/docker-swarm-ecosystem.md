@@ -1,6 +1,6 @@
 # Docker Swarm Ecosystem -- Full Alignment Research
 
-Research document for kombify StackKits ha-homelab. Covers every built-in Docker Swarm capability and complementary tools to maximize alignment with Docker-native standards.
+Research document for kombify StackKits ha-kit. Covers every built-in Docker Swarm capability and complementary tools to maximize alignment with Docker-native standards.
 
 ---
 
@@ -414,11 +414,11 @@ Recovery: `docker swarm init --force-new-cluster` on a remaining manager forces 
 
 ## 7. Complementary Ecosystem Tools
 
-These are NOT part of Docker Swarm but integrate tightly with it for our ha-homelab StackKit.
+These are NOT part of Docker Swarm but integrate tightly with it for our ha-kit StackKit.
 
 ### 7.1 Reverse Proxy / Load Balancing
 
-| Tool | Integration | License | Role in ha-homelab |
+| Tool | Integration | License | Role in ha-kit |
 |------|------------|---------|-------------------|
 | **Traefik** | Native Docker Swarm provider; auto-discovers services via labels; runs as global service | MIT | Primary reverse proxy (L7) |
 | **HAProxy** | DNSRR endpoint mode for direct backend access; can use Swarm DNS for service discovery | GPL-2.0 | L4 load balancer + health checks |
@@ -632,11 +632,11 @@ The `deploy` key in Compose files is the interface between Docker Compose files 
 
 ---
 
-## 10. kombify ha-homelab Alignment Matrix
+## 10. kombify ha-kit Alignment Matrix
 
-Maps every Swarm capability to how ha-homelab uses it.
+Maps every Swarm capability to how ha-kit uses it.
 
-| Swarm Feature | ha-homelab Usage | Status |
+| Swarm Feature | ha-kit Usage | Status |
 |---------------|-----------------|--------|
 | **Raft consensus** | 3 manager nodes for quorum | Core |
 | **Overlay networks** | Encrypted overlay for all inter-service traffic | Core |
@@ -742,9 +742,9 @@ Maps every Swarm capability to how ha-homelab uses it.
 
 ---
 
-## 11. What Docker Swarm Does NOT Provide (Gaps Filled by ha-homelab)
+## 11. What Docker Swarm Does NOT Provide (Gaps Filled by ha-kit)
 
-| Gap | Solution in ha-homelab |
+| Gap | Solution in ha-kit |
 |-----|----------------------|
 | **No autoscaling** | Manual scaling via `docker service scale`; could add Prometheus-based alerts |
 | **No built-in ingress TLS termination** | Traefik handles TLS with ACME/Let's Encrypt |

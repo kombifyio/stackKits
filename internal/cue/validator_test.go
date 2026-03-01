@@ -32,7 +32,7 @@ func TestValidateSpec(t *testing.T) {
 	t.Run("validates complete spec", func(t *testing.T) {
 		spec := &models.StackSpec{
 			Name:     "test-deployment",
-			StackKit: "base-homelab",
+			StackKit: "base-kit",
 			Variant:  "default",
 			Mode:     "simple",
 			Network: models.NetworkSpec{
@@ -53,7 +53,7 @@ func TestValidateSpec(t *testing.T) {
 
 	t.Run("fails for missing name", func(t *testing.T) {
 		spec := &models.StackSpec{
-			StackKit: "base-homelab",
+			StackKit: "base-kit",
 		}
 
 		result, err := validator.ValidateSpec(spec)
@@ -86,7 +86,7 @@ func TestValidateSpec(t *testing.T) {
 	t.Run("fails for invalid network mode", func(t *testing.T) {
 		spec := &models.StackSpec{
 			Name:     "test",
-			StackKit: "base-homelab",
+			StackKit: "base-kit",
 			Network: models.NetworkSpec{
 				Mode: "invalid-mode",
 			},
@@ -110,7 +110,7 @@ func TestValidateSpec(t *testing.T) {
 	t.Run("fails for invalid compute tier", func(t *testing.T) {
 		spec := &models.StackSpec{
 			Name:     "test",
-			StackKit: "base-homelab",
+			StackKit: "base-kit",
 			Compute: models.ComputeSpec{
 				Tier: "ultra-mega",
 			},
@@ -128,7 +128,7 @@ func TestValidateSpec(t *testing.T) {
 		for _, mode := range validModes {
 			spec := &models.StackSpec{
 				Name:     "test",
-				StackKit: "base-homelab",
+				StackKit: "base-kit",
 				Network: models.NetworkSpec{
 					Mode: mode,
 				},
@@ -147,7 +147,7 @@ func TestValidateSpec(t *testing.T) {
 		for _, tier := range validTiers {
 			spec := &models.StackSpec{
 				Name:     "test",
-				StackKit: "base-homelab",
+				StackKit: "base-kit",
 				Compute: models.ComputeSpec{
 					Tier: tier,
 				},
@@ -163,7 +163,7 @@ func TestValidateSpec(t *testing.T) {
 	t.Run("validates nodes", func(t *testing.T) {
 		spec := &models.StackSpec{
 			Name:     "test",
-			StackKit: "ha-homelab",
+			StackKit: "ha-kit",
 			Nodes: []models.NodeSpec{
 				{Name: "", IP: "192.168.1.10"}, // Missing name
 			},
@@ -178,7 +178,7 @@ func TestValidateSpec(t *testing.T) {
 	t.Run("validates node IP required", func(t *testing.T) {
 		spec := &models.StackSpec{
 			Name:     "test",
-			StackKit: "ha-homelab",
+			StackKit: "ha-kit",
 			Nodes: []models.NodeSpec{
 				{Name: "node-1", IP: ""}, // Missing IP
 			},
@@ -193,7 +193,7 @@ func TestValidateSpec(t *testing.T) {
 	t.Run("warns for missing domain in public mode", func(t *testing.T) {
 		spec := &models.StackSpec{
 			Name:     "test",
-			StackKit: "base-homelab",
+			StackKit: "base-kit",
 			Network: models.NetworkSpec{
 				Mode: "public",
 			},
@@ -209,7 +209,7 @@ func TestValidateSpec(t *testing.T) {
 	t.Run("warns for missing email in public mode", func(t *testing.T) {
 		spec := &models.StackSpec{
 			Name:     "test",
-			StackKit: "base-homelab",
+			StackKit: "base-kit",
 			Domain:   "example.com",
 			Network: models.NetworkSpec{
 				Mode: "public",

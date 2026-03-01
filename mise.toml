@@ -30,7 +30,7 @@ run = [
   "docker compose up -d --build",
   "go test -v -race -short ./pkg/... ./internal/...",
   "cue vet ./base/...",
-  "cue vet ./base-homelab/...",
+  "cue vet ./base-kit/...",
   "cue vet ./modern-homelab/...",
 ]
 
@@ -67,7 +67,7 @@ run = "go test -v -race -short ./pkg/... ./internal/..."
 description = "Run CUE schema validation"
 run = [
   "cue vet ./base/...",
-  "cue vet ./base-homelab/...",
+  "cue vet ./base-kit/...",
   "cue vet ./modern-homelab/..."
 ]
 
