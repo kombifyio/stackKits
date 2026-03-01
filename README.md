@@ -172,14 +172,8 @@ See [docs/CLI.md](docs/CLI.md) for full reference.
 
 ## Documentation
 
-- [Architecture (v4)](docs/ARCHITECTURE_V4.md) — design concepts and layer model
 - [CLI Reference](docs/CLI.md) — all commands and flags
-- [Creating StackKits](docs/creating-stackkits.md) — guide for building new kits
-- [Deployment Guide](docs/DEPLOYMENT.md) — deployment workflows
-- [Development Guide](docs/DEVELOPMENT.md) — contributing and local dev setup
 - [Stack Spec Reference](docs/stack-spec-reference.md) — specification format
-- [Testing](docs/TESTING.md) — test strategy and running tests
-- [ADRs](docs/ADR/) — architecture decision records
 
 ## License
 
