@@ -2,6 +2,7 @@
 # See: https://goreleaser.com/customization/
 
 version: 2
+project_name: stackkits
 
 before:
   hooks:
@@ -78,27 +79,20 @@ changelog:
 
 release:
   github:
-    owner: KombiverseLabs
-    name: StackKits
+    owner: kombifyio
+    name: stackKits
   draft: false
   prerelease: auto
   name_template: "v{{ .Version }}"
   header: |
     ## StackKits CLI v{{ .Version }}
 
-    ### Installation
+    ### Quick Install (Linux/macOS)
 
-    **macOS/Linux (Homebrew):**
     ```bash
-    # Coming soon
+    curl -sSL https://raw.githubusercontent.com/kombifyio/stackKits/main/install.sh | sh
     ```
 
-    **Manual download:**
-    Download the appropriate archive for your platform below, extract it, and place `stackkit` in your PATH.
-
-    **Go install:**
-    ```bash
-    go install github.com/kombihq/stackkits/cmd/stackkit@v{{ .Version }}
-    ```
+    Or download the archive for your platform below and place `stackkit` in your PATH.
   footer: |
-    **Full Changelog**: https://github.com/KombiverseLabs/StackKits/compare/{{ .PreviousTag }}...{{ .Tag }}
+    **Full Changelog**: https://github.com/kombifyio/stackKits/compare/{{ .PreviousTag }}...{{ .Tag }}

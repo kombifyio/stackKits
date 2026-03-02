@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"runtime"
 	"strings"
 
@@ -112,7 +113,11 @@ func prepareLocalSystem(ctx context.Context, spec *models.StackSpec) error {
 			if prepareDryRun {
 				printWarning("Docker not installed - would install")
 			} else {
-				return fmt.Errorf("Docker is not installed. Please install Docker first:\n  https://docs.docker.com/engine/install/")
+				printInfo("Installing Docker...")
+				if err := installDockerLocal(ctx); err != nil {
+					return fmt.Errorf("failed to install Docker: %w", err)
+				}
+				printSuccess("Docker installed successfully")
 			}
 		} else {
 			version, err := dockerClient.Version(ctx)
@@ -139,7 +144,11 @@ func prepareLocalSystem(ctx context.Context, spec *models.StackSpec) error {
 			if prepareDryRun {
 				printWarning("OpenTofu not installed - would install")
 			} else {
-				return fmt.Errorf("OpenTofu is not installed. Please install OpenTofu first:\n  https://opentofu.org/docs/intro/install/")
+				printInfo("Installing OpenTofu...")
+				if err := installTofuLocal(ctx); err != nil {
+					return fmt.Errorf("failed to install OpenTofu: %w", err)
+				}
+				printSuccess("OpenTofu installed successfully")
 			}
 		} else {
 			version, err := tofuExec.Version(ctx)
@@ -307,6 +316,26 @@ func checkLocalResources(spec *models.StackSpec) {
 		// Windows/macOS — no /proc/meminfo available
 		printInfo("System memory: auto-detection not available on this OS (check manually)")
 	}
+}
+
+func installDockerLocal(ctx context.Context) error {
+	cmd := exec.Command("sh", "-c", "curl -fsSL https://get.docker.com | sh")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+func installTofuLocal(ctx context.Context) error {
+	script := `
+curl --proto '=https' --tlsv1.2 -fsSL https://get.opentofu.org/install-opentofu.sh -o /tmp/install-opentofu.sh
+chmod +x /tmp/install-opentofu.sh
+/tmp/install-opentofu.sh --install-method deb 2>/dev/null || /tmp/install-opentofu.sh --install-method rpm
+rm -f /tmp/install-opentofu.sh
+`
+	cmd := exec.Command("sh", "-c", script)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
 
 func installDockerRemote(ctx context.Context, client *ssh.Client, osType string) error {
