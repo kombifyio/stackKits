@@ -12,22 +12,27 @@ Edit .cue files → stackkit generate → stackkit apply → Done.
 
 ## Base Kit
 
-The included **Base Kit** (`base-kit`) provides a single-node homelab deployment with:
+The **Base Kit** is a single-environment deployment pattern — all services run on one node via Docker Compose.
 
-| Service | Purpose |
-|---------|---------|
-| **Traefik** | Reverse proxy with automatic HTTPS |
-| **Dokploy** | PaaS platform for app deployment |
-| **Uptime Kuma** | Monitoring & status pages |
-| **Dozzle** | Real-time container log viewer |
-| **Whoami** | Proxy verification test service |
+### Default Services
+
+| Layer | Service | Purpose |
+|-------|---------|---------|
+| L2 Platform | **Traefik** | Reverse proxy with automatic HTTPS |
+| L2 Identity | **TinyAuth** | Forward auth with passkeys & OAuth |
+| L2 Identity | **PocketID** | OpenID Connect identity provider |
+| L2 Platform | **Dokploy** | PaaS platform for app deployment |
+| L2 Observability | **Dozzle** | Real-time Docker log viewer |
+| L3 Application | **Uptime Kuma** | Uptime monitoring & status pages |
+| L3 Application | **Whoami** | Proxy verification test service |
 
 ### Variants
 
 | Variant | Description |
 |---------|-------------|
-| `default` | Dokploy PaaS + Uptime Kuma monitoring |
-| `beszel` | Dokploy PaaS + Beszel server metrics |
+| `default` | Dokploy + TinyAuth + PocketID + Uptime Kuma |
+| `coolify` | Coolify instead of Dokploy (requires own domain) |
+| `beszel` | Beszel server metrics instead of Uptime Kuma |
 | `minimal` | Dockge + Portainer + Netdata (traditional compose management) |
 
 ### Deployment Modes
