@@ -39,47 +39,34 @@ The included **Base Kit** (`base-kit`) provides a single-node homelab deployment
 
 ## Requirements
 
-- **Go 1.24+** (to build the CLI)
-- **OpenTofu 1.6+** (deployment engine)
-- **CUE** (optional, for schema validation)
-- **Target server**: Ubuntu 22/24 or Debian 12 with SSH access
+- **Target server**: Ubuntu 22/24 or Debian 12 with root SSH access
+- 2+ CPU cores, 4+ GB RAM, 50+ GB disk (4 cores / 8 GB recommended)
 
-### Minimum Resources
-
-| | CPU | RAM | Disk |
-|---|---|---|---|
-| **Minimum** | 2 cores | 4 GB | 50 GB |
-| **Recommended** | 4 cores | 8 GB | 100 GB |
+The CLI installs all dependencies (Docker, OpenTofu) on the target server automatically.
 
 ## Quick Start
 
-### 1. Build the CLI
+### 1. Install the CLI
 
 ```bash
-git clone https://github.com/kombihq/stackkits.git
-cd stackkits
-make build
-# Binary at: ./build/stackkit
+curl -sSL https://raw.githubusercontent.com/kombifyio/stackKits/main/install.sh | sh
 ```
 
-Or install directly:
+Or build from source:
 
 ```bash
-go install github.com/kombihq/stackkits/cmd/stackkit@latest
+git clone https://github.com/kombifyio/stackKits.git && cd stackKits
+make build    # Binary at: ./build/stackkit
 ```
 
-### 2. Initialize a Stack
+### 2. Initialize and Configure
 
 ```bash
 mkdir my-homelab && cd my-homelab
-
 stackkit init base-kit
-# Creates stack-spec.yaml
 ```
 
-### 3. Configure
-
-Edit `stack-spec.yaml`:
+Edit `stack-spec.yaml` with your server details:
 
 ```yaml
 name: my-homelab
@@ -87,29 +74,15 @@ stackkit: base-kit
 variant: default
 mode: simple
 domain: homelab.example.com
-network:
-  mode: local
-  subnet: 172.20.0.0/16
-compute:
-  tier: standard
 ssh:
+  host: <your-server-ip>
   user: root
   port: 22
 ```
 
-### 4. Generate & Deploy
+### 3. Deploy
 
 ```bash
-# Validate CUE schemas
-stackkit validate
-
-# Generate OpenTofu files
-stackkit generate
-
-# Preview changes
-stackkit plan
-
-# Deploy to server
 stackkit apply --auto-approve
 ```
 
