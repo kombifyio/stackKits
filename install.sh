@@ -7,9 +7,9 @@
 #
 # What it does:
 #   1. Detects your OS and architecture
-#   2. Downloads the latest stackkit binary from GitHub Releases
-#   3. Installs it to /usr/local/bin (or ~/.local/bin if not root)
-#   4. Verifies the installation
+#   2. Downloads the latest stackkit binary + kit definitions from GitHub Releases
+#   3. Installs the binary to /usr/local/bin (or ~/.local/bin)
+#   4. Installs kit definitions to ~/.stackkits/
 #
 # After install:
 #   stackkit init base-kit
@@ -20,6 +20,7 @@ set -eu
 REPO="kombifyio/stackKits"
 BINARY_NAME="stackkit"
 ARCHIVE_PREFIX="stackkits"
+KITS_DIR="${HOME}/.stackkits"
 
 log() { printf '\033[1;36m[stackkit]\033[0m %s\n' "$*"; }
 err() { printf '\033[1;31m[stackkit]\033[0m %s\n' "$*" >&2; exit 1; }
@@ -87,22 +88,34 @@ if [ ! -f "${TMP_DIR}/${BINARY_NAME}" ]; then
   err "Binary '${BINARY_NAME}' not found in archive"
 fi
 
-# --- Install -------------------------------------------------------------------
+# --- Install binary ------------------------------------------------------------
 
-log "Installing to ${INSTALL_DIR}/${BINARY_NAME}..."
+log "Installing binary to ${INSTALL_DIR}/${BINARY_NAME}..."
 mv "${TMP_DIR}/${BINARY_NAME}" "${INSTALL_DIR}/${BINARY_NAME}"
 chmod +x "${INSTALL_DIR}/${BINARY_NAME}"
 
+# --- Install kit definitions ---------------------------------------------------
+
+log "Installing kit definitions to ${KITS_DIR}/..."
+mkdir -p "$KITS_DIR"
+
+# Copy kit directories (base-kit, base schemas) from archive
+for kit_dir in "$TMP_DIR"/base-kit "$TMP_DIR"/base; do
+  if [ -d "$kit_dir" ]; then
+    kit_name=$(basename "$kit_dir")
+    rm -rf "${KITS_DIR}/${kit_name}"
+    cp -r "$kit_dir" "${KITS_DIR}/${kit_name}"
+  fi
+done
+
 # --- Verify --------------------------------------------------------------------
 
+log ""
 if command -v "$BINARY_NAME" >/dev/null 2>&1; then
-  INSTALLED_VERSION=$("$BINARY_NAME" version 2>/dev/null || echo "unknown")
-  log ""
   log "stackkit installed successfully!"
-  log "  Version:  ${INSTALLED_VERSION}"
-  log "  Location: ${INSTALL_DIR}/${BINARY_NAME}"
+  log "  Binary: ${INSTALL_DIR}/${BINARY_NAME}"
+  log "  Kits:   ${KITS_DIR}/"
 else
-  log ""
   log "stackkit installed to ${INSTALL_DIR}/${BINARY_NAME}"
   if [ "$INSTALL_DIR" = "${HOME}/.local/bin" ]; then
     log ""
@@ -113,7 +126,6 @@ fi
 
 log ""
 log "Get started:"
-log "  mkdir my-homelab && cd my-homelab"
 log "  stackkit init base-kit"
 log "  stackkit apply --auto-approve"
 log ""

@@ -67,7 +67,6 @@ make build    # Binary at: ./build/stackkit
 ### 2. Initialize and Configure
 
 ```bash
-mkdir my-homelab && cd my-homelab
 stackkit init base-kit
 ```
 
