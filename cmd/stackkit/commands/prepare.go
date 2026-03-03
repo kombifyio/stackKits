@@ -307,7 +307,7 @@ func checkLocalResources(spec *models.StackSpec) {
 			totalGB := float64(totalKB) / 1024 / 1024
 			printSuccess("System memory: %.1f GB", totalGB)
 			if totalGB < 2.0 {
-				printWarning("Low memory — some services may not start. Consider using compute tier 'low'.")
+				printWarning("Low memory — some services may not start")
 			}
 		} else {
 			printInfo("System memory: could not parse /proc/meminfo")

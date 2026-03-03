@@ -2,19 +2,23 @@
 set -euo pipefail
 
 # =============================================================================
-# StackKits VM Entrypoint — Ubuntu + Docker-in-Docker + SSH
+# StackKits Cloud VM Entrypoint — Simulated Azure/Cloud VPS
 # =============================================================================
-# Starts dockerd and sshd. Handles signals for clean shutdown.
+# Simulates a cloud VPS (Azure, Hetzner, etc.) for the modern-homelab cloud
+# node. Identical capabilities to a real cloud VM: Docker, SSH, public-facing.
+#
 # Environment:
-#   AUTHORIZED_KEYS   — optional SSH public key(s) injected at runtime
-#   DOCKER_OPTS       — extra dockerd args (optional)
-#   VM_LABEL          — human-readable label for logs (optional)
+#   VM_LABEL            — label for logs (default: vm-cloud)
+#   CLOUD_PROVIDER_SIM  — simulated provider name (default: azure)
+#   CLOUD_REGION_SIM    — simulated region (default: westeurope)
+#   DOCKER_OPTS         — extra dockerd args
 # =============================================================================
 
-LABEL="${VM_LABEL:-vm}"
+LABEL="${VM_LABEL:-vm-cloud}"
+PROVIDER="${CLOUD_PROVIDER_SIM:-azure}"
+REGION="${CLOUD_REGION_SIM:-westeurope}"
 log() { printf '[%s] [%s] %s\n' "$(date -u +%H:%M:%S)" "$LABEL" "$*"; }
 
-# --- Signal handling for clean shutdown ---
 DOCKERD_PID=""
 cleanup() {
   log "Shutting down..."
@@ -27,6 +31,22 @@ cleanup() {
   exit 0
 }
 trap cleanup SIGTERM SIGINT SIGQUIT
+
+# --- Metadata endpoint (simulates Azure IMDS / cloud metadata) ---
+mkdir -p /var/run/kombify-sim
+cat > /var/run/kombify-sim/metadata.json << EOF
+{
+  "provider": "$PROVIDER",
+  "region": "$REGION",
+  "instance_type": "${CLOUD_INSTANCE_TYPE:-Standard_B2s}",
+  "instance_id": "sim-$(hostname)",
+  "public_ip": "$(hostname -i 2>/dev/null | awk '{print $1}' || echo '10.0.0.1')",
+  "private_ip": "$(hostname -i 2>/dev/null | awk '{print $1}' || echo '10.0.0.1')",
+  "simulated": true,
+  "started_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+}
+EOF
+log "Cloud VM simulation: provider=$PROVIDER region=$REGION"
 
 # --- SSH authorized_keys ---
 mkdir -p /root/.ssh
@@ -44,7 +64,6 @@ if [ "${AUTHORIZED_KEYS:-}" != "" ]; then
   log "SSH keys loaded from AUTHORIZED_KEYS env"
 fi
 
-# Generate host keys if missing (first boot or ephemeral volume)
 ssh-keygen -A >/dev/null 2>&1 || true
 mkdir -p /var/run/sshd
 
@@ -59,7 +78,6 @@ dockerd \
   >>/var/log/dockerd.log 2>&1 &
 DOCKERD_PID=$!
 
-# Wait for Docker with exponential backoff
 MAX_WAIT=120
 waited=0
 backoff=1
@@ -80,6 +98,15 @@ while ! docker info >/dev/null 2>&1; do
 done
 
 log "dockerd ready (waited ${waited}s, pid=$DOCKERD_PID)"
+
+# --- Simple metadata HTTP endpoint on port 8169 (like Azure IMDS on 169.254.169.254) ---
+# Serves /metadata as a simple health + info endpoint
+while true; do
+  echo -ne "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n$(cat /var/run/kombify-sim/metadata.json)" \
+    | nc -l -p 8169 -q 1 >/dev/null 2>&1 || true
+done &
+METADATA_PID=$!
+log "Metadata endpoint on :8169/metadata (pid=$METADATA_PID)"
 
 # --- Start SSH daemon (foreground) ---
 log "Starting sshd..."

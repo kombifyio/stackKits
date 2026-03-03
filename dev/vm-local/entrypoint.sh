@@ -2,19 +2,15 @@
 set -euo pipefail
 
 # =============================================================================
-# StackKits VM Entrypoint — Ubuntu + Docker-in-Docker + SSH
+# StackKits Local VM Entrypoint — Simulated On-Premises Server
 # =============================================================================
-# Starts dockerd and sshd. Handles signals for clean shutdown.
-# Environment:
-#   AUTHORIZED_KEYS   — optional SSH public key(s) injected at runtime
-#   DOCKER_OPTS       — extra dockerd args (optional)
-#   VM_LABEL          — human-readable label for logs (optional)
+# Simulates a local homelab server for the modern-homelab local node.
+# Password auth enabled (like a physical machine).
 # =============================================================================
 
-LABEL="${VM_LABEL:-vm}"
+LABEL="${VM_LABEL:-vm-local}"
 log() { printf '[%s] [%s] %s\n' "$(date -u +%H:%M:%S)" "$LABEL" "$*"; }
 
-# --- Signal handling for clean shutdown ---
 DOCKERD_PID=""
 cleanup() {
   log "Shutting down..."
@@ -44,7 +40,6 @@ if [ "${AUTHORIZED_KEYS:-}" != "" ]; then
   log "SSH keys loaded from AUTHORIZED_KEYS env"
 fi
 
-# Generate host keys if missing (first boot or ephemeral volume)
 ssh-keygen -A >/dev/null 2>&1 || true
 mkdir -p /var/run/sshd
 
@@ -59,7 +54,6 @@ dockerd \
   >>/var/log/dockerd.log 2>&1 &
 DOCKERD_PID=$!
 
-# Wait for Docker with exponential backoff
 MAX_WAIT=120
 waited=0
 backoff=1
@@ -80,7 +74,5 @@ while ! docker info >/dev/null 2>&1; do
 done
 
 log "dockerd ready (waited ${waited}s, pid=$DOCKERD_PID)"
-
-# --- Start SSH daemon (foreground) ---
 log "Starting sshd..."
 exec /usr/sbin/sshd -D -e
