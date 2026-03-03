@@ -139,10 +139,14 @@ stackkit init base-kit --non-interactive --force
 
 ok "  base-kit initialized in $HOMELAB_DIR"
 
-# --- Step 4: Deploy ---------------------------------------------------------
+# --- Step 4: Generate + Deploy ----------------------------------------------
 
 info "Step 4/4 -- Deploying homelab stack"
 
+# Clean stale deploy artifacts from previous runs
+rm -rf "$HOMELAB_DIR/deploy"
+
+stackkit generate --force
 stackkit apply --auto-approve
 
 # --- Done -------------------------------------------------------------------
