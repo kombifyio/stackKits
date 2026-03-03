@@ -1,6 +1,6 @@
 #!/bin/sh
 # =============================================================================
-# StackKits Base Installer — installs the CLI and deploys the base-kit.
+# StackKits Base Installer -- installs the CLI and deploys the base-kit.
 # =============================================================================
 # Usage: curl -sSL base.stackkit.cc | sh
 #
@@ -43,7 +43,7 @@ esac
 
 # --- Step 1: Install stackkit CLI -------------------------------------------
 
-info "Step 1/4 — Installing stackkit CLI"
+info "Step 1/4 -- Installing stackkit CLI"
 
 LATEST=$(curl -sSL "https://api.github.com/repos/$REPO/releases/latest" \
   | grep '"tag_name"' | head -1 | sed -E 's/.*"v([^"]+)".*/\1/')
@@ -73,7 +73,7 @@ ok "  stackkit $(stackkit version 2>/dev/null || echo v${LATEST}) installed"
 
 # --- Step 2: Prepare system (Docker + OpenTofu) -----------------------------
 
-info "Step 2/4 — Preparing system (Docker + OpenTofu)"
+info "Step 2/4 -- Preparing system (Docker + OpenTofu)"
 
 if [ "$(id -u)" -eq 0 ]; then
   stackkit prepare
@@ -85,7 +85,7 @@ ok "  System ready"
 
 # --- Step 3: Initialize base-kit --------------------------------------------
 
-info "Step 3/4 — Initializing base-kit"
+info "Step 3/4 -- Initializing base-kit"
 
 mkdir -p "$HOMELAB_DIR"
 cd "$HOMELAB_DIR"
@@ -96,7 +96,7 @@ ok "  base-kit initialized in $HOMELAB_DIR"
 
 # --- Step 4: Deploy ---------------------------------------------------------
 
-info "Step 4/4 — Deploying homelab stack"
+info "Step 4/4 -- Deploying homelab stack"
 
 stackkit apply --auto-approve
 
