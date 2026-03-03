@@ -1,0 +1,7 @@
+Origin: kombify
+Label: kombify-stackkits
+Codename: stable
+Architectures: amd64 arm64
+Components: main
+Description: kombify StackKits APT repository
+SignWith: C2EDBB3B4BB09DC1650663806E6848D01BC03020
