@@ -94,14 +94,35 @@ else
 fi
 
 # Ensure Docker daemon is running (prepare installs but may not start it)
-if command -v systemctl >/dev/null 2>&1; then
-  if ! docker info >/dev/null 2>&1; then
-    info "  Starting Docker..."
+if ! docker info >/dev/null 2>&1; then
+  info "  Starting Docker..."
+  # Check if systemd is actually running (PID 1), not just installed
+  if [ -d /run/systemd/system ]; then
     if [ "$(id -u)" -eq 0 ]; then
       systemctl start docker
     else
       sudo systemctl start docker
     fi
+  elif command -v service >/dev/null 2>&1; then
+    if [ "$(id -u)" -eq 0 ]; then
+      service docker start
+    else
+      sudo service docker start
+    fi
+  else
+    # Direct start as fallback (containers, WSL, etc.)
+    if [ "$(id -u)" -eq 0 ]; then
+      dockerd &
+    else
+      sudo dockerd &
+    fi
+    sleep 3
+  fi
+  # Verify Docker is now running
+  if docker info >/dev/null 2>&1; then
+    ok "  Docker started"
+  else
+    warn "  Could not start Docker automatically. Start it manually and re-run."
   fi
 fi
 
