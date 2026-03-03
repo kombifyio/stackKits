@@ -126,13 +126,45 @@ stackkit apply --auto-approve
 
 # --- Done -------------------------------------------------------------------
 
+# Read domain from spec (defaults to stack.local)
+DOMAIN="stack.local"
+if [ -f "$HOMELAB_DIR/stack-spec.yaml" ]; then
+  _d=$(grep '^domain:' "$HOMELAB_DIR/stack-spec.yaml" | head -1 | awk '{print $2}' || true)
+  if [ -n "$_d" ]; then DOMAIN="$_d"; fi
+fi
+
+SERVER_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "YOUR_SERVER_IP")
+
 echo ""
 ok "Your homelab is running!"
 echo ""
-echo "  Directory:  $HOMELAB_DIR"
-echo "  Status:     stackkit status"
-echo "  Add-ons:    stackkit addon list"
-echo "  Tear down:  stackkit destroy"
+printf '\033[38;5;208m'
+echo "  Dashboard:  http://base.${DOMAIN}"
+printf '\033[0m'
 echo ""
-echo "  Customize:  Edit $HOMELAB_DIR/stack-spec.yaml, then run stackkit apply"
+echo "  All services are accessible at <service>.${DOMAIN}:"
+echo "    http://base.${DOMAIN}         Dashboard (service overview)"
+echo "    http://traefik.${DOMAIN}      Reverse proxy"
+echo "    http://dokploy.${DOMAIN}      PaaS controller"
+echo "    http://kuma.${DOMAIN}         Uptime monitoring"
+echo "    http://auth.${DOMAIN}         Authentication (TinyAuth)"
+echo ""
+echo "  First login:"
+echo "    Open http://auth.${DOMAIN}"
+echo "    Username: admin  |  Password: admin123"
+echo "    CHANGE YOUR PASSWORD after first login!"
+echo ""
+if [ "$DOMAIN" = "stack.local" ]; then
+  echo "  DNS setup (add to /etc/hosts on your workstation):"
+  echo "    ${SERVER_IP}  base.stack.local traefik.stack.local dokploy.stack.local"
+  echo "    ${SERVER_IP}  kuma.stack.local auth.stack.local whoami.stack.local"
+  echo "    Or use wildcard: *.stack.local -> ${SERVER_IP}"
+  echo ""
+fi
+echo "  Commands:"
+echo "    stackkit status       Check service health"
+echo "    stackkit addon list   Available add-ons"
+echo "    stackkit destroy      Tear down everything"
+echo ""
+echo "  Project directory: $HOMELAB_DIR"
 echo ""
