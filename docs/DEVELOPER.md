@@ -1,0 +1,329 @@
+# kombify StackKits -- Developer Guide
+
+## Prerequisites
+
+| Tool | Version | Purpose | Required? |
+|------|---------|---------|-----------|
+| Go | 1.24+ | Build CLI and server binaries | Yes |
+| Docker | 24.0+ | Container runtime, dev VM | Yes |
+| Docker Compose | v2+ | Dev environment orchestration | Yes |
+| CUE CLI | latest stable | Schema validation (`cue vet`) | Yes |
+| Mise | >= 2024.11.1 | Task runner (replaces make) | Recommended |
+| Git | any | Version control | Yes |
+
+Mise will auto-install Go 1.24.1, Node 22, and CUE if configured:
+
+```bash
+mise install   # reads .mise.toml [tools] section
+```
+
+OpenTofu and Terramate are internal engines -- they are bundled or installed
+by `stackkit prepare`, never by the developer directly.
+
+## Local Development Setup
+
+### 1. Clone and install dependencies
+
+```bash
+git clone https://github.com/kombihq/stackkits.git
+cd stackkits
+go mod download
+```
+
+### 2. Build the CLI
+
+```bash
+go build -o build/stackkit ./cmd/stackkit
+go build -o build/stackkit-server ./cmd/stackkit-server
+```
+
+Or via Mise/Make:
+
+```bash
+mise run _build    # builds both binaries
+make build         # builds CLI only
+```
+
+### 3. Start the dev environment
+
+The dev environment uses a Docker-in-Docker VM where services deploy:
+
+```bash
+docker compose up -d vm              # start Ubuntu VM
+docker compose up -d orchestrator    # start web UI (port 9000)
+docker compose up -d portal          # start dashboard (port 9001)
+```
+
+Wait for the VM Docker daemon:
+
+```bash
+# Poll until ready (the mise task does this automatically)
+docker compose exec vm docker info
+```
+
+### 4. Deploy base-kit into the VM
+
+```bash
+docker compose run --rm -e DOCKER_HOST=tcp://vm:2375 cli \
+  ./stackkit init base-kit --non-interactive
+
+docker compose run --rm -e DOCKER_HOST=tcp://vm:2375 cli \
+  ./stackkit apply --auto-approve
+```
+
+### 5. Verify
+
+```bash
+docker ps                          # host: should show only stackkits-vm
+docker compose exec vm docker ps   # VM: should show all services
+```
+
+Access points after deploy:
+- Orchestrator: http://localhost:9000
+- Portal: http://localhost:9001
+- TinyAuth: http://auth.stack.local (admin / admin123)
+
+### Full automated dev cycle
+
+```bash
+mise run dev   # builds, starts VM, runs all tests, prints URLs
+```
+
+## Project Structure
+
+```
+cmd/stackkit/                CLI entry point and commands
+cmd/stackkit/commands/       Cobra command implementations (init, generate, apply, etc.)
+cmd/stackkit-server/         API server entry point
+internal/api/                REST API handlers, middleware, server setup
+internal/config/             YAML config loading (stackkit.yaml, stack-spec.yaml)
+internal/cue/                CUE validation, CUE-to-TFVars bridge
+internal/docker/             Docker client operations
+internal/errors/             Structured error types for API
+internal/iac/                Unified IaC executor interface (OpenTofu + Terramate)
+internal/ssh/                SSH client for remote deployments
+internal/template/           Go template renderer for .tf files
+internal/terramate/          Terramate CLI wrapper
+internal/tofu/               OpenTofu CLI wrapper
+internal/validation/         Spec validation logic
+pkg/models/                  Public data structures (StackKit, StackSpec, etc.)
+api/                         OpenAPI 3.0 specification
+base/                        Layer 1 CUE schemas (shared foundation)
+base-kit/                    Base Kit CUE definitions, templates, tests
+modern-homelab/              Modern Homelab CUE definitions (alpha, K8s -- needs rewrite)
+ha-kit/                      HA Kit CUE definitions (scaffolding only)
+addons/                      18 composable CUE add-on definitions
+modules/                     14 self-contained service modules with integration tests
+platforms/docker/            Docker platform CUE + Terraform templates
+tests/                       Unit, integration, E2E, and VM tests
+dev/                         Development utilities (VM Dockerfile, orchestrator)
+deploy/                      Generated artifacts (build output, never edit)
+docs/                        Documentation and ADRs
+```
+
+## Entry Points
+
+Start here to understand the codebase:
+
+1. `cmd/stackkit/main.go` -- CLI entry, sets version info, calls `commands.Execute()`
+2. `cmd/stackkit/commands/root.go` -- Cobra root command, global flags, subcommand registration
+3. `base/stackkit.cue` -- Foundation CUE schema (`#BaseStackKit`, `#ServiceDefinition`)
+4. `base/layers.cue` -- 3-layer architecture validation (`#Layer1Foundation`, etc.)
+5. `pkg/models/models.go` -- Core Go data structures
+6. `internal/cue/bridge.go` -- CUE-to-Terraform bridge (central generation logic)
+
+## Common Development Tasks
+
+### Add a new CLI command
+
+1. Create `cmd/stackkit/commands/mycommand.go`
+2. Define a `cobra.Command` variable
+3. Register in `root.go` via `rootCmd.AddCommand(myCommandCmd)` in `init()`
+4. Pattern: see `cmd/stackkit/commands/status.go` for a simple example
+
+### Add a service to base-kit
+
+1. Edit `base-kit/services.cue` -- add a new `#MyService: base.#ServiceDefinition & { ... }`
+2. Reference it in the variant service lists in `base-kit/stackkit.yaml`
+3. Validate: `cue vet ./base-kit/...`
+4. If the service needs OpenTofu resources, add a template in `base-kit/templates/simple/`
+
+### Add a new add-on
+
+1. Create `addons/myaddon/addon.cue` with `#Config` definition
+2. Declare `_compatibility` (which stackkits, which contexts)
+3. Define service configurations
+4. Validate: `cue vet ./addons/myaddon/...`
+5. Note: add-on code generation is not yet implemented (planned M2)
+
+### Add an API endpoint
+
+1. Add route in `internal/api/server.go` in the `routes()` method
+2. Add handler in `internal/api/handlers.go`
+3. Use `writeSuccess()` / `writeError()` / `writeStructuredError()` for responses
+4. Add test in `internal/api/server_test.go`
+
+### Add a service module
+
+1. Create `modules/mymodule/module.cue` with CUE definition
+2. Create `modules/mymodule/reference-compose.yaml` with Docker Compose reference
+3. Create `modules/mymodule/tests/integration_test.sh`
+4. Validate: `cue vet -c=false ./modules/mymodule/...`
+
+## Testing
+
+### Test structure
+
+| Type | Location | Runner | What it tests |
+|------|----------|--------|---------------|
+| Unit (Go) | `tests/unit/`, `internal/*_test.go` | `go test` | Individual packages |
+| Integration (Go) | `tests/integration/` | `go test` | Multi-component workflows |
+| CUE validation | `base-kit/tests/`, `tests/validation_test.cue` | `cue vet` | Schema correctness |
+| Module integration | `modules/*/tests/integration_test.sh` | `bash` | Per-service compose tests |
+| E2E | `base-kit/tests/e2e_test.sh` | `bash` (in VM) | Full deployment verification |
+| VM CLI tests | `tests/vm/cli_vm_test.go` | `go test -tags=vm` | CLI against running VM |
+
+### Running tests
+
+```bash
+# All tests (CUE + Go unit + Go integration)
+mise run test:all
+
+# CUE schema validation only
+mise run test:cue
+# or: cue vet ./base/... && cue vet ./base-kit/...
+
+# Go unit tests
+go test -v -race -short ./pkg/... ./internal/...
+
+# Go integration tests
+go test -v -race ./tests/integration/...
+
+# Single module integration test
+mise run test:module traefik
+
+# All module integration tests
+mise run test:modules
+
+# E2E (requires running VM)
+make test-e2e
+
+# VM CLI tests (requires running VM, 15min timeout)
+go test -v -race -timeout=15m -tags=vm ./tests/vm/...
+
+# Coverage
+mise run test-coverage
+```
+
+### Before every commit
+
+```bash
+cue vet ./base/...
+cue vet ./base-kit/...
+go test -race -short ./pkg/... ./internal/...
+```
+
+## Debugging Tips
+
+### CUE validation failures
+
+- `"field not allowed"` -- config has a field not in the schema. Check the
+  `#ServiceDefinition` in `base/stackkit.cue` for allowed fields.
+- `"conflicting values"` -- two definitions disagree on type. Common when
+  mixing `string` and `int` for ports.
+- `"incomplete value"` -- a required field has no value. Use `cue vet -c=false`
+  to allow incomplete values during development.
+
+### OpenTofu errors during apply
+
+- Check `deploy/terraform.tfvars.json` -- generated variables may be wrong.
+- Verify Docker daemon is reachable: `docker info` (or with `DOCKER_HOST` set).
+- Check `deploy/main.tf` provider block for correct Docker provider config.
+
+### API server issues
+
+- Set `STACKKITS_API_KEY` env var to enable authentication.
+- Health endpoint (`/health`, `/api/v1/health`) never requires auth.
+- Rate limit errors return HTTP 429 with `Retry-After: 60` header.
+- Check structured error response for `category`, `error_code`, `suggestions`.
+
+### Docker-in-Docker VM issues
+
+- VM takes 30-60s to start Docker daemon. Check with
+  `docker compose exec vm docker info`.
+- If VM ports conflict (80, 443), override via env vars:
+  `VM_HTTP_PORT=8180 docker compose up -d vm`.
+
+## Common Pitfalls
+
+- **Editing generated files.** Files in `deploy/` are build output. Changes
+  will be overwritten by `stackkit generate`. Change CUE definitions instead.
+
+- **Using ports 3000/3001 as host ports.** These conflict with common dev
+  tools. The project uses 4000/4001 instead. Enforced by pre-commit hook.
+
+- **Using localhost URLs.** All service URLs must use domain-based routing
+  (e.g., `whoami.stack.local`), never `localhost:PORT`.
+
+- **Forgetting `cue vet` before commit.** Invalid CUE schemas break the
+  entire validation pipeline. Always run `cue vet ./...` first.
+
+- **Running OpenTofu directly.** Users and developers should never run
+  `tofu plan` or `tofu apply` directly. Use `stackkit plan` / `stackkit apply`.
+
+- **Assuming modern-homelab works.** It is entirely K8s-based and needs a
+  complete rewrite (TD-08). Do not reference it as functional.
+
+## Environment Variables
+
+| Variable | Description | Default | Source |
+|----------|-------------|---------|--------|
+| `DOCKER_HOST` | Docker daemon address | local socket | Set for remote/VM deploy |
+| `STACKKITS_API_KEY` | API key for server auth | (none, auth disabled) | `--api-key` flag |
+| `DOMAIN` | Default domain for services | `stack.local` | `docker-compose.yml` |
+| `VM_SSH_PORT` | SSH port for dev VM | `2222` | `docker-compose.yml` |
+| `VM_DOCKER_PORT` | Docker TCP port for dev VM | `2375` | `docker-compose.yml` |
+| `VM_HTTP_PORT` | HTTP port for dev VM | `80` | `docker-compose.yml` |
+| `VM_HTTPS_PORT` | HTTPS port for dev VM | `443` | `docker-compose.yml` |
+| `ORCHESTRATOR_PORT` | Orchestrator web UI port | `9000` | `docker-compose.yml` |
+| `PORTAL_PORT` | Portal dashboard port | `9001` | `docker-compose.yml` |
+| `GOTOOLCHAIN` | Go toolchain selection | `auto` | `.mise.toml` |
+
+## Useful Commands
+
+```bash
+# Build
+go build -o build/stackkit ./cmd/stackkit
+go build -o build/stackkit-server ./cmd/stackkit-server
+make build-all                          # cross-platform (linux, darwin, windows)
+
+# Run CLI directly
+go run ./cmd/stackkit version
+go run ./cmd/stackkit init base-kit --non-interactive
+make run ARGS="status --json"
+
+# Dev environment
+mise run dev                            # full cycle: build + VM + tests
+mise run demo                           # quick start: VM + base-kit demo (no tests)
+docker compose down -v                  # tear down everything
+
+# CUE
+cue vet ./base/...                      # validate base schemas
+cue vet ./base-kit/...                  # validate base-kit
+cue eval ./base-kit/                    # evaluate and print resolved CUE
+cue fmt ./base/...                      # format CUE files
+
+# Testing
+mise run test:all                       # CUE + Go + module tests
+mise run test:cue                       # CUE validation only
+mise run test:modules                   # all module integration tests
+go test -v -race -short ./internal/...  # Go unit tests
+
+# Lint and format
+make lint
+make fmt
+
+# Staging/Production (via GitHub Actions)
+mise run stage                          # trigger staging workflow
+mise run prod                           # trigger production workflow
+```
