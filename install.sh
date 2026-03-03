@@ -1,6 +1,6 @@
 #!/bin/sh
 # StackKits installer — installs the stackkit CLI binary.
-# Usage: curl -sSL https://raw.githubusercontent.com/kombifyio/stackKits/main/install.sh | bash
+# Usage: curl -sSL install.kombify.me | sh
 set -eu
 
 REPO="kombifyio/stackKits"

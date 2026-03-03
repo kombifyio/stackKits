@@ -46,6 +46,20 @@ archives:
       - LICENSE
       - docs/CLI.md
 
+nfpms:
+  - id: deb
+    package_name: kombify-stackkits
+    vendor: kombify
+    homepage: https://github.com/kombifyio/stackKits
+    maintainer: kombify <admin@kombify.io>
+    description: "kombify StackKits CLI — infrastructure deployment from declarative blueprints"
+    license: "Apache-2.0 AND GPL-3.0"
+    formats:
+      - deb
+    bindir: /usr/local/bin
+    section: utils
+    priority: optional
+
 checksum:
   name_template: "checksums.txt"
 
@@ -87,12 +101,24 @@ release:
   header: |
     ## StackKits CLI v{{ .Version }}
 
-    ### Quick Install (Linux/macOS)
+    ### Quick Install
 
+    **Linux/macOS:**
     ```bash
-    curl -sSL https://raw.githubusercontent.com/kombifyio/stackKits/main/install.sh | sh
+    curl -sSL install.kombify.me | sh
     ```
 
-    Or download the archive for your platform below and place `stackkit` in your PATH.
+    **APT (Debian/Ubuntu):**
+    ```bash
+    curl -sSL apt.kombify.io/setup.sh | sudo sh
+    sudo apt install kombify-stackkits
+    ```
+
+    **Go:**
+    ```bash
+    go install github.com/kombihq/stackkits/cmd/stackkit@v{{ .Version }}
+    ```
+
+    Or download the archive for your platform below.
   footer: |
     **Full Changelog**: https://github.com/kombifyio/stackKits/compare/{{ .PreviousTag }}...{{ .Tag }}
