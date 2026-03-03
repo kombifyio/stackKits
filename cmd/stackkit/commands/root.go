@@ -61,6 +61,13 @@ Examples:
   stackkit status                      Check deployment status
   stackkit destroy                     Tear down deployment`,
 	SilenceUsage: true,
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		// Show banner for root help and key workflow commands
+		name := cmd.Name()
+		if name == "stackkit" || name == "init" || name == "apply" {
+			printBanner()
+		}
+	},
 }
 
 // Execute runs the root command

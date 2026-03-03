@@ -1,7 +1,19 @@
 #!/bin/sh
-# StackKits installer — installs the stackkit CLI binary.
+# StackKits installer -- installs the stackkit CLI binary.
 # Usage: curl -sSL install.kombify.me | sh
 set -eu
+
+printf '\033[38;5;208m'
+cat <<'BANNER'
+
+     _             _    _    _ _
+ ___| |_ __ _  ___| | _| | _(_) |_
+/ __| __/ _` |/ __| |/ / |/ / | __|
+\__ \ || (_| | (__|   <|   <| | |_
+|___/\__\__,_|\___|_|\_\_|\_\_|\__|
+
+BANNER
+printf '\033[0m'
 
 REPO="kombifyio/stackKits"
 INSTALL_DIR="/usr/local/bin"
