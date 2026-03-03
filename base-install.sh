@@ -93,6 +93,18 @@ else
   sudo stackkit prepare
 fi
 
+# Ensure Docker daemon is running (prepare installs but may not start it)
+if command -v systemctl >/dev/null 2>&1; then
+  if ! docker info >/dev/null 2>&1; then
+    info "  Starting Docker..."
+    if [ "$(id -u)" -eq 0 ]; then
+      systemctl start docker
+    else
+      sudo systemctl start docker
+    fi
+  fi
+fi
+
 ok "  System ready"
 
 # --- Step 3: Initialize base-kit --------------------------------------------
@@ -102,7 +114,7 @@ info "Step 3/4 -- Initializing base-kit"
 mkdir -p "$HOMELAB_DIR"
 cd "$HOMELAB_DIR"
 
-stackkit init base-kit --non-interactive
+stackkit init base-kit --non-interactive --force
 
 ok "  base-kit initialized in $HOMELAB_DIR"
 
