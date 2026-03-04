@@ -254,12 +254,26 @@ func generateTfvarsJSON(spec *models.StackSpec) []byte {
 		vars["dashboard_title"] = "My Homelab"
 	}
 
-	// Docker capabilities — detect network mode
+	// Docker capabilities — detect network mode and dashboard hints
 	vars["network_mode"] = "bridge"
+	vars["dns_fixed"] = false
+	vars["dns_fix_method"] = ""
+	vars["storage_driver_degraded"] = false
+	vars["storage_driver"] = "overlay2"
 	if caps := loadDockerCapabilities(); caps != nil {
 		if !caps.BridgeNetworking {
 			vars["network_mode"] = "host"
 			printInfo("Host networking mode (bridge unavailable on this system)")
+		}
+		if caps.DNSFix != "" && caps.DNSFix != "none" {
+			vars["dns_fixed"] = true
+			vars["dns_fix_method"] = caps.DNSFix
+			printInfo("DNS fix applied: %s", caps.DNSFix)
+		}
+		if caps.StorageDriver != "" && caps.StorageDriver != "overlay2" {
+			vars["storage_driver_degraded"] = true
+			vars["storage_driver"] = caps.StorageDriver
+			printInfo("Degraded storage driver: %s", caps.StorageDriver)
 		}
 	}
 

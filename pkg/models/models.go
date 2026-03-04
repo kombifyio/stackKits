@@ -193,6 +193,12 @@ type DockerCapabilities struct {
 	BridgeNetworking bool   `json:"bridgeNetworking"`
 	Iptables         bool   `json:"iptables"`
 	StorageDriver    string `json:"storageDriver"`
+
+	// DNS and image pre-pull status (troubleshooting engine)
+	DNSWorking      bool     `json:"dnsWorking"`
+	DNSFix          string   `json:"dnsFix,omitempty"`          // "none", "daemon-json", "host-prepull"
+	PrePulledImages []string `json:"prePulledImages,omitempty"`
+	PrePullFailed   []string `json:"prePullFailed,omitempty"`
 }
 
 // SystemInfo represents system information from a node

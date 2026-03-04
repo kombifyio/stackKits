@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -151,6 +152,17 @@ func prepareLocalSystem(ctx context.Context, spec *models.StackSpec) error {
 				writeDockerCapabilities(caps)
 			}
 		}
+	}
+
+	// DNS test + image pre-pull (after Docker, before OpenTofu)
+	if !prepareSkipDocker && !prepareDryRun {
+		caps := loadDockerCapabilities()
+		if caps == nil {
+			caps = detectCapabilities()
+		}
+		caps = testDockerDNS(ctx, caps)
+		prePullImages(ctx, caps)
+		writeDockerCapabilities(caps)
 	}
 
 	// Check OpenTofu
@@ -479,6 +491,148 @@ func writeDockerCapabilities(caps *models.DockerCapabilities) {
 		return
 	}
 	os.WriteFile(filepath.Join(dir, "capabilities.json"), data, 0644) //nolint:errcheck
+}
+
+// testDockerDNS verifies DNS resolution works inside Docker containers.
+// On restricted VPS (OpenVZ/LXC), Docker's internal DNS resolver depends on
+// netfilter/conntrack. When iptables is disabled, container DNS breaks even
+// though the host OS DNS works fine.
+func testDockerDNS(ctx context.Context, caps *models.DockerCapabilities) *models.DockerCapabilities {
+	if caps == nil {
+		caps = &models.DockerCapabilities{}
+	}
+
+	printInfo("Testing Docker DNS resolution...")
+
+	// Test: DNS lookup inside a container with explicit DNS server
+	testCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(testCtx, "docker", "run", "--rm", "--dns", "1.1.1.1",
+		"alpine:3.19", "nslookup", "registry-1.docker.io")
+	output, err := cmd.CombinedOutput()
+
+	if err == nil {
+		printSuccess("Docker DNS is working")
+		caps.DNSWorking = true
+		caps.DNSFix = "none"
+		return caps
+	}
+
+	printWarning("Docker DNS is not working: %s", strings.TrimSpace(string(output)))
+
+	// Fix 1: Inject DNS servers into daemon.json and restart
+	printInfo("Configuring explicit DNS servers (1.1.1.1, 8.8.8.8)...")
+	applyDNSToDaemonJSON()
+	restartDockerForDNS(ctx)
+
+	// Re-test
+	testCtx2, cancel2 := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel2()
+	cmd2 := exec.CommandContext(testCtx2, "docker", "run", "--rm",
+		"alpine:3.19", "nslookup", "registry-1.docker.io")
+	if cmd2.Run() == nil {
+		printSuccess("Docker DNS fixed (configured explicit DNS servers)")
+		caps.DNSWorking = true
+		caps.DNSFix = "daemon-json"
+		return caps
+	}
+
+	// DNS still broken — we'll rely on pre-pulling from the host
+	printWarning("Docker DNS remains unavailable (restricted VPS)")
+	printInfo("Images will be pre-pulled from the host network")
+	caps.DNSWorking = false
+	caps.DNSFix = "host-prepull"
+	return caps
+}
+
+// applyDNSToDaemonJSON injects explicit DNS servers into /etc/docker/daemon.json.
+func applyDNSToDaemonJSON() {
+	daemonCfg, err := os.ReadFile("/etc/docker/daemon.json")
+	if err != nil {
+		return
+	}
+
+	var cfg map[string]interface{}
+	if json.Unmarshal(daemonCfg, &cfg) != nil {
+		return
+	}
+
+	if _, hasDNS := cfg["dns"]; hasDNS {
+		return // DNS already configured
+	}
+
+	cfg["dns"] = []string{"1.1.1.1", "8.8.8.8"}
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return
+	}
+	os.WriteFile("/etc/docker/daemon.json", data, 0644) //nolint:errcheck
+}
+
+// restartDockerForDNS restarts Docker daemon to apply DNS config changes.
+func restartDockerForDNS(ctx context.Context) {
+	isSystemd := false
+	if _, err := os.Stat("/run/systemd/system"); err == nil {
+		isSystemd = true
+	}
+	stopDocker(isSystemd)
+	tryStartDocker(ctx, isSystemd) //nolint:errcheck
+}
+
+// baseKitImages returns the canonical list of Docker images used by the base-kit.
+func baseKitImages() []string {
+	return []string{
+		"traefik:v3",
+		"ghcr.io/steveiliop56/tinyauth:v4",
+		"ghcr.io/pocket-id/pocket-id:v2",
+		"postgres:16-alpine",
+		"redis:7-alpine",
+		"dokploy/dokploy:latest",
+		"curlimages/curl:latest",
+		"nginx:alpine",
+		"louislam/uptime-kuma:1",
+		"python:3.11-alpine",
+		"traefik/whoami:latest",
+	}
+}
+
+// prePullImages pulls all base-kit Docker images from the host network.
+// This is critical on restricted VPS where container DNS is broken — the host
+// network has working DNS, so `docker pull` from the host succeeds.
+func prePullImages(ctx context.Context, caps *models.DockerCapabilities) {
+	images := baseKitImages()
+	printInfo("Pre-pulling %d Docker images...", len(images))
+
+	pulled := []string{}
+	failed := []string{}
+
+	for i, image := range images {
+		fmt.Printf("  [%d/%d] %s ", i+1, len(images), image)
+
+		pullCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+		cmd := exec.CommandContext(pullCtx, "docker", "pull", image) // #nosec G204
+		var stderr bytes.Buffer
+		cmd.Stderr = &stderr
+		if err := cmd.Run(); err != nil {
+			cancel()
+			fmt.Printf("✗\n")
+			printWarning("    Failed: %s", strings.TrimSpace(stderr.String()))
+			failed = append(failed, image)
+		} else {
+			cancel()
+			fmt.Printf("✓\n")
+			pulled = append(pulled, image)
+		}
+	}
+
+	caps.PrePulledImages = pulled
+	caps.PrePullFailed = failed
+
+	if len(failed) == 0 {
+		printSuccess("All %d images pre-pulled", len(pulled))
+	} else {
+		printWarning("%d images pulled, %d failed", len(pulled), len(failed))
+	}
 }
 
 // loadDockerKernelModules loads kernel modules required by Docker networking and storage.

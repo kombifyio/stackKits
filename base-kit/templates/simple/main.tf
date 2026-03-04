@@ -140,6 +140,30 @@ variable "network_mode" {
   default     = "bridge"
 }
 
+variable "dns_fixed" {
+  type        = bool
+  description = "Whether stackkit applied a DNS fix during prepare"
+  default     = false
+}
+
+variable "dns_fix_method" {
+  type        = string
+  description = "DNS fix method applied: 'daemon-json' or 'host-prepull'"
+  default     = ""
+}
+
+variable "storage_driver_degraded" {
+  type        = bool
+  description = "Whether Docker is using a degraded storage driver (e.g. vfs instead of overlay2)"
+  default     = false
+}
+
+variable "storage_driver" {
+  type        = string
+  description = "Docker storage driver in use"
+  default     = "overlay2"
+}
+
 # =============================================================================
 # LOCALS
 # =============================================================================
@@ -163,6 +187,10 @@ locals {
 
   # Host-mode hint for dashboard
   host_mode_hint = local.is_host ? "<div style=\"background:#78350F;border:1px solid #D97706;border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#FEF3C7;\"><strong>&#9888; Host Networking Mode</strong> &mdash; Your VPS does not support Docker bridge networking. All containers run on the host network. For full network isolation, consider a KVM-based VPS (Hetzner, DigitalOcean, Linode).</div>" : ""
+
+  dns_fix_hint = var.dns_fixed ? "<div style=\"background:#1E3A5F;border:1px solid #3B82F6;border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#DBEAFE;\"><strong>&#128268; DNS Fix Applied</strong> &mdash; stackkit automatically configured Docker DNS (method: ${var.dns_fix_method}). Container name resolution is working via external DNS servers (1.1.1.1, 8.8.8.8).</div>" : ""
+
+  storage_hint = var.storage_driver_degraded ? "<div style=\"background:#7F1D1D;border:1px solid #EF4444;border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#FEE2E2;\"><strong>&#9888; Degraded Storage</strong> &mdash; Docker is using the <code>${var.storage_driver}</code> storage driver instead of overlay2. This uses more disk space and may be slower. Consider a KVM-based VPS for full performance.</div>" : ""
 
   # --- Compose file content (host vs bridge variants) ---
   # HCL ternary cannot use heredocs directly, so we define them as separate locals.
@@ -456,7 +484,7 @@ locals {
         <a class="nav-kuma" href="http://kuma.${var.domain}" target="_blank">&#9650; Status</a>
       </nav>
       <main>
-        ${local.host_mode_hint}
+        ${local.host_mode_hint}${local.dns_fix_hint}${local.storage_hint}
         <div class="hdr">
           <h1>Service <span class="accent">Dashboard</span></h1>
           <p>Running on <code style="font-family:monospace">${var.domain}</code> &middot; Managed by StackKits</p>

@@ -2,9 +2,11 @@ package commands
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/kombifyio/stackkits/internal/config"
@@ -104,11 +106,11 @@ func runApply(cmd *cobra.Command, args []string) error {
 		printSuccess("Initialized successfully")
 	}
 
-	// Run apply
+	// Run apply with troubleshooting retry wrapper
 	printInfo("Applying changes...")
 	startTime := time.Now()
 
-	result, err := executor.Apply(ctx, applyAutoApprove, planFile)
+	result, err := troubleshootAndApply(ctx, executor, applyAutoApprove, planFile, deployDir)
 	if err != nil {
 		return fmt.Errorf("apply error: %w", err)
 	}
@@ -122,9 +124,13 @@ func runApply(cmd *cobra.Command, args []string) error {
 	}
 
 	if !result.Success {
-		printError("Apply failed:")
-		fmt.Println(result.Stderr)
-		return fmt.Errorf("%s apply failed", executor.Mode())
+		userMsg := formatApplyError(result.Stderr)
+		printError("%s", userMsg)
+		fmt.Println()
+		printInfo("Troubleshooting tips:")
+		fmt.Println("  1. Run 'stackkit prepare' to re-detect system capabilities")
+		fmt.Println("  2. Run 'stackkit apply' to retry the deployment")
+		return fmt.Errorf("deployment failed")
 	}
 
 	// Update deployment state
@@ -281,4 +287,234 @@ func ensurePrerequisites(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// =============================================================================
+// TROUBLESHOOTING ENGINE
+// =============================================================================
+
+// applyFailurePattern represents a known failure pattern and its automated fix.
+type applyFailurePattern struct {
+	Name        string
+	Match       func(stderr string) bool
+	Fix         func(ctx context.Context, deployDir string) error
+	UserMessage string
+}
+
+// knownFailurePatterns returns the ordered list of failure patterns to check.
+func knownFailurePatterns() []applyFailurePattern {
+	return []applyFailurePattern{
+		{
+			Name: "docker-image-pull",
+			Match: func(stderr string) bool {
+				return (strings.Contains(stderr, "unable to find") ||
+					strings.Contains(stderr, "unable to pull") ||
+					strings.Contains(stderr, "Error pulling image") ||
+					strings.Contains(stderr, "i/o timeout")) &&
+					strings.Contains(stderr, "docker_image")
+			},
+			Fix: func(ctx context.Context, deployDir string) error {
+				printInfo("Pre-pulling images from host network...")
+				caps := loadDockerCapabilities()
+				if caps == nil {
+					caps = &models.DockerCapabilities{}
+				}
+				prePullImages(ctx, caps)
+				writeDockerCapabilities(caps)
+				if len(caps.PrePullFailed) > 0 {
+					return fmt.Errorf("%d images failed to pull", len(caps.PrePullFailed))
+				}
+				return nil
+			},
+			UserMessage: "Docker image pulls failed (DNS or network issue). Pulling images from host network...",
+		},
+		{
+			Name: "docker-network",
+			Match: func(stderr string) bool {
+				return strings.Contains(stderr, "docker_network") &&
+					(strings.Contains(stderr, "operation not permitted") ||
+						strings.Contains(stderr, "Unable to create network"))
+			},
+			Fix: func(ctx context.Context, deployDir string) error {
+				printInfo("Switching to host networking mode...")
+				if err := patchTfvarsNetworkMode(deployDir, "host"); err != nil {
+					return err
+				}
+				// Re-init to pick up the tfvars change
+				tofuExec := tofu.NewExecutor()
+				tofuExec.SetWorkDir(deployDir)
+				_, err := tofuExec.Init(ctx)
+				return err
+			},
+			UserMessage: "Bridge networking blocked (restricted VPS). Switching to host networking mode...",
+		},
+		{
+			Name: "docker-daemon",
+			Match: func(stderr string) bool {
+				return strings.Contains(stderr, "Cannot connect to the Docker daemon") ||
+					strings.Contains(stderr, "docker.sock") ||
+					strings.Contains(stderr, "connection refused")
+			},
+			Fix: func(ctx context.Context, _ string) error {
+				printInfo("Restarting Docker daemon...")
+				caps, err := startDockerDaemon(ctx)
+				if err != nil {
+					return err
+				}
+				writeDockerCapabilities(caps)
+				return nil
+			},
+			UserMessage: "Docker daemon lost connection. Restarting Docker...",
+		},
+		{
+			Name: "state-lock",
+			Match: func(stderr string) bool {
+				return strings.Contains(stderr, "Error acquiring the state lock") ||
+					strings.Contains(stderr, "state is locked")
+			},
+			Fix: func(_ context.Context, _ string) error {
+				printInfo("Waiting for state lock to release...")
+				time.Sleep(5 * time.Second)
+				return nil
+			},
+			UserMessage: "Infrastructure state is locked. Waiting...",
+		},
+	}
+}
+
+// troubleshootAndApply wraps executor.Apply with detect-fix-retry logic.
+// Follows the same pattern as startDockerDaemon() in prepare.go:
+// Attempt → Detect failure pattern → Apply fix → Retry → Escalate.
+func troubleshootAndApply(
+	ctx context.Context,
+	executor iac.Executor,
+	autoApprove bool,
+	planFile string,
+	deployDir string,
+) (*iac.ExecResult, error) {
+	const maxRetries = 2
+	patterns := knownFailurePatterns()
+
+	var lastResult *iac.ExecResult
+	var appliedFixes []string
+
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		if attempt > 0 {
+			fmt.Println()
+			printInfo("Retry attempt %d/%d...", attempt, maxRetries)
+		}
+
+		result, err := executor.Apply(ctx, autoApprove, planFile)
+		if err != nil {
+			return nil, fmt.Errorf("apply error: %w", err)
+		}
+
+		lastResult = result
+
+		if result.Success {
+			if attempt > 0 {
+				printSuccess("Apply succeeded after troubleshooting (%d fix(es) applied)", len(appliedFixes))
+			}
+			return result, nil
+		}
+
+		// Apply failed — try to match a known pattern and fix
+		if attempt >= maxRetries {
+			break
+		}
+
+		fixed := false
+		for _, pattern := range patterns {
+			if !pattern.Match(result.Stderr) {
+				continue
+			}
+
+			// Don't apply the same fix twice
+			alreadyApplied := false
+			for _, name := range appliedFixes {
+				if name == pattern.Name {
+					alreadyApplied = true
+					break
+				}
+			}
+			if alreadyApplied {
+				continue
+			}
+
+			fmt.Println()
+			printWarning("%s", pattern.UserMessage)
+
+			if fixErr := pattern.Fix(ctx, deployDir); fixErr != nil {
+				printWarning("Auto-fix failed: %v", fixErr)
+				continue
+			}
+
+			appliedFixes = append(appliedFixes, pattern.Name)
+			fixed = true
+			break
+		}
+
+		if !fixed {
+			break // no pattern matched — don't retry blindly
+		}
+	}
+
+	return lastResult, nil
+}
+
+// formatApplyError translates raw Terraform/OpenTofu stderr into a
+// user-friendly error message.
+func formatApplyError(stderr string) string {
+	translations := []struct {
+		pattern string
+		message string
+	}{
+		{"unable to find", "Could not download one or more container images. Check your internet connection."},
+		{"unable to pull", "Could not download one or more container images. Check your internet connection."},
+		{"Error pulling image", "Failed to download a container image (DNS or network issue)."},
+		{"Unable to create network", "Could not create Docker network. Your VPS may not support bridge networking."},
+		{"Cannot connect to the Docker daemon", "Docker is not running. Run 'stackkit prepare' to start it."},
+		{"Error acquiring the state lock", "Another deployment operation is in progress. Wait and try again."},
+		{"context deadline exceeded", "Operation timed out. Check if your server has adequate resources."},
+	}
+
+	for _, t := range translations {
+		if strings.Contains(stderr, t.pattern) {
+			return t.message
+		}
+	}
+
+	// Extract first "Error:" line as fallback
+	for _, line := range strings.Split(stderr, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "Error") || strings.HasPrefix(trimmed, "│ Error") {
+			cleaned := strings.TrimPrefix(trimmed, "│ ")
+			return "Deployment error: " + cleaned
+		}
+	}
+
+	return "Deployment failed. Run 'stackkit prepare' then retry with 'stackkit apply'."
+}
+
+// patchTfvarsNetworkMode updates terraform.tfvars.json to change network_mode.
+func patchTfvarsNetworkMode(deployDir, mode string) error {
+	tfvarsPath := filepath.Join(deployDir, "terraform.tfvars.json")
+	data, err := os.ReadFile(tfvarsPath)
+	if err != nil {
+		return fmt.Errorf("could not read tfvars: %w", err)
+	}
+
+	var vars map[string]interface{}
+	if err := json.Unmarshal(data, &vars); err != nil {
+		return fmt.Errorf("could not parse tfvars: %w", err)
+	}
+
+	vars["network_mode"] = mode
+
+	newData, err := json.MarshalIndent(vars, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(tfvarsPath, append(newData, '\n'), 0600)
 }

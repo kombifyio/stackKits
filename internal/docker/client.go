@@ -383,18 +383,24 @@ func validateImageName(image string) error {
 	return nil
 }
 
-// Pull pulls a Docker image
+// Pull pulls a Docker image with a 10-minute timeout.
 func (c *Client) Pull(ctx context.Context, image string) error {
 	// Validate image name
 	if err := validateImageName(image); err != nil {
 		return fmt.Errorf("invalid image name: %w", err)
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, c.binary, "pull", image) // #nosec G204 -- binary path is set at construction, not from user input
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
+		errMsg := strings.TrimSpace(stderr.String())
+		if errMsg != "" {
+			return fmt.Errorf("failed to pull image %s: %w (%s)", image, err, errMsg)
+		}
 		return fmt.Errorf("failed to pull image %s: %w", image, err)
 	}
 
