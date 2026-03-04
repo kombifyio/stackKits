@@ -76,7 +76,7 @@ nfpms:
   - id: deb
     package_name: kombify-stackkits
     vendor: kombify
-    homepage: https://github.com/KombiverseLabs/kombify-StackKits
+    homepage: https://github.com/kombifyio/stackKits
     maintainer: kombify <admin@kombify.io>
     description: "kombify StackKits CLI — infrastructure deployment from declarative blueprints"
     license: "Apache-2.0 AND GPL-3.0"
