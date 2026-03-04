@@ -221,13 +221,9 @@ Items are categorized by severity and mapped to roadmap milestones.
 **Fix:** Migrate to `kombify-DB` `content_*` tables (see `kombify-DB/TECHNICAL_DEBT.md` TD-10).  
 **Milestone:** M9
 
-### TD-24: GitHub Org References (kombihq)
+### ~~TD-24: GitHub Org References (kombihq)~~ → RESOLVED
 
-**Location:** `cue.mod/module.cue`, all CUE imports (20+ files)  
-**Problem:** References `github.com/kombifyio/stackkits` — org name may change.  
-**Impact:** Low until Go module depends on resolvable import. CUE local evaluation still works.  
-**Fix:** Update when org name is finalized. Deferred due to impact on 3+ Go modules.  
-**Milestone:** Deferred
+> Resolved on 2026-03-04. Go module path changed from `github.com/kombihq/stackkits` to `github.com/kombifyio/stackkits` across all 74 files (go.mod, Go imports, CUE modules, docs).
 
 ### ~~TD-25: Domain Validation Inconsistency (W10)~~ → RESOLVED
 

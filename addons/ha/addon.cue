@@ -891,7 +891,7 @@ package ha
 	vipAddress: string
 
 	// HAProxy stats URL
-	haproxyStatsUrl: string | *"http://localhost:8404/stats"
+	haproxyStatsUrl: string | *"http://haproxy.stack.local/stats"
 
 	// PostgreSQL connection (via HAProxy)
 	postgresqlUrl: string

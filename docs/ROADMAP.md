@@ -54,7 +54,7 @@ Before implementation, a full audit identified critical inconsistencies across S
 | K4 | **Duplicate concept pages** — 3× StackKits explanations, 2× spec-driven pages | docs | Medium |
 | K5 | **ha-kit description** — docs say K8s, code is Docker Swarm | docs | High |
 | K6 | **modern-homelab.mdx** — 591 lines entirely about K8s/k3s/FluxCD/Longhorn | docs | High |
-| K7 | **GitHub org references** — kombify, kombifyLabs, Soulcreek, kombihq mixed | docs, Stack | Medium |
+| K7 | ~~**GitHub org references**~~ — RESOLVED 2026-03-04. Module path changed to kombifyio, all refs fixed | docs, Stack | ~~Medium~~ |
 | K8 | **URL casing** — /Cloud/ vs /cloud/ mixed | docs | Low |
 | K9 | **Outdated service references** — "Authelia", "Portainer" instead of "TinyAuth", "Dokploy" | docs | Medium |
 | K10 | **"Terraform" on marketing** — should be "OpenTofu" | StackKits | Medium |

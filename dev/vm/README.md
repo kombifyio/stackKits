@@ -24,7 +24,7 @@ docker compose up -d --build
 ## Connect
 
 ```powershell
-ssh -p 2222 root@localhost
+ssh -p 2222 root@127.0.0.1
 ```
 
 ## Docker API for StackKits
@@ -32,5 +32,5 @@ ssh -p 2222 root@localhost
 Use this to target the VM-service Docker Engine from OpenTofu and the `stackkit status` command:
 
 ```powershell
-$env:DOCKER_HOST = "tcp://localhost:2375"
+$env:DOCKER_HOST = "tcp://127.0.0.1:2375"
 ```
