@@ -95,6 +95,17 @@ else
   sudo install -m 755 "$TMP/stackkit" "$INSTALL_DIR/stackkit"
 fi
 
+# Install bundled kit definitions so stackkit init can find them
+STACKKITS_DIR="$HOME/.stackkits"
+mkdir -p "$STACKKITS_DIR"
+if [ -d "$TMP/base-kit" ]; then
+  cp -r "$TMP/base-kit" "$STACKKITS_DIR/"
+  info "  Installed base-kit to $STACKKITS_DIR/base-kit"
+fi
+if [ -d "$TMP/base" ]; then
+  cp -r "$TMP/base" "$STACKKITS_DIR/"
+fi
+
 ok "  stackkit $(stackkit version 2>/dev/null || echo v${LATEST}) installed"
 
 # --- Step 2: Prepare system (Docker + OpenTofu) -----------------------------
