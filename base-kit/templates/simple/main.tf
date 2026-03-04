@@ -164,6 +164,219 @@ locals {
   # Host-mode hint for dashboard
   host_mode_hint = local.is_host ? "<div style=\"background:#78350F;border:1px solid #D97706;border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#FEF3C7;\"><strong>&#9888; Host Networking Mode</strong> &mdash; Your VPS does not support Docker bridge networking. All containers run on the host network. For full network isolation, consider a KVM-based VPS (Hetzner, DigitalOcean, Linode).</div>" : ""
 
+  # --- Compose file content (host vs bridge variants) ---
+  # HCL ternary cannot use heredocs directly, so we define them as separate locals.
+
+  kuma_compose_host = <<-EOT
+    services:
+      uptime-kuma:
+        image: louislam/uptime-kuma:1
+        container_name: kuma
+        restart: unless-stopped
+        network_mode: host
+        volumes:
+          - kuma-data:/app/data
+        labels:
+          - "traefik.enable=true"
+          - "traefik.http.routers.kuma.rule=Host(`kuma.${var.domain}`)"
+          - "traefik.http.routers.kuma.entrypoints=web"
+          - "traefik.http.services.kuma.loadbalancer.server.port=${local.host_ports.kuma}"
+          - "traefik.http.routers.kuma.middlewares=tinyauth@docker"
+        healthcheck:
+          test: ["CMD-SHELL", "curl -sf http://localhost:${local.host_ports.kuma}/ || exit 1"]
+          interval: 30s
+          timeout: 10s
+          retries: 5
+          start_period: 45s
+
+      init-kuma:
+        image: python:3.11-alpine
+        restart: "no"
+        network_mode: host
+        environment:
+          KUMA_URL: "http://127.0.0.1:${local.host_ports.kuma}"
+          KUMA_USER: "${var.admin_email}"
+          KUMA_PASS: "${var.enable_dokploy_apps ? random_password.kuma_admin[0].result : "admin"}"
+          DOMAIN: "${var.domain}"
+        command:
+          - sh
+          - -c
+          - |
+            pip install -q uptime-kuma-api
+            python3 << 'PYEOF'
+            from uptime_kuma_api import UptimeKumaApi, MonitorType
+            import os, sys
+            url    = os.environ["KUMA_URL"]
+            user   = os.environ["KUMA_USER"]
+            pw     = os.environ["KUMA_PASS"]
+            domain = os.environ["DOMAIN"]
+            api = UptimeKumaApi(url, wait_events=True, timeout=30)
+            try:
+                api.setup(user, pw)
+                print("Admin user created")
+            except Exception as e:
+                print(f"Setup skipped: {e}")
+            try:
+                api.login(user, pw)
+                print("Logged in")
+            except Exception as e:
+                print(f"Login failed: {e}", file=sys.stderr)
+                api.disconnect()
+                sys.exit(1)
+            monitors = [
+                ("Traefik Dashboard", f"http://traefik.{domain}"),
+                ("TinyAuth",          f"http://auth.{domain}"),
+                ("Dokploy",           f"http://dokploy.{domain}"),
+                ("Dashboard",         f"http://base.{domain}"),
+            ]
+            for name, murl in monitors:
+                try:
+                    api.add_monitor(type=MonitorType.HTTP, name=name, url=murl,
+                                    interval=60, maxretries=1,
+                                    accepted_statuscodes=["200-399"])
+                    print(f"Monitor added: {name}")
+                except Exception as e:
+                    print(f"Skip {name}: {e}")
+            api.disconnect()
+            print("Kuma setup complete!")
+            PYEOF
+        depends_on:
+          uptime-kuma:
+            condition: service_healthy
+
+    volumes:
+      kuma-data:
+  EOT
+
+  kuma_compose_bridge = <<-EOT
+    services:
+      uptime-kuma:
+        image: louislam/uptime-kuma:1
+        container_name: kuma
+        restart: unless-stopped
+        volumes:
+          - kuma-data:/app/data
+        networks:
+          - dokploy-network
+        labels:
+          - "traefik.enable=true"
+          - "traefik.http.routers.kuma.rule=Host(`kuma.${var.domain}`)"
+          - "traefik.http.routers.kuma.entrypoints=web"
+          - "traefik.http.services.kuma.loadbalancer.server.port=3001"
+          - "traefik.http.routers.kuma.middlewares=tinyauth@docker"
+        healthcheck:
+          test: ["CMD-SHELL", "curl -sf http://localhost:3001/ || exit 1"]
+          interval: 30s
+          timeout: 10s
+          retries: 5
+          start_period: 45s
+
+      init-kuma:
+        image: python:3.11-alpine
+        restart: "no"
+        environment:
+          KUMA_URL: "http://uptime-kuma:3001"
+          KUMA_USER: "${var.admin_email}"
+          KUMA_PASS: "${var.enable_dokploy_apps ? random_password.kuma_admin[0].result : "admin"}"
+          DOMAIN: "${var.domain}"
+        command:
+          - sh
+          - -c
+          - |
+            pip install -q uptime-kuma-api
+            python3 << 'PYEOF'
+            from uptime_kuma_api import UptimeKumaApi, MonitorType
+            import os, sys
+            url    = os.environ["KUMA_URL"]
+            user   = os.environ["KUMA_USER"]
+            pw     = os.environ["KUMA_PASS"]
+            domain = os.environ["DOMAIN"]
+            api = UptimeKumaApi(url, wait_events=True, timeout=30)
+            try:
+                api.setup(user, pw)
+                print("Admin user created")
+            except Exception as e:
+                print(f"Setup skipped: {e}")
+            try:
+                api.login(user, pw)
+                print("Logged in")
+            except Exception as e:
+                print(f"Login failed: {e}", file=sys.stderr)
+                api.disconnect()
+                sys.exit(1)
+            monitors = [
+                ("Traefik Dashboard", f"http://traefik.{domain}"),
+                ("TinyAuth",          f"http://auth.{domain}"),
+                ("Dokploy",           f"http://dokploy.{domain}"),
+                ("Dashboard",         f"http://base.{domain}"),
+            ]
+            for name, murl in monitors:
+                try:
+                    api.add_monitor(type=MonitorType.HTTP, name=name, url=murl,
+                                    interval=60, maxretries=1,
+                                    accepted_statuscodes=["200-399"])
+                    print(f"Monitor added: {name}")
+                except Exception as e:
+                    print(f"Skip {name}: {e}")
+            api.disconnect()
+            print("Kuma setup complete!")
+            PYEOF
+        depends_on:
+          uptime-kuma:
+            condition: service_healthy
+        networks:
+          - dokploy-network
+
+    volumes:
+      kuma-data:
+
+    networks:
+      dokploy-network:
+        external: true
+        name: ${var.network_name}
+  EOT
+
+  kuma_compose_content = local.is_host ? local.kuma_compose_host : local.kuma_compose_bridge
+
+  whoami_compose_host = <<-EOT
+    services:
+      whoami:
+        image: traefik/whoami:latest
+        container_name: whoami
+        restart: unless-stopped
+        network_mode: host
+        command: ["--port=${local.host_ports.whoami}"]
+        labels:
+          - "traefik.enable=true"
+          - "traefik.http.routers.whoami.rule=Host(`whoami.${var.domain}`)"
+          - "traefik.http.routers.whoami.entrypoints=web"
+          - "traefik.http.services.whoami.loadbalancer.server.port=${local.host_ports.whoami}"
+          - "traefik.http.routers.whoami.middlewares=tinyauth@docker"
+  EOT
+
+  whoami_compose_bridge = <<-EOT
+    services:
+      whoami:
+        image: traefik/whoami:latest
+        container_name: whoami
+        restart: unless-stopped
+        networks:
+          - dokploy-network
+        labels:
+          - "traefik.enable=true"
+          - "traefik.http.routers.whoami.rule=Host(`whoami.${var.domain}`)"
+          - "traefik.http.routers.whoami.entrypoints=web"
+          - "traefik.http.services.whoami.loadbalancer.server.port=80"
+          - "traefik.http.routers.whoami.middlewares=tinyauth@docker"
+
+    networks:
+      dokploy-network:
+        external: true
+        name: ${var.network_name}
+  EOT
+
+  whoami_compose_content = local.is_host ? local.whoami_compose_host : local.whoami_compose_bridge
+
   domains = {
     dokploy   = "dokploy.${var.domain}"
     traefik   = "traefik.${var.domain}"
@@ -1196,214 +1409,14 @@ resource "local_file" "kuma_compose" {
   count = var.enable_dokploy && var.enable_dokploy_apps ? 1 : 0
 
   filename = "${path.module}/.kuma-compose.yaml"
-  content  = local.is_host ? <<-EOT
-    services:
-      uptime-kuma:
-        image: louislam/uptime-kuma:1
-        container_name: kuma
-        restart: unless-stopped
-        network_mode: host
-        volumes:
-          - kuma-data:/app/data
-        labels:
-          - "traefik.enable=true"
-          - "traefik.http.routers.kuma.rule=Host(`kuma.${var.domain}`)"
-          - "traefik.http.routers.kuma.entrypoints=web"
-          - "traefik.http.services.kuma.loadbalancer.server.port=${local.host_ports.kuma}"
-          - "traefik.http.routers.kuma.middlewares=tinyauth@docker"
-        healthcheck:
-          test: ["CMD-SHELL", "curl -sf http://localhost:${local.host_ports.kuma}/ || exit 1"]
-          interval: 30s
-          timeout: 10s
-          retries: 5
-          start_period: 45s
-
-      init-kuma:
-        image: python:3.11-alpine
-        restart: "no"
-        network_mode: host
-        environment:
-          KUMA_URL: "http://127.0.0.1:${local.host_ports.kuma}"
-          KUMA_USER: "${var.admin_email}"
-          KUMA_PASS: "${var.enable_dokploy_apps ? random_password.kuma_admin[0].result : "admin"}"
-          DOMAIN: "${var.domain}"
-        command:
-          - sh
-          - -c
-          - |
-            pip install -q uptime-kuma-api
-            python3 << 'PYEOF'
-            from uptime_kuma_api import UptimeKumaApi, MonitorType
-            import os, sys
-            url    = os.environ["KUMA_URL"]
-            user   = os.environ["KUMA_USER"]
-            pw     = os.environ["KUMA_PASS"]
-            domain = os.environ["DOMAIN"]
-            api = UptimeKumaApi(url, wait_events=True, timeout=30)
-            try:
-                api.setup(user, pw)
-                print("Admin user created")
-            except Exception as e:
-                print(f"Setup skipped: {e}")
-            try:
-                api.login(user, pw)
-                print("Logged in")
-            except Exception as e:
-                print(f"Login failed: {e}", file=sys.stderr)
-                api.disconnect()
-                sys.exit(1)
-            monitors = [
-                ("Traefik Dashboard", f"http://traefik.{domain}"),
-                ("TinyAuth",          f"http://auth.{domain}"),
-                ("Dokploy",           f"http://dokploy.{domain}"),
-                ("Dashboard",         f"http://base.{domain}"),
-            ]
-            for name, murl in monitors:
-                try:
-                    api.add_monitor(type=MonitorType.HTTP, name=name, url=murl,
-                                    interval=60, maxretries=1,
-                                    accepted_statuscodes=["200-399"])
-                    print(f"Monitor added: {name}")
-                except Exception as e:
-                    print(f"Skip {name}: {e}")
-            api.disconnect()
-            print("Kuma setup complete!")
-            PYEOF
-        depends_on:
-          uptime-kuma:
-            condition: service_healthy
-
-    volumes:
-      kuma-data:
-  EOT
-  : <<-EOT
-    services:
-      uptime-kuma:
-        image: louislam/uptime-kuma:1
-        container_name: kuma
-        restart: unless-stopped
-        volumes:
-          - kuma-data:/app/data
-        networks:
-          - dokploy-network
-        labels:
-          - "traefik.enable=true"
-          - "traefik.http.routers.kuma.rule=Host(`kuma.${var.domain}`)"
-          - "traefik.http.routers.kuma.entrypoints=web"
-          - "traefik.http.services.kuma.loadbalancer.server.port=3001"
-          - "traefik.http.routers.kuma.middlewares=tinyauth@docker"
-        healthcheck:
-          test: ["CMD-SHELL", "curl -sf http://localhost:3001/ || exit 1"]
-          interval: 30s
-          timeout: 10s
-          retries: 5
-          start_period: 45s
-
-      init-kuma:
-        image: python:3.11-alpine
-        restart: "no"
-        environment:
-          KUMA_URL: "http://uptime-kuma:3001"
-          KUMA_USER: "${var.admin_email}"
-          KUMA_PASS: "${var.enable_dokploy_apps ? random_password.kuma_admin[0].result : "admin"}"
-          DOMAIN: "${var.domain}"
-        command:
-          - sh
-          - -c
-          - |
-            pip install -q uptime-kuma-api
-            python3 << 'PYEOF'
-            from uptime_kuma_api import UptimeKumaApi, MonitorType
-            import os, sys
-            url    = os.environ["KUMA_URL"]
-            user   = os.environ["KUMA_USER"]
-            pw     = os.environ["KUMA_PASS"]
-            domain = os.environ["DOMAIN"]
-            api = UptimeKumaApi(url, wait_events=True, timeout=30)
-            try:
-                api.setup(user, pw)
-                print("Admin user created")
-            except Exception as e:
-                print(f"Setup skipped: {e}")
-            try:
-                api.login(user, pw)
-                print("Logged in")
-            except Exception as e:
-                print(f"Login failed: {e}", file=sys.stderr)
-                api.disconnect()
-                sys.exit(1)
-            monitors = [
-                ("Traefik Dashboard", f"http://traefik.{domain}"),
-                ("TinyAuth",          f"http://auth.{domain}"),
-                ("Dokploy",           f"http://dokploy.{domain}"),
-                ("Dashboard",         f"http://base.{domain}"),
-            ]
-            for name, murl in monitors:
-                try:
-                    api.add_monitor(type=MonitorType.HTTP, name=name, url=murl,
-                                    interval=60, maxretries=1,
-                                    accepted_statuscodes=["200-399"])
-                    print(f"Monitor added: {name}")
-                except Exception as e:
-                    print(f"Skip {name}: {e}")
-            api.disconnect()
-            print("Kuma setup complete!")
-            PYEOF
-        depends_on:
-          uptime-kuma:
-            condition: service_healthy
-        networks:
-          - dokploy-network
-
-    volumes:
-      kuma-data:
-
-    networks:
-      dokploy-network:
-        external: true
-        name: ${var.network_name}
-  EOT
+  content  = local.kuma_compose_content
 }
 
 resource "local_file" "whoami_compose" {
   count = var.enable_dokploy && var.enable_dokploy_apps ? 1 : 0
 
   filename = "${path.module}/.whoami-compose.yaml"
-  content  = local.is_host ? <<-EOT
-    services:
-      whoami:
-        image: traefik/whoami:latest
-        container_name: whoami
-        restart: unless-stopped
-        network_mode: host
-        command: ["--port=${local.host_ports.whoami}"]
-        labels:
-          - "traefik.enable=true"
-          - "traefik.http.routers.whoami.rule=Host(`whoami.${var.domain}`)"
-          - "traefik.http.routers.whoami.entrypoints=web"
-          - "traefik.http.services.whoami.loadbalancer.server.port=${local.host_ports.whoami}"
-          - "traefik.http.routers.whoami.middlewares=tinyauth@docker"
-  EOT
-  : <<-EOT
-    services:
-      whoami:
-        image: traefik/whoami:latest
-        container_name: whoami
-        restart: unless-stopped
-        networks:
-          - dokploy-network
-        labels:
-          - "traefik.enable=true"
-          - "traefik.http.routers.whoami.rule=Host(`whoami.${var.domain}`)"
-          - "traefik.http.routers.whoami.entrypoints=web"
-          - "traefik.http.services.whoami.loadbalancer.server.port=80"
-          - "traefik.http.routers.whoami.middlewares=tinyauth@docker"
-
-    networks:
-      dokploy-network:
-        external: true
-        name: ${var.network_name}
-  EOT
+  content  = local.whoami_compose_content
 }
 
 # =============================================================================
