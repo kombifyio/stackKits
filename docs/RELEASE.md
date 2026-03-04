@@ -18,31 +18,77 @@ Releases are published to the **public** `kombifyio/stackKits` repo. The release
 3. **Validate archive job** — builds a snapshot, verifies required files are present (base-kit/, base/, binary)
 4. **Release job** — GoReleaser builds cross-platform binaries and publishes to GitHub Releases
 
-### Release Archives MUST Include
+### Release Archives
 
-The release `.tar.gz` is not just a binary — it bundles everything the CLI needs:
+Each release produces **4 archive types** per platform:
 
+| Archive | Contents |
+|---------|----------|
+| `stackkits_VERSION_OS_ARCH` | Full bundle — CLI + all kits + base schemas |
+| `stackkits-base-kit_VERSION_OS_ARCH` | CLI + base-kit + base schemas |
+
+Per-kit archives for ha-kit and modern-homelab will be added when they graduate from alpha.
+
+Every archive includes the CLI binary + `base/` schemas (shared by all kits) + the specific kit directory. This lets users install just the kit they need.
+
+These are configured in `.goreleaser.yaml` under `archives`. **When adding a new kit archive, also add validation in `release.yml`.**
+
+### Kit Versioning
+
+Kits version independently from the CLI and from each other:
+
+| Component | Version | Where |
+|-----------|---------|-------|
+| CLI binary | From git tag (e.g. `v4.0.1`) | GoReleaser ldflags |
+| base-kit | `4.0.0` | `base-kit/stackkit.yaml` |
+| ha-kit | `1.0.0-alpha` | `ha-kit/stackkit.yaml` |
+| modern-homelab | `1.0.0-alpha` | `modern-homelab/stackkit.yaml` |
+
+A CLI release bundles whatever kit versions are in the repo at that point. To release only a specific kit's changes, just tag and release — the per-kit archive (`stackkits-base-kit_*`) contains only that kit.
+
+## Public Repo Sync
+
+The public repo is kept in sync automatically via a whitelist-based sync script.
+
+### How It Works
+
+1. **On every push to `main`** on the private repo, `.github/workflows/sync-public.yml` runs
+2. It executes `scripts/sync-public.sh`, which:
+   - Clones `kombifyio/stackKits` to a temp directory
+   - Removes everything except `.git/`
+   - Copies only whitelisted files from the private repo
+   - Commits and pushes if there are changes
+
+### Whitelist Approach
+
+Only files explicitly listed in the `INCLUDE` array in `scripts/sync-public.sh` go to the public repo. **New files added to the private repo default to private-only.** To publish a new file, add it to the `INCLUDE` array.
+
+Currently synced:
+- Go source: `cmd/`, `internal/`, `pkg/`, `api/`
+- Build files: `go.mod`, `go.sum`, `Makefile`, `Dockerfile`, etc.
+- Kit definitions: `base/`, `base-kit/`, `ha-kit/`, `modern-homelab/`, `addons/`, `modules/`, `platforms/`, `cue.mod/`
+- Docs & examples: `docs/`, `demos/`, `README.md`, `LICENSE`, `CONTRIBUTING.md`
+- Installer scripts: `base-install.sh`, `install.sh`
+- Tests: `tests/`
+- Release config: `.goreleaser.yaml`, `.golangci.yml`, `.env.example`
+- CI: `.github/workflows/release.yml` only
+
+### Manual Sync
+
+```bash
+# Preview what would change (no push)
+./scripts/sync-public.sh --dry-run
+
+# Sync and push
+./scripts/sync-public.sh
+
+# CI mode (uses PAT instead of gh auth)
+PUBLIC_REPO_TOKEN=ghp_... ./scripts/sync-public.sh
 ```
-stackkit                          # CLI binary
-base-kit/stackkit.yaml            # Kit metadata
-base-kit/services.cue             # Service definitions
-base-kit/defaults.cue             # Default values
-base-kit/stackfile.cue            # Main CUE definition
-base-kit/default-spec.yaml        # Example spec
-base-kit/templates/simple/main.tf # Deployment template
-base-kit/templates/advanced/...   # Advanced mode templates
-base/stackkit.cue                 # Base CUE schemas
-base/layers.cue                   # Layer definitions
-base/identity.cue                 # Identity schemas
-base/network.cue                  # Network schemas
-base/security.cue                 # Security schemas
-base/...                          # Other base schemas
-README.md
-LICENSE
-docs/CLI.md
-```
 
-These are configured in `.goreleaser.yaml` under `archives.files`. **If you add new directories needed at runtime, add them here.**
+### CI Requirements
+
+The sync workflow requires a `PUBLIC_REPO_TOKEN` secret on the private repo — a GitHub PAT with write access to `kombifyio/stackKits`.
 
 ## Creating a Release
 
@@ -50,9 +96,8 @@ These are configured in `.goreleaser.yaml` under `archives.files`. **If you add 
 # 1. Ensure you're on main with all changes committed
 git status  # clean working tree
 
-# 2. Push to both repos
-git push origin main      # private dev repo
-git push public main      # public user repo
+# 2. Sync is automatic on push, but you can verify:
+./scripts/sync-public.sh --dry-run
 
 # 3. Tag and push to public repo (triggers release workflow)
 git tag v0.X.Y
@@ -92,8 +137,9 @@ git push public v0.X.Y
 ### CI Validation (validate-archive job)
 The release workflow includes a `validate-archive` job that:
 - Builds a dry-run archive with `goreleaser --snapshot`
-- Checks that all required files are present
-- **Blocks the release if any required file is missing**
+- Checks **all 4 archive types** (full + 3 per-kit) for required files
+- Verifies each kit archive contains its kit directory + base schemas + CLI binary
+- **Blocks the release if any required file is missing from any archive**
 
 ### E2E Install Test
 Run locally before releasing:
@@ -106,9 +152,10 @@ Run locally before releasing:
 ### What NOT to Do
 
 - Never release from `KombiverseLabs/kombify-StackKits` (private) — users can't download
-- Never remove `base-kit/` or `base/` from `.goreleaser.yaml` archive files
+- Never remove kit directories or `base/` from `.goreleaser.yaml` archive files
 - Never force push to `kombifyio/stackKits` without checking existing releases
 - Never change the Go module path without updating both repos
+- Never add a new kit without adding a corresponding archive entry in `.goreleaser.yaml`
 
 ## Git Remote Setup
 

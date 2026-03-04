@@ -57,55 +57,95 @@ jobs:
       - name: Verify archive contents
         run: |
           set -euo pipefail
-          echo "=== Checking archive contents ==="
+          MISSING=0
 
-          # Find the linux amd64 archive
-          ARCHIVE=$(find dist/ -name '*linux_amd64.tar.gz' | head -1)
-          if [ -z "$ARCHIVE" ]; then
-            echo "FAIL: No linux_amd64 archive found in dist/"
-            ls -la dist/
-            exit 1
-          fi
+          check_archive() {
+            local LABEL="$1"
+            local PATTERN="$2"
+            shift 2
 
-          echo "Archive: $ARCHIVE"
-          tar tzf "$ARCHIVE" | sort > /tmp/archive-files.txt
-          cat /tmp/archive-files.txt
+            echo ""
+            echo "=== Checking $LABEL archive ==="
+            ARCHIVE=$(find dist/ -name "$PATTERN" | head -1)
+            if [ -z "$ARCHIVE" ]; then
+              echo "FAIL: No archive matching $PATTERN found in dist/"
+              ls -la dist/
+              MISSING=$((MISSING + 1))
+              return
+            fi
 
-          # Required files that MUST be in every release
-          REQUIRED_FILES=(
+            echo "Archive: $ARCHIVE"
+            tar tzf "$ARCHIVE" | sort > /tmp/archive-files.txt
+
+            for f in "$@"; do
+              if ! grep -q "^${f}$" /tmp/archive-files.txt; then
+                echo "FAIL: Missing required file: $f"
+                MISSING=$((MISSING + 1))
+              fi
+            done
+            echo "OK: $LABEL archive checked."
+          }
+
+          # Common files required in ALL archives
+          COMMON=(
             "stackkit"
+            "README.md"
+            "LICENSE"
+          )
+
+          # Base schemas required in ALL archives
+          BASE_SCHEMAS=(
+            "base/stackkit.cue"
+            "base/layers.cue"
+            "base/identity.cue"
+            "base/network.cue"
+            "base/security.cue"
+          )
+
+          # Per-kit required files
+          BASE_KIT_FILES=(
             "base-kit/stackkit.yaml"
             "base-kit/services.cue"
             "base-kit/defaults.cue"
             "base-kit/stackfile.cue"
             "base-kit/default-spec.yaml"
             "base-kit/templates/simple/main.tf"
-            "base/stackkit.cue"
-            "base/layers.cue"
-            "base/identity.cue"
-            "base/network.cue"
-            "base/security.cue"
-            "README.md"
-            "LICENSE"
           )
 
-          MISSING=0
-          for f in "${REQUIRED_FILES[@]}"; do
-            if ! grep -q "^${f}$" /tmp/archive-files.txt; then
-              echo "FAIL: Missing required file: $f"
-              MISSING=$((MISSING + 1))
-            fi
-          done
+          HA_KIT_FILES=(
+            "ha-kit/stackkit.yaml"
+            "ha-kit/services.cue"
+            "ha-kit/defaults.cue"
+            "ha-kit/stackfile.cue"
+          )
 
+          MODERN_FILES=(
+            "modern-homelab/stackkit.yaml"
+            "modern-homelab/services.cue"
+            "modern-homelab/defaults.cue"
+            "modern-homelab/stackfile.cue"
+          )
+
+          # Check full bundle
+          check_archive "full bundle" \
+            "stackkits_*_linux_amd64.tar.gz" \
+            "${COMMON[@]}" "${BASE_SCHEMAS[@]}" "${BASE_KIT_FILES[@]}" "${HA_KIT_FILES[@]}" "${MODERN_FILES[@]}"
+
+          # Check per-kit archives (only base-kit for now)
+          check_archive "base-kit" \
+            "stackkits-base-kit_*_linux_amd64.tar.gz" \
+            "${COMMON[@]}" "${BASE_SCHEMAS[@]}" "${BASE_KIT_FILES[@]}"
+
+          # TODO: add ha-kit and modern-homelab archive checks when they graduate from alpha
+
+          echo ""
           if [ "$MISSING" -gt 0 ]; then
-            echo ""
-            echo "FAIL: $MISSING required files missing from archive!"
+            echo "FAIL: $MISSING required files missing across archives!"
             echo "Update .goreleaser.yaml 'files:' section to include them."
             exit 1
           fi
 
-          echo ""
-          echo "OK: All required files present in archive."
+          echo "OK: All archives validated successfully."
 
   release:
     name: Release

@@ -32,6 +32,7 @@ builds:
       - -X main.BuildDate={{ .Date }}
 
 archives:
+  # Full bundle — all kits + CLI (for users who want everything)
   - id: default
     formats:
       - tar.gz
@@ -47,6 +48,29 @@ archives:
       - docs/CLI.md
       - base-kit/**
       - base/**
+      - ha-kit/**
+      - modern-homelab/**
+
+  # Per-kit archives — CLI + specific kit + base schemas
+  - id: base-kit
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: >-
+      {{ .ProjectName }}-base-kit_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    files:
+      - README.md
+      - LICENSE
+      - docs/CLI.md
+      - base-kit/**
+      - base/**
+
+  # TODO: add ha-kit and modern-homelab per-kit archives when they graduate from alpha
+  # - id: ha-kit
+  # - id: modern-homelab
 
 nfpms:
   - id: deb
@@ -105,9 +129,14 @@ release:
 
     ### Quick Install
 
-    **Linux/macOS:**
+    **Base Kit (single-server homelab):**
     ```bash
     curl -sSL base.stackkit.cc | sh
+    ```
+
+    **CLI only (pick a kit later):**
+    ```bash
+    curl -sSL install.kombify.me | sh
     ```
 
     **Go:**
@@ -115,6 +144,11 @@ release:
     go install github.com/kombihq/stackkits/cmd/stackkit@v{{ .Version }}
     ```
 
-    Or download the archive for your platform below.
+    ### Downloads
+
+    | Archive | Contents |
+    |---------|----------|
+    | `stackkits_*` | Full bundle — CLI + all kits |
+    | `stackkits-base-kit_*` | CLI + base-kit only |
   footer: |
     **Full Changelog**: https://github.com/kombifyio/stackKits/compare/{{ .PreviousTag }}...{{ .Tag }}

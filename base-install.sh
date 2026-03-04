@@ -80,7 +80,7 @@ fi
 
 info "  Latest version: v${LATEST} (${OS}/${ARCH})"
 
-ARCHIVE="stackkits_${LATEST}_${OS}_${ARCH}.tar.gz"
+ARCHIVE="stackkits-base-kit_${LATEST}_${OS}_${ARCH}.tar.gz"
 URL="https://github.com/$REPO/releases/download/v${LATEST}/${ARCHIVE}"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT

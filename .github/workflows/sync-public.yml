@@ -1,0 +1,21 @@
+name: Sync to Public Repo
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  sync:
+    name: Sync curated files to kombifyio/stackKits
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout private repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Sync to public repo
+        run: ./scripts/sync-public.sh
+        env:
+          PUBLIC_REPO_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN }}
