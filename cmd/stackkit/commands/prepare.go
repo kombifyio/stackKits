@@ -144,6 +144,11 @@ func prepareLocalSystem(ctx context.Context, spec *models.StackSpec) error {
 				}
 			} else {
 				printSuccess("Docker daemon is running")
+				// Detect capabilities even when Docker is already running.
+				// This ensures capabilities.json exists for generate to read,
+				// e.g. when the installer is re-run on a restricted VPS.
+				caps := detectCapabilities()
+				writeDockerCapabilities(caps)
 			}
 		}
 	}
@@ -445,6 +450,16 @@ func startDockerDaemon(ctx context.Context) (*models.DockerCapabilities, error) 
 		printWarning("Docker socket /var/run/docker.sock does not exist")
 	}
 	return nil, fmt.Errorf("Docker daemon failed to start — see diagnostics above")
+}
+
+// detectCapabilities probes the system for Docker-relevant capabilities
+// without restarting the daemon. Used when Docker is already running.
+func detectCapabilities() *models.DockerCapabilities {
+	return &models.DockerCapabilities{
+		BridgeNetworking: detectBridgeSupport(),
+		Iptables:         testIptablesNAT(),
+		StorageDriver:    detectStorageDriver(),
+	}
 }
 
 // writeDockerCapabilities persists detected Docker capabilities for use by generate.
