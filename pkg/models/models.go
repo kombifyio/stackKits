@@ -194,6 +194,11 @@ type DockerCapabilities struct {
 	Iptables         bool   `json:"iptables"`
 	StorageDriver    string `json:"storageDriver"`
 
+	// Docker runtime functionality — false when the kernel blocks unshare/namespaces
+	// (e.g. OpenVZ containers), making Docker unable to run any containers.
+	DockerFunctional bool   `json:"dockerFunctional"`
+	RuntimeError     string `json:"runtimeError,omitempty"`
+
 	// DNS and image pre-pull status (troubleshooting engine)
 	DNSWorking      bool     `json:"dnsWorking"`
 	DNSFix          string   `json:"dnsFix,omitempty"`          // "none", "daemon-json", "host-prepull"

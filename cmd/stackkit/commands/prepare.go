@@ -154,12 +154,21 @@ func prepareLocalSystem(ctx context.Context, spec *models.StackSpec) error {
 		}
 	}
 
-	// DNS test + image pre-pull (after Docker, before OpenTofu)
+	// Docker runtime + DNS test + image pre-pull (after Docker, before OpenTofu)
 	if !prepareSkipDocker && !prepareDryRun {
 		caps := loadDockerCapabilities()
 		if caps == nil {
 			caps = detectCapabilities()
 		}
+
+		// Critical: test that Docker can actually run containers.
+		// On some VPS (OpenVZ/LXC), the daemon starts but the kernel blocks
+		// unshare/namespace creation, making all container operations fail.
+		if !testDockerRuntime(ctx, caps) {
+			writeDockerCapabilities(caps)
+			return fmt.Errorf("Docker cannot run containers on this VPS — see above for details")
+		}
+
 		caps = testDockerDNS(ctx, caps)
 		prePullImages(ctx, caps)
 		writeDockerCapabilities(caps)
@@ -491,6 +500,67 @@ func writeDockerCapabilities(caps *models.DockerCapabilities) {
 		return
 	}
 	os.WriteFile(filepath.Join(dir, "capabilities.json"), data, 0644) //nolint:errcheck
+}
+
+// testDockerRuntime verifies Docker can actually create and run containers.
+// On heavily restricted VPS (OpenVZ containers), the Docker daemon starts but
+// the kernel blocks the unshare() syscall, making it impossible to create
+// namespaces for containers or even register image layers.
+// Returns true if Docker is functional, false if the VPS is incompatible.
+func testDockerRuntime(ctx context.Context, caps *models.DockerCapabilities) bool {
+	printInfo("Testing Docker container runtime...")
+
+	// Try the simplest possible container operation: pull + run hello-world
+	// This tests both layer registration (unshare for storage) and container
+	// creation (unshare for namespaces).
+	testCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(testCtx, "docker", "run", "--rm", "hello-world") // #nosec G204
+	output, err := cmd.CombinedOutput()
+	outputStr := strings.TrimSpace(string(output))
+
+	if err == nil {
+		printSuccess("Docker runtime is functional")
+		caps.DockerFunctional = true
+		return true
+	}
+
+	// Check for the specific unshare/namespace error that indicates
+	// a fundamentally incompatible VPS (OpenVZ/LXC without nesting).
+	if strings.Contains(outputStr, "unshare") ||
+		strings.Contains(outputStr, "operation not permitted") ||
+		strings.Contains(outputStr, "failed to register layer") {
+		caps.DockerFunctional = false
+		caps.RuntimeError = "kernel blocks container namespaces (unshare: operation not permitted)"
+
+		fmt.Println()
+		printError("%s", "Docker cannot run containers on this VPS")
+		fmt.Println()
+		fmt.Println("  Your VPS uses container-based virtualization (OpenVZ/LXC) that blocks")
+		fmt.Println("  the kernel features Docker needs (namespaces, cgroups, unshare).")
+		fmt.Println("  The Docker daemon starts, but no containers can be created.")
+		fmt.Println()
+		fmt.Println("  " + bold("What you need:") + " A VPS with KVM or full virtualization.")
+		fmt.Println("  These providers offer compatible VPS from ~$4/month:")
+		fmt.Println()
+		fmt.Println("    • Hetzner Cloud    — https://hetzner.cloud")
+		fmt.Println("    • DigitalOcean     — https://digitalocean.com")
+		fmt.Println("    • Linode (Akamai)  — https://linode.com")
+		fmt.Println("    • Vultr            — https://vultr.com")
+		fmt.Println("    • Contabo (KVM)    — https://contabo.com")
+		fmt.Println()
+		fmt.Println("  " + bold("How to check:") + " Run 'systemd-detect-virt' — if it says 'kvm' or 'none', Docker will work.")
+		fmt.Println("  If it says 'openvz' or 'lxc', Docker is blocked at the kernel level.")
+		fmt.Println()
+		return false
+	}
+
+	// Some other error (network, disk, etc.) — not a fatal runtime issue,
+	// let the rest of prepare handle it.
+	printWarning("Docker test container failed: %s", outputStr)
+	caps.DockerFunctional = true // Assume functional, may be transient
+	return true
 }
 
 // testDockerDNS verifies DNS resolution works inside Docker containers.
