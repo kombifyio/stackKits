@@ -45,8 +45,8 @@ archives:
       - README.md
       - LICENSE
       - docs/CLI.md
-      - base-kit/**/*
-      - base/**/*
+      - base-kit/**
+      - base/**
 
 nfpms:
   - id: deb
