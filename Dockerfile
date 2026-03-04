@@ -51,8 +51,8 @@ RUN apk add --no-cache \
     git \
     openssh-client
 
-# Install Docker CLI
-RUN apk add --no-cache docker-cli
+# Install Docker CLI with compose plugin
+RUN apk add --no-cache docker-cli docker-cli-compose
 
 # Copy OpenTofu binary
 COPY --from=tofu-installer /usr/local/bin/tofu /usr/local/bin/tofu

@@ -30,6 +30,20 @@ REPO="kombifyio/stackKits"
 INSTALL_DIR="/usr/local/bin"
 HOMELAB_DIR="$HOME/my-homelab"
 
+# --- Admin email prompt (supports env var override) -------------------------
+
+ADMIN_EMAIL="${STACKKIT_ADMIN_EMAIL:-}"
+if [ -z "$ADMIN_EMAIL" ]; then
+  echo ""
+  printf '  Admin email (for login accounts): '
+  read -r ADMIN_EMAIL </dev/tty
+  echo ""
+fi
+if [ -z "$ADMIN_EMAIL" ]; then
+  warn "No admin email provided — using 'admin' as username"
+  ADMIN_EMAIL="admin"
+fi
+
 # --- Helpers ----------------------------------------------------------------
 
 info()  { printf '\033[1;34m==> %s\033[0m\n' "$*"; }
@@ -116,13 +130,22 @@ if ! docker info >/dev/null 2>&1; then
     else
       sudo dockerd &
     fi
-    sleep 3
   fi
-  # Verify Docker is now running
+  # Wait for Docker daemon to become ready (up to 30 seconds)
+  DOCKER_WAIT=0
+  DOCKER_MAX_WAIT=30
+  while [ "$DOCKER_WAIT" -lt "$DOCKER_MAX_WAIT" ]; do
+    if docker info >/dev/null 2>&1; then
+      break
+    fi
+    sleep 2
+    DOCKER_WAIT=$((DOCKER_WAIT + 2))
+    info "  Waiting for Docker daemon... (${DOCKER_WAIT}s/${DOCKER_MAX_WAIT}s)"
+  done
   if docker info >/dev/null 2>&1; then
     ok "  Docker started"
   else
-    warn "  Could not start Docker automatically. Start it manually and re-run."
+    die "  Could not start Docker. Start it manually and re-run: systemctl start docker"
   fi
 fi
 
@@ -135,7 +158,7 @@ info "Step 3/4 -- Initializing base-kit"
 mkdir -p "$HOMELAB_DIR"
 cd "$HOMELAB_DIR"
 
-stackkit init base-kit --non-interactive --force
+stackkit init base-kit --non-interactive --force --admin-email "$ADMIN_EMAIL"
 
 ok "  base-kit initialized in $HOMELAB_DIR"
 
@@ -160,6 +183,12 @@ fi
 
 SERVER_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "YOUR_SERVER_IP")
 
+# Read generated password from tfvars
+ADMIN_PASSWORD=""
+if [ -f "$HOMELAB_DIR/deploy/terraform.tfvars.json" ]; then
+  ADMIN_PASSWORD=$(grep '"admin_password_plaintext"' "$HOMELAB_DIR/deploy/terraform.tfvars.json" | head -1 | sed -E 's/.*: *"([^"]+)".*/\1/' || true)
+fi
+
 echo ""
 ok "Your homelab is running!"
 echo ""
@@ -174,10 +203,16 @@ echo "    http://dokploy.${DOMAIN}      PaaS controller"
 echo "    http://kuma.${DOMAIN}         Uptime monitoring"
 echo "    http://auth.${DOMAIN}         Authentication (TinyAuth)"
 echo ""
-echo "  First login:"
-echo "    Open http://auth.${DOMAIN}"
-echo "    Username: admin  |  Password: admin123"
-echo "    CHANGE YOUR PASSWORD after first login!"
+echo "  Login credentials:"
+echo "    Email:    ${ADMIN_EMAIL}"
+if [ -n "$ADMIN_PASSWORD" ]; then
+  echo "    Password: ${ADMIN_PASSWORD}"
+fi
+echo ""
+echo "  Next steps:"
+echo "    1. Login at http://auth.${DOMAIN} with the credentials above"
+echo "    2. Register a passkey at http://id.${DOMAIN}/login/setup"
+echo "    3. Change your auto-generated password"
 echo ""
 if [ "$DOMAIN" = "stack.local" ]; then
   echo "  DNS setup (add to /etc/hosts on your workstation):"

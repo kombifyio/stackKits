@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/kombihq/stackkits/internal/config"
 	"github.com/kombihq/stackkits/internal/cue"
@@ -128,7 +129,16 @@ func prepareLocalSystem(ctx context.Context, spec *models.StackSpec) error {
 			}
 
 			if !dockerClient.IsRunning(ctx) {
-				printWarning("Docker daemon is not running")
+				if prepareDryRun {
+					printWarning("Docker daemon is not running - would attempt to start")
+				} else {
+					printWarning("Docker daemon is not running, attempting to start...")
+					if err := startDockerDaemon(ctx); err != nil {
+						printWarning("Could not start Docker: %v", err)
+					} else {
+						printSuccess("Docker daemon started")
+					}
+				}
 			} else {
 				printSuccess("Docker daemon is running")
 			}
@@ -148,7 +158,17 @@ func prepareLocalSystem(ctx context.Context, spec *models.StackSpec) error {
 				if err := installTofuLocal(ctx); err != nil {
 					return fmt.Errorf("failed to install OpenTofu: %w", err)
 				}
-				printSuccess("OpenTofu installed successfully")
+				// Verify installation actually worked
+				tofuExec = tofu.NewExecutor()
+				if !tofuExec.IsInstalled() {
+					return fmt.Errorf("OpenTofu installation completed but binary not found in PATH")
+				}
+				version, err := tofuExec.Version(ctx)
+				if err != nil {
+					printSuccess("OpenTofu installed successfully")
+				} else {
+					printSuccess("OpenTofu %s installed successfully", version)
+				}
 			}
 		} else {
 			version, err := tofuExec.Version(ctx)
@@ -318,20 +338,78 @@ func checkLocalResources(spec *models.StackSpec) {
 	}
 }
 
+func startDockerDaemon(ctx context.Context) error {
+	// Try systemd first, then SysV init
+	var cmd *exec.Cmd
+	if _, err := os.Stat("/run/systemd/system"); err == nil {
+		cmd = exec.Command("systemctl", "start", "docker")
+	} else {
+		cmd = exec.Command("service", "docker", "start")
+	}
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("start command failed: %w", err)
+	}
+
+	// Wait for Docker to become ready (up to 30 seconds)
+	dockerClient := docker.NewClient()
+	for i := 0; i < 15; i++ {
+		if dockerClient.IsRunning(ctx) {
+			return nil
+		}
+		time.Sleep(2 * time.Second)
+	}
+	return fmt.Errorf("Docker daemon did not become ready within 30 seconds")
+}
+
 func installDockerLocal(ctx context.Context) error {
 	cmd := exec.Command("sh", "-c", "curl -fsSL https://get.docker.com | sh")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+	// Enable and start Docker daemon after install
+	if err := startDockerDaemon(ctx); err != nil {
+		printWarning("Docker installed but daemon start deferred: %v", err)
+	}
+	return nil
 }
 
 func installTofuLocal(ctx context.Context) error {
+	// Try the official installer first (deb → rpm → standalone binary fallback)
 	script := `
+set -e
 curl --proto '=https' --tlsv1.2 -fsSL https://get.opentofu.org/install-opentofu.sh -o /tmp/install-opentofu.sh
 chmod +x /tmp/install-opentofu.sh
-/tmp/install-opentofu.sh --install-method deb 2>/dev/null || /tmp/install-opentofu.sh --install-method rpm
+/tmp/install-opentofu.sh --install-method deb 2>/dev/null || \
+  /tmp/install-opentofu.sh --install-method rpm 2>/dev/null || \
+  /tmp/install-opentofu.sh --install-method standalone 2>/dev/null
 rm -f /tmp/install-opentofu.sh
 `
+	cmd := exec.Command("sh", "-c", script)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		// Fallback: direct binary download
+		printWarning("Package install failed, trying direct binary download...")
+		return installTofuBinary(ctx)
+	}
+	return nil
+}
+
+func installTofuBinary(ctx context.Context) error {
+	arch := runtime.GOARCH
+	goos := runtime.GOOS
+	script := fmt.Sprintf(`
+set -e
+TOFU_VERSION=$(curl -sSL https://api.github.com/repos/opentofu/opentofu/releases/latest | grep '"tag_name"' | head -1 | sed -E 's/.*"v([^"]+)".*/\1/')
+curl -sSL "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/tofu_${TOFU_VERSION}_%s_%s.tar.gz" -o /tmp/tofu.tar.gz
+tar xzf /tmp/tofu.tar.gz -C /tmp tofu
+install -m 755 /tmp/tofu /usr/local/bin/tofu
+rm -f /tmp/tofu.tar.gz /tmp/tofu
+`, goos, arch)
 	cmd := exec.Command("sh", "-c", script)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

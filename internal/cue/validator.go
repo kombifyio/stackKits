@@ -33,6 +33,16 @@ func NewValidator(baseDir string) *Validator {
 func (v *Validator) ValidateStackKit(stackkitDir string) (*models.ValidationResult, error) {
 	result := &models.ValidationResult{Valid: true}
 
+	// Ensure the kit directory has a cue.mod/module.cue so CUE imports resolve.
+	// Standalone kits (e.g. ~/.stackkits/base-kit/) may not have one.
+	if err := ensureCueModule(stackkitDir); err != nil {
+		result.Warnings = append(result.Warnings, models.ValidationError{
+			Path:    stackkitDir,
+			Message: fmt.Sprintf("could not set up CUE module: %v", err),
+			Code:    "CUE_MODULE_WARNING",
+		})
+	}
+
 	// Load CUE files from the stackkit directory
 	cfg := &load.Config{
 		Dir: stackkitDir,
@@ -213,6 +223,29 @@ func (v *Validator) ValidateCUEFile(path string) (*models.ValidationResult, erro
 	}
 
 	return result, nil
+}
+
+// ensureCueModule creates a cue.mod/module.cue in the given directory if one
+// doesn't exist. This allows standalone kit directories (e.g. ~/.stackkits/base-kit/)
+// to resolve CUE imports without requiring manual setup.
+func ensureCueModule(dir string) error {
+	modDir := filepath.Join(dir, "cue.mod")
+	modFile := filepath.Join(modDir, "module.cue")
+
+	if _, err := os.Stat(modFile); err == nil {
+		return nil // already exists
+	}
+
+	if err := os.MkdirAll(modDir, 0750); err != nil {
+		return fmt.Errorf("create cue.mod: %w", err)
+	}
+
+	content := `module: "github.com/kombihq/stackkits"
+language: {
+	version: "v0.9.0"
+}
+`
+	return os.WriteFile(modFile, []byte(content), 0600)
 }
 
 // GetSchemaDir returns the CUE schema directory

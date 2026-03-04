@@ -1,8 +1,10 @@
 package commands
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"os"
 	"path/filepath"
 
@@ -11,6 +13,7 @@ import (
 	"github.com/kombihq/stackkits/internal/template"
 	"github.com/kombihq/stackkits/pkg/models"
 	"github.com/spf13/cobra"
+	"golang.org/x/crypto/bcrypt"
 )
 
 var (
@@ -162,6 +165,29 @@ func copyOrRenderTemplates(srcDir, dstDir string, spec *models.StackSpec, stackk
 	return renderer.Render(renderCtx)
 }
 
+// generateRandomPassword generates a cryptographically random alphanumeric password.
+func generateRandomPassword(length int) (string, error) {
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	b := make([]byte, length)
+	for i := range b {
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+		if err != nil {
+			return "", fmt.Errorf("generate random password: %w", err)
+		}
+		b[i] = charset[n.Int64()]
+	}
+	return string(b), nil
+}
+
+// bcryptHash returns a bcrypt hash of the given password.
+func bcryptHash(password string) (string, error) {
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return "", fmt.Errorf("bcrypt hash: %w", err)
+	}
+	return string(hash), nil
+}
+
 // generateTfvarsJSON generates terraform.tfvars.json matching the template variables.
 // Service enablement is module-based: all base-kit services are enabled by default.
 // Per-service overrides can be applied via spec.Services[name]["enabled"].
@@ -190,12 +216,35 @@ func generateTfvarsJSON(spec *models.StackSpec) []byte {
 	vars["enable_pocketid"] = true
 	vars["enable_dokploy"] = true
 	vars["enable_dokploy_apps"] = true
-	vars["enable_dashboard"] = false
+	vars["enable_dashboard"] = true
+
+	// Admin email (fallback to "admin" for backwards compatibility)
+	adminEmail := spec.AdminEmail
+	if adminEmail == "" {
+		adminEmail = "admin"
+	}
+	vars["admin_email"] = adminEmail
+
+	// Generate random password and bcrypt hash for TinyAuth
+	adminPassword, err := generateRandomPassword(16)
+	if err != nil {
+		// Fallback to a known default if crypto/rand fails (should never happen)
+		adminPassword = "admin123"
+	}
+	vars["admin_password_plaintext"] = adminPassword
+
+	hash, err := bcryptHash(adminPassword)
+	if err != nil {
+		// Fallback to the old hardcoded hash
+		hash = "$2y$10$2aSDNcypqNOcOSOXkmQlSO0MBxZcUeRRtsU/gDZBIwWws.Oly8AYC"
+		adminPassword = "admin123"
+		vars["admin_password_plaintext"] = adminPassword
+	}
 
 	// TinyAuth configuration
 	domain := vars["domain"].(string)
 	vars["tinyauth_app_url"] = fmt.Sprintf("http://auth.%s", domain)
-	vars["tinyauth_users"] = "admin:$2y$10$2aSDNcypqNOcOSOXkmQlSO0MBxZcUeRRtsU/gDZBIwWws.Oly8AYC"
+	vars["tinyauth_users"] = fmt.Sprintf("%s:%s", adminEmail, hash)
 
 	// Dashboard
 	vars["brand_color"] = "#F97316"

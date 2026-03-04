@@ -225,36 +225,55 @@ func ensurePrerequisites(ctx context.Context) error {
 	// Check Docker
 	dockerClient := docker.NewClient()
 	if !dockerClient.IsInstalled() {
-		printWarning("Docker is not installed")
-		fmt.Print("Install Docker now? [Y/n] ")
-		var answer string
-		_, _ = fmt.Scanln(&answer)
-		if answer != "" && answer[0] == 'n' || answer[0] == 'N' {
-			return fmt.Errorf("Docker is required. Install it manually or run 'stackkit prepare'")
+		if applyAutoApprove {
+			printInfo("Docker is not installed, installing...")
+		} else {
+			printWarning("Docker is not installed")
+			fmt.Print("Install Docker now? [Y/n] ")
+			var answer string
+			_, _ = fmt.Scanln(&answer)
+			if len(answer) > 0 && (answer[0] == 'n' || answer[0] == 'N') {
+				return fmt.Errorf("Docker is required. Install it manually or run 'stackkit prepare'")
+			}
+			printInfo("Installing Docker...")
 		}
-		printInfo("Installing Docker...")
 		if err := installDockerLocal(ctx); err != nil {
 			return fmt.Errorf("failed to install Docker: %w", err)
 		}
 		printSuccess("Docker installed")
-	} else if !dockerClient.IsRunning(ctx) {
-		printWarning("Docker daemon is not running")
-		return fmt.Errorf("start Docker before applying. On Linux: systemctl start docker")
+	}
+
+	// Ensure Docker daemon is running (start it if needed)
+	if !dockerClient.IsRunning(ctx) {
+		printInfo("Docker daemon is not running, starting...")
+		if err := startDockerDaemon(ctx); err != nil {
+			return fmt.Errorf("failed to start Docker daemon: %w", err)
+		}
+		printSuccess("Docker daemon started")
 	}
 
 	// Check OpenTofu
 	tofuExec := tofu.NewExecutor()
 	if !tofuExec.IsInstalled() {
-		printWarning("OpenTofu is not installed")
-		fmt.Print("Install OpenTofu now? [Y/n] ")
-		var answer string
-		_, _ = fmt.Scanln(&answer)
-		if answer != "" && answer[0] == 'n' || answer[0] == 'N' {
-			return fmt.Errorf("OpenTofu is required. Install it manually or run 'stackkit prepare'")
+		if applyAutoApprove {
+			printInfo("OpenTofu is not installed, installing...")
+		} else {
+			printWarning("OpenTofu is not installed")
+			fmt.Print("Install OpenTofu now? [Y/n] ")
+			var answer string
+			_, _ = fmt.Scanln(&answer)
+			if len(answer) > 0 && (answer[0] == 'n' || answer[0] == 'N') {
+				return fmt.Errorf("OpenTofu is required. Install it manually or run 'stackkit prepare'")
+			}
+			printInfo("Installing OpenTofu...")
 		}
-		printInfo("Installing OpenTofu...")
 		if err := installTofuLocal(ctx); err != nil {
 			return fmt.Errorf("failed to install OpenTofu: %w", err)
+		}
+		// Verify installation
+		tofuExec = tofu.NewExecutor()
+		if !tofuExec.IsInstalled() {
+			return fmt.Errorf("OpenTofu installation completed but binary not found in PATH")
 		}
 		printSuccess("OpenTofu installed")
 	}

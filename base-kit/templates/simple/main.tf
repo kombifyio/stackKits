@@ -121,6 +121,19 @@ variable "enable_dashboard" {
   default     = true
 }
 
+variable "admin_email" {
+  type        = string
+  description = "Admin email for login accounts (TinyAuth, Dokploy, Kuma)"
+  default     = "admin"
+}
+
+variable "admin_password_plaintext" {
+  type        = string
+  description = "Auto-generated admin password (used by init containers)"
+  default     = "admin123"
+  sensitive   = true
+}
+
 # =============================================================================
 # LOCALS
 # =============================================================================
@@ -242,6 +255,18 @@ locals {
               <p class="cdesc">Service uptime monitoring and status pages for all homelab services.</p>
               <div class="curl">kuma.${var.domain}</div>
             </a>
+          </div>
+        </section>
+        <section class="section">
+          <div class="slabel">Getting Started</div>
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:24px 28px;">
+            <ol style="margin:0;padding-left:20px;font-size:13px;color:var(--dim);line-height:2.2;">
+              <li>Login to <a href="http://auth.${var.domain}" style="color:var(--brand);text-decoration:none;">TinyAuth</a> with your admin email + generated password</li>
+              <li>Register a passkey at <a href="http://id.${var.domain}/login/setup" style="color:var(--brand);text-decoration:none;font-family:monospace;">id.${var.domain}/login/setup</a> for passwordless login</li>
+              <li>Access <a href="http://dokploy.${var.domain}" style="color:var(--brand);text-decoration:none;">Dokploy</a> to deploy and manage applications (protected by TinyAuth)</li>
+              <li>Check <a href="http://kuma.${var.domain}" style="color:var(--brand);text-decoration:none;">Uptime Kuma</a> for service monitoring</li>
+              <li>Change your auto-generated password in TinyAuth settings</li>
+            </ol>
           </div>
         </section>
       </main>
@@ -573,7 +598,6 @@ resource "docker_container" "tinyauth" {
   env = [
     "TZ=Europe/Berlin",
     "APP_URL=${var.tinyauth_app_url}",
-    # Default: admin / admin123
     "USERS=${var.tinyauth_users}",
   ]
 
@@ -957,6 +981,62 @@ resource "docker_container" "dokploy" {
 }
 
 # =============================================================================
+# LAYER 2: PLATFORM - DOKPLOY ADMIN INIT
+# =============================================================================
+# One-shot container that creates the Dokploy admin user via its tRPC API.
+# Runs once after Dokploy starts, waits for health, then calls createAdmin.
+
+resource "docker_image" "curl" {
+  count = var.enable_dokploy ? 1 : 0
+  name  = "curlimages/curl:latest"
+}
+
+resource "docker_container" "init_dokploy" {
+  count = var.enable_dokploy ? 1 : 0
+  name  = "init-dokploy"
+  image = docker_image.curl[0].image_id
+
+  restart = "no"
+  rm      = true
+
+  networks_advanced {
+    name = docker_network.base_net.name
+  }
+
+  command = [
+    "sh", "-c",
+    <<-EOT
+      echo "Waiting for Dokploy to be ready..."
+      for i in $(seq 1 60); do
+        if curl -sf http://dokploy:3000/api/settings >/dev/null 2>&1; then
+          echo "Dokploy is ready"
+          break
+        fi
+        sleep 2
+      done
+      echo "Creating admin user..."
+      curl -sf -X POST \
+        -H "Content-Type: application/json" \
+        -d '{"0":{"json":{"email":"${var.admin_email}","password":"${var.admin_password_plaintext}"}}}' \
+        "http://dokploy:3000/api/trpc/auth.createAdmin?batch=1" && \
+      echo "Dokploy admin created" || echo "Dokploy admin creation skipped (may already exist)"
+    EOT
+  ]
+
+  labels {
+    label = "stackkit.layer"
+    value = "2-platform"
+  }
+
+  labels {
+    label = "stackkit.service"
+    value = "init-dokploy"
+  }
+
+  depends_on = [docker_container.dokploy]
+}
+
+# =============================================================================
 # LAYER 2: LINKS DASHBOARD
 # =============================================================================
 
@@ -1070,7 +1150,7 @@ resource "local_file" "kuma_compose" {
         restart: "no"
         environment:
           KUMA_URL: "http://uptime-kuma:3001"
-          KUMA_USER: "admin"
+          KUMA_USER: "${var.admin_email}"
           KUMA_PASS: "${var.enable_dokploy_apps ? random_password.kuma_admin[0].result : "admin"}"
           DOMAIN: "${var.domain}"
         command:
@@ -1257,9 +1337,15 @@ output "whoami_url" {
 }
 
 output "credentials" {
-  description = "Default credentials"
-  value       = var.enable_tinyauth ? "TinyAuth: admin / admin123" : null
+  description = "Admin credentials"
+  value       = var.enable_tinyauth ? "TinyAuth: ${var.admin_email} / <see admin_password output>" : null
   sensitive   = false
+}
+
+output "admin_password" {
+  description = "Auto-generated admin password"
+  value       = var.admin_password_plaintext
+  sensitive   = true
 }
 
 output "tinyauth_login_url" {
@@ -1287,7 +1373,7 @@ output "architecture_summary" {
     ║                                                                   ║
     ║    ${var.enable_tinyauth ? "✓" : "✗"} TinyAuth    → http://${local.domains.auth}           ║
     ║        Purpose: ForwardAuth proxy (backed by Pocket ID)          ║
-    ║        Credentials: admin / admin123                             ║
+    ║        Credentials: ${var.admin_email} / <auto-generated>        ║
     ║                                                                   ║
     ║  LAYER 2 (Platform) - Managed by OpenTofu:                        ║
     ║    ${var.enable_traefik ? "✓" : "✗"} Traefik     → http://${local.domains.traefik}        ║
@@ -1316,9 +1402,12 @@ output "architecture_summary" {
     ║                                                                   ║
     ║  Step 1: Login to TinyAuth                                        ║
     ║    URL: http://${local.domains.auth}                             ║
-    ║    Username: admin                                                ║
-    ║    Password: admin123                                             ║
-    ║    CHANGE PASSWORD IMMEDIATELY AFTER FIRST LOGIN                  ║
+    ║    Email: ${var.admin_email}                                     ║
+    ║    Password: <auto-generated, see terraform output>              ║
+    ║                                                                   ║
+    ║  Step 1b: Register passkey at Pocket ID                           ║
+    ║    URL: http://${local.domains.pocketid}/login/setup              ║
+    ║    Enables passwordless login via WebAuthn                        ║
     ║                                                                   ║
     ║  Step 2: Access Dokploy (via TinyAuth SSO)                        ║
     ║    URL: http://${local.domains.dokploy}                          ║

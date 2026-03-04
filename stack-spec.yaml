@@ -2,7 +2,6 @@ name: workspace
 stackkit: base-kit
 variant: default
 mode: simple
-domain: stack.local
 network:
     mode: local
     subnet: 172.20.0.0/16

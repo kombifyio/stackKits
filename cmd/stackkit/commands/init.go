@@ -18,6 +18,7 @@ var (
 	initOutputDir      string
 	initForce          bool
 	initNonInteractive bool
+	initAdminEmail     string
 )
 
 var initCmd = &cobra.Command{
@@ -48,6 +49,7 @@ func init() {
 	initCmd.Flags().StringVarP(&initOutputDir, "output", "o", "deploy", "Output directory for generated files")
 	initCmd.Flags().BoolVarP(&initForce, "force", "f", false, "Overwrite existing files")
 	initCmd.Flags().BoolVar(&initNonInteractive, "non-interactive", false, "Run in non-interactive mode (fail if input is required)")
+	initCmd.Flags().StringVar(&initAdminEmail, "admin-email", "", "Admin email for login accounts (TinyAuth, Dokploy, Kuma)")
 }
 
 // selectStackKit prompts the user to pick a StackKit or returns the one
@@ -169,26 +171,38 @@ func selectComputeTier(p *prompter, stackkit *models.StackKit) (string, error) {
 	return initComputeTier, nil
 }
 
-// promptOptionalConfig asks for domain and email when running interactively.
-func promptOptionalConfig(p *prompter) (domain string, email string) {
+// promptOptionalConfig asks for domain, email, and admin email when running interactively.
+func promptOptionalConfig(p *prompter) (domain, email, adminEmail string) {
 	if p == nil || initNonInteractive {
-		return "", ""
+		return "", "", initAdminEmail
 	}
 
 	fmt.Println()
 	printInfo("Optional configuration (press Enter to skip):")
 	fmt.Println()
 
+	// Admin email first — other defaults can derive from it
+	if initAdminEmail != "" {
+		adminEmail = initAdminEmail
+	} else {
+		a, err := p.inputString("Admin email (for login accounts)", "")
+		if err == nil {
+			adminEmail = a
+		}
+	}
+
 	d, err := p.inputString("Domain (e.g. home.example.com)", "")
 	if err == nil {
 		domain = d
 	}
 
-	e, err := p.inputString("Email (for Let's Encrypt certificates)", "")
+	// Let's Encrypt email defaults to admin email
+	defaultEmail := adminEmail
+	e, err := p.inputString("Email (for Let's Encrypt certificates)", defaultEmail)
 	if err == nil {
 		email = e
 	}
-	return domain, email
+	return domain, email, adminEmail
 }
 
 // applyNonInteractiveDefaults fills in missing flag values when running
@@ -316,7 +330,7 @@ func resolveStackKitName(args []string, availableKits []*models.StackKit, wd str
 }
 
 // gatherInitChoices prompts (or defaults) all user choices for the init wizard.
-func gatherInitChoices(p *prompter, stackkit *models.StackKit) (variant, mode, computeTier, domain, email string, err error) {
+func gatherInitChoices(p *prompter, stackkit *models.StackKit) (variant, mode, computeTier, domain, email, adminEmail string, err error) {
 	variant, err = selectVariant(p, stackkit)
 	if err != nil {
 		return
@@ -332,7 +346,7 @@ func gatherInitChoices(p *prompter, stackkit *models.StackKit) (variant, mode, c
 		return
 	}
 
-	domain, email = promptOptionalConfig(p)
+	domain, email, adminEmail = promptOptionalConfig(p)
 	return
 }
 
@@ -358,7 +372,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 	printSuccess("Found StackKit: %s v%s", stackkit.Metadata.Name, stackkit.Metadata.Version)
 
-	variant, mode, computeTier, domain, email, err := gatherInitChoices(p, stackkit)
+	variant, mode, computeTier, domain, email, adminEmail, err := gatherInitChoices(p, stackkit)
 	if err != nil {
 		return err
 	}
@@ -369,12 +383,13 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	spec := &models.StackSpec{
-		Name:     filepath.Base(wd),
-		StackKit: stackkitName,
-		Variant:  variant,
-		Mode:     mode,
-		Domain:   domain,
-		Email:    email,
+		Name:       filepath.Base(wd),
+		StackKit:   stackkitName,
+		Variant:    variant,
+		Mode:       mode,
+		Domain:     domain,
+		Email:      email,
+		AdminEmail: adminEmail,
 		Network: models.NetworkSpec{
 			Mode:   "local",
 			Subnet: "172.20.0.0/16",

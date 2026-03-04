@@ -81,6 +81,7 @@ type StackSpec struct {
 	Context     string            `yaml:"context,omitempty" json:"context,omitempty"`
 	Domain      string            `yaml:"domain,omitempty" json:"domain,omitempty"`
 	Email       string            `yaml:"email,omitempty" json:"email,omitempty"`
+	AdminEmail  string            `yaml:"adminEmail,omitempty" json:"adminEmail,omitempty"`
 	Network     NetworkSpec       `yaml:"network,omitempty" json:"network,omitempty"`
 	Compute     ComputeSpec       `yaml:"compute,omitempty" json:"compute,omitempty"`
 	SSH         SSHSpec           `yaml:"ssh,omitempty" json:"ssh,omitempty"`

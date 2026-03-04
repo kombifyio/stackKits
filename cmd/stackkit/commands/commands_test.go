@@ -2,12 +2,16 @@ package commands
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/kombihq/stackkits/pkg/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // executeCommand runs the root command with the given args and captures
@@ -196,4 +200,90 @@ func TestStatusCommand_NoSpecFile(t *testing.T) {
 	_, err := executeCommand("status", "--spec", filepath.Join(tmpDir, "nonexistent.yaml"), "--chdir", tmpDir)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to load spec")
+}
+
+func TestGenerateRandomPassword(t *testing.T) {
+	pw, err := generateRandomPassword(16)
+	require.NoError(t, err)
+	assert.Len(t, pw, 16)
+
+	// Should be alphanumeric only
+	for _, c := range pw {
+		assert.True(t, (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9'),
+			"unexpected character %q in password", c)
+	}
+
+	// Two passwords should differ (probabilistic but virtually certain for 16 chars)
+	pw2, err := generateRandomPassword(16)
+	require.NoError(t, err)
+	assert.NotEqual(t, pw, pw2)
+}
+
+func TestBcryptHash(t *testing.T) {
+	password := "testpassword123"
+	hash, err := bcryptHash(password)
+	require.NoError(t, err)
+	assert.True(t, strings.HasPrefix(hash, "$2a$"), "hash should be bcrypt format")
+
+	// Verify the hash matches the password
+	err = bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
+	assert.NoError(t, err)
+
+	// Wrong password should not match
+	err = bcrypt.CompareHashAndPassword([]byte(hash), []byte("wrong"))
+	assert.Error(t, err)
+}
+
+func TestGenerateTfvarsJSON_AdminEmail(t *testing.T) {
+	spec := &models.StackSpec{
+		Name:       "test-homelab",
+		AdminEmail: "test@example.com",
+		Domain:     "home.example.com",
+	}
+
+	data := generateTfvarsJSON(spec)
+
+	var vars map[string]interface{}
+	err := json.Unmarshal(data, &vars)
+	require.NoError(t, err)
+
+	assert.Equal(t, "test@example.com", vars["admin_email"])
+	assert.Equal(t, true, vars["enable_dashboard"])
+
+	// tinyauth_users should be email:bcrypt_hash
+	users, ok := vars["tinyauth_users"].(string)
+	require.True(t, ok)
+	assert.True(t, strings.HasPrefix(users, "test@example.com:$2a$"),
+		"tinyauth_users should be email:bcrypt, got: %s", users)
+
+	// admin_password_plaintext should be present and 16 chars
+	pw, ok := vars["admin_password_plaintext"].(string)
+	require.True(t, ok)
+	assert.Len(t, pw, 16)
+}
+
+func TestGenerateTfvarsJSON_FallbackAdmin(t *testing.T) {
+	spec := &models.StackSpec{
+		Name: "test-homelab",
+	}
+
+	data := generateTfvarsJSON(spec)
+
+	var vars map[string]interface{}
+	err := json.Unmarshal(data, &vars)
+	require.NoError(t, err)
+
+	// Without adminEmail, should fall back to "admin"
+	assert.Equal(t, "admin", vars["admin_email"])
+
+	users, ok := vars["tinyauth_users"].(string)
+	require.True(t, ok)
+	assert.True(t, strings.HasPrefix(users, "admin:$2a$"),
+		"tinyauth_users should use 'admin' fallback, got: %s", users)
+}
+
+func TestInitCommand_AdminEmailFlag(t *testing.T) {
+	f := initCmd.Flags().Lookup("admin-email")
+	require.NotNil(t, f, "--admin-email flag should exist")
+	assert.Equal(t, "", f.DefValue)
 }
