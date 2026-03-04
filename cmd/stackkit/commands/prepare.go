@@ -343,40 +343,60 @@ func startDockerDaemon(ctx context.Context) error {
 		isSystemd = true
 	}
 
-	// Clean up stale state from failed previous starts
+	// Phase 1: Clean up stale state
 	os.Remove("/var/run/docker.pid") //nolint:errcheck
 
-	// Pre-flight: ensure iptables works (common VPS issue with nf_tables)
-	fixIptablesIfNeeded()
+	// Phase 2: Load required kernel modules
+	loadDockerKernelModules()
 
+	// Phase 3: Detect iptables capability and fix if possible
+	iptablesAvailable := ensureIptables()
+
+	// Phase 4: Write adaptive daemon.json based on system capabilities
+	ensureDaemonConfig(iptablesAvailable)
+
+	// Phase 5: Ensure containerd is ready (Docker depends on it)
+	ensureContainerd(isSystemd)
+
+	// Phase 6: Enable Docker service
 	if isSystemd {
-		exec.Command("systemctl", "enable", "containerd").Run()    //nolint:errcheck
-		exec.Command("systemctl", "start", "containerd").Run()     //nolint:errcheck
 		exec.Command("systemctl", "enable", "docker").Run()        //nolint:errcheck
 		exec.Command("systemctl", "enable", "docker.socket").Run() //nolint:errcheck
-	} else {
-		exec.Command("service", "containerd", "start").Run() //nolint:errcheck
 	}
 
-	// Try starting Docker — if it fails, attempt auto-fix and retry
+	// Phase 7: Start Docker
 	if err := tryStartDocker(ctx, isSystemd); err == nil {
 		return nil
 	}
 
-	// Check Docker logs for known fixable issues
+	// Phase 8: First start failed — read logs, attempt targeted fix, retry
 	logOutput := getDockerLogs(isSystemd)
-	if strings.Contains(logOutput, "iptables") && strings.Contains(logOutput, "Permission denied") {
-		printWarning("nf_tables iptables backend failed — switching to iptables-legacy...")
-		if switchToIptablesLegacy() {
-			printSuccess("Switched to iptables-legacy")
-			// Retry Docker start
-			if err := tryStartDocker(ctx, isSystemd); err == nil {
-				return nil
-			}
+
+	// Auto-fix: iptables failure in Docker logs (may not have been caught in pre-flight)
+	if strings.Contains(logOutput, "iptables") || strings.Contains(logOutput, "NAT chain") {
+		printWarning("Docker failed due to iptables — reconfiguring with iptables disabled...")
+		writeDaemonJSON(false)
+		stopDocker(isSystemd)
+		if err := tryStartDocker(ctx, isSystemd); err == nil {
+			printSuccess("Docker started with iptables disabled")
+			return nil
 		}
+		logOutput = getDockerLogs(isSystemd)
 	}
 
-	// Still not working — show diagnostics
+	// Auto-fix: storage driver issues
+	if strings.Contains(logOutput, "graphdriver") || strings.Contains(logOutput, "overlay2") {
+		printWarning("Docker storage driver issue — cleaning up and retrying...")
+		stopDocker(isSystemd)
+		os.RemoveAll("/var/lib/docker/overlay2") //nolint:errcheck
+		os.RemoveAll("/var/lib/docker/network")  //nolint:errcheck
+		if err := tryStartDocker(ctx, isSystemd); err == nil {
+			return nil
+		}
+		logOutput = getDockerLogs(isSystemd)
+	}
+
+	// All auto-fixes exhausted — report clearly
 	printWarning("Docker failed to start — diagnostics:")
 	fmt.Println(logOutput)
 	if _, err := os.Stat("/var/run/docker.sock"); os.IsNotExist(err) {
@@ -385,49 +405,52 @@ func startDockerDaemon(ctx context.Context) error {
 	return fmt.Errorf("Docker daemon failed to start — see diagnostics above")
 }
 
-// tryStartDocker starts the Docker service and waits up to 15s for it to respond.
-func tryStartDocker(ctx context.Context, isSystemd bool) error {
-	os.Remove("/var/run/docker.pid") //nolint:errcheck
-
-	if isSystemd {
-		cmd := exec.Command("systemctl", "start", "docker")
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			return err
-		}
-	} else {
-		cmd := exec.Command("service", "docker", "start")
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			return err
-		}
+// loadDockerKernelModules loads kernel modules required by Docker networking and storage.
+func loadDockerKernelModules() {
+	modules := []string{
+		"ip_tables",     // base iptables
+		"iptable_nat",   // NAT table (port mapping)
+		"iptable_filter", // filter table
+		"nf_nat",        // netfilter NAT core
+		"br_netfilter",  // bridge netfilter (container traffic)
+		"overlay",       // overlay2 storage driver
+		"bridge",        // bridge networking
+	}
+	for _, mod := range modules {
+		exec.Command("modprobe", mod).Run() //nolint:errcheck
 	}
 
-	dockerClient := docker.NewClient()
-	for i := 0; i < 15; i++ {
-		if dockerClient.IsRunning(ctx) {
-			return nil
-		}
-		time.Sleep(1 * time.Second)
-	}
-	return fmt.Errorf("timeout")
+	// Enable IPv4 forwarding (required for container networking)
+	os.WriteFile("/proc/sys/net/ipv4/ip_forward", []byte("1"), 0644) //nolint:errcheck
 }
 
-// fixIptablesIfNeeded checks if nf_tables iptables is broken and switches to legacy.
-func fixIptablesIfNeeded() {
-	// Test if iptables works at all
-	testCmd := exec.Command("iptables", "--wait", "-t", "nat", "-L", "-n")
-	if output, err := testCmd.CombinedOutput(); err != nil {
-		if strings.Contains(string(output), "Permission denied") ||
-			strings.Contains(string(output), "nf_tables") {
-			printWarning("iptables nf_tables backend broken — switching to legacy...")
-			if switchToIptablesLegacy() {
-				printSuccess("Switched to iptables-legacy")
-			}
-		}
+// ensureIptables tests iptables NAT support, switching backends if needed.
+// Returns true if iptables NAT works, false if Docker must run without it.
+func ensureIptables() bool {
+	// Test 1: Does iptables NAT work with the current backend?
+	if testIptablesNAT() {
+		return true
 	}
+
+	// Test 2: Try switching to iptables-legacy
+	printWarning("iptables NAT failed — trying iptables-legacy...")
+	if switchToIptablesLegacy() {
+		if testIptablesNAT() {
+			printSuccess("iptables-legacy works")
+			return true
+		}
+		printWarning("iptables-legacy also failed")
+	}
+
+	// Test 3: iptables is completely broken on this system
+	printWarning("iptables NAT unavailable — Docker will run without iptables management")
+	return false
+}
+
+// testIptablesNAT checks if iptables can access the NAT table.
+func testIptablesNAT() bool {
+	cmd := exec.Command("iptables", "--wait", "-t", "nat", "-L", "-n")
+	return cmd.Run() == nil
 }
 
 // switchToIptablesLegacy switches iptables from nf_tables to legacy backend.
@@ -448,16 +471,123 @@ func switchToIptablesLegacy() bool {
 	return success
 }
 
+// ensureDaemonConfig writes /etc/docker/daemon.json adapted to system capabilities.
+func ensureDaemonConfig(iptablesAvailable bool) {
+	// Don't overwrite if user has a custom config
+	if _, err := os.Stat("/etc/docker/daemon.json"); err == nil {
+		existing, readErr := os.ReadFile("/etc/docker/daemon.json")
+		if readErr == nil && len(existing) > 5 {
+			// User has a custom config — respect it
+			return
+		}
+	}
+	writeDaemonJSON(iptablesAvailable)
+}
+
+// writeDaemonJSON writes an adaptive daemon.json based on system capabilities.
+func writeDaemonJSON(iptablesAvailable bool) {
+	os.MkdirAll("/etc/docker", 0755) //nolint:errcheck
+
+	iptablesStr := "true"
+	if !iptablesAvailable {
+		iptablesStr = "false"
+	}
+
+	// Detect DNS: systemd-resolved uses 127.0.0.53 which doesn't work in containers
+	dnsLine := ""
+	if resolv, err := os.ReadFile("/etc/resolv.conf"); err == nil {
+		if strings.Contains(string(resolv), "127.0.0.53") {
+			dnsLine = `"dns": ["1.1.1.1", "8.8.8.8"],`
+		}
+	}
+
+	config := fmt.Sprintf(`{
+  "storage-driver": "overlay2",
+  "iptables": %s,
+  "live-restore": true,
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "10m",
+    "max-file": "3"
+  },
+  %s
+  "max-concurrent-downloads": 3
+}`, iptablesStr, dnsLine)
+
+	os.WriteFile("/etc/docker/daemon.json", []byte(config), 0644) //nolint:errcheck
+	printInfo("Configured /etc/docker/daemon.json (iptables=%s)", iptablesStr)
+}
+
+// ensureContainerd starts containerd and waits for its socket to be ready.
+func ensureContainerd(isSystemd bool) {
+	if isSystemd {
+		exec.Command("systemctl", "enable", "containerd").Run() //nolint:errcheck
+		exec.Command("systemctl", "start", "containerd").Run()  //nolint:errcheck
+	} else {
+		exec.Command("service", "containerd", "start").Run() //nolint:errcheck
+	}
+
+	// Wait for containerd socket (up to 10s)
+	for i := 0; i < 10; i++ {
+		if _, err := os.Stat("/run/containerd/containerd.sock"); err == nil {
+			return
+		}
+		time.Sleep(1 * time.Second)
+	}
+}
+
+// tryStartDocker starts the Docker service and waits up to 30s for it to respond.
+func tryStartDocker(ctx context.Context, isSystemd bool) error {
+	os.Remove("/var/run/docker.pid") //nolint:errcheck
+
+	if isSystemd {
+		cmd := exec.Command("systemctl", "start", "docker")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			return err
+		}
+	} else {
+		cmd := exec.Command("service", "docker", "start")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			return err
+		}
+	}
+
+	dockerClient := docker.NewClient()
+	for i := 0; i < 30; i++ {
+		if dockerClient.IsRunning(ctx) {
+			return nil
+		}
+		time.Sleep(1 * time.Second)
+	}
+	return fmt.Errorf("timeout waiting for Docker daemon (30s)")
+}
+
+// stopDocker stops the Docker daemon for a clean restart.
+func stopDocker(isSystemd bool) {
+	if isSystemd {
+		exec.Command("systemctl", "stop", "docker").Run()        //nolint:errcheck
+		exec.Command("systemctl", "stop", "docker.socket").Run() //nolint:errcheck
+	} else {
+		exec.Command("service", "docker", "stop").Run() //nolint:errcheck
+	}
+	os.Remove("/var/run/docker.pid") //nolint:errcheck
+	time.Sleep(2 * time.Second)
+}
+
 // getDockerLogs returns recent Docker daemon log output.
 func getDockerLogs(isSystemd bool) string {
 	if isSystemd {
-		cmd := exec.Command("journalctl", "-u", "docker", "--no-pager", "-n", "20")
+		cmd := exec.Command("journalctl", "-u", "docker", "--no-pager", "-n", "30")
 		output, _ := cmd.CombinedOutput()
 		return string(output)
 	}
 	for _, logFile := range []string{"/var/log/docker.log", "/var/log/syslog"} {
 		if _, err := os.Stat(logFile); err == nil {
-			cmd := exec.Command("tail", "-20", logFile)
+			cmd := exec.Command("tail", "-30", logFile)
 			output, _ := cmd.CombinedOutput()
 			return string(output)
 		}
