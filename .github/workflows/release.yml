@@ -31,9 +31,85 @@ jobs:
       - name: Run tests
         run: go test ./...
 
+  validate-archive:
+    name: Validate release archive
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Build dry-run archive
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --snapshot --clean
+
+      - name: Verify archive contents
+        run: |
+          set -euo pipefail
+          echo "=== Checking archive contents ==="
+
+          # Find the linux amd64 archive
+          ARCHIVE=$(find dist/ -name '*linux_amd64.tar.gz' | head -1)
+          if [ -z "$ARCHIVE" ]; then
+            echo "FAIL: No linux_amd64 archive found in dist/"
+            ls -la dist/
+            exit 1
+          fi
+
+          echo "Archive: $ARCHIVE"
+          tar tzf "$ARCHIVE" | sort > /tmp/archive-files.txt
+          cat /tmp/archive-files.txt
+
+          # Required files that MUST be in every release
+          REQUIRED_FILES=(
+            "stackkit"
+            "base-kit/stackkit.yaml"
+            "base-kit/services.cue"
+            "base-kit/defaults.cue"
+            "base-kit/stackfile.cue"
+            "base-kit/default-spec.yaml"
+            "base-kit/templates/simple/main.tf"
+            "base/stackkit.cue"
+            "base/layers.cue"
+            "base/identity.cue"
+            "base/network.cue"
+            "base/security.cue"
+            "README.md"
+            "LICENSE"
+          )
+
+          MISSING=0
+          for f in "${REQUIRED_FILES[@]}"; do
+            if ! grep -q "^${f}$" /tmp/archive-files.txt; then
+              echo "FAIL: Missing required file: $f"
+              MISSING=$((MISSING + 1))
+            fi
+          done
+
+          if [ "$MISSING" -gt 0 ]; then
+            echo ""
+            echo "FAIL: $MISSING required files missing from archive!"
+            echo "Update .goreleaser.yaml 'files:' section to include them."
+            exit 1
+          fi
+
+          echo ""
+          echo "OK: All required files present in archive."
+
   release:
     name: Release
-    needs: test
+    needs: [test, validate-archive]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
