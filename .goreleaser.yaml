@@ -50,7 +50,7 @@ nfpms:
   - id: deb
     package_name: kombify-stackkits
     vendor: kombify
-    homepage: https://github.com/kombifyio/stackKits
+    homepage: https://github.com/KombiverseLabs/kombify-StackKits
     maintainer: kombify <admin@kombify.io>
     description: "kombify StackKits CLI — infrastructure deployment from declarative blueprints"
     license: "Apache-2.0 AND GPL-3.0"
@@ -93,8 +93,8 @@ changelog:
 
 release:
   github:
-    owner: kombifyio
-    name: stackKits
+    owner: KombiverseLabs
+    name: kombify-StackKits
   draft: false
   prerelease: auto
   name_template: "v{{ .Version }}"
@@ -105,13 +105,7 @@ release:
 
     **Linux/macOS:**
     ```bash
-    curl -sSL install.kombify.me | sh
-    ```
-
-    **APT (Debian/Ubuntu):**
-    ```bash
-    curl -sSL apt.kombify.io/setup.sh | sudo sh
-    sudo apt install kombify-stackkits
+    curl -sSL base.stackkit.cc | sh
     ```
 
     **Go:**
@@ -121,4 +115,4 @@ release:
 
     Or download the archive for your platform below.
   footer: |
-    **Full Changelog**: https://github.com/kombifyio/stackKits/compare/{{ .PreviousTag }}...{{ .Tag }}
+    **Full Changelog**: https://github.com/KombiverseLabs/kombify-StackKits/compare/{{ .PreviousTag }}...{{ .Tag }}
