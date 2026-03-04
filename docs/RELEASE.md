@@ -7,7 +7,7 @@
 | `KombiverseLabs/kombify-StackKits` | **Private** | Development — all source, CI, dev tools, internal docs |
 | `kombifyio/stackKits` | **Public** | Curated user-facing repo — kits, docs, installer, releases |
 
-The Go module path is `github.com/kombihq/stackkits` (separate from either GitHub org).
+The Go module path is `github.com/kombihq/stackkits` (legacy, not a real repo — used only as a Go module identifier).
 
 ## How Releases Work
 

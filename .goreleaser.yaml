@@ -139,11 +139,6 @@ release:
     curl -sSL install.kombify.me | sh
     ```
 
-    **Go:**
-    ```bash
-    go install github.com/kombihq/stackkits/cmd/stackkit@v{{ .Version }}
-    ```
-
     ### Downloads
 
     | Archive | Contents |
