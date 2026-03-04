@@ -355,71 +355,74 @@ func startDockerDaemon(ctx context.Context) error {
 	// Phase 4: Detect best storage driver
 	storageDriver := detectStorageDriver()
 
-	// Phase 5: Write adaptive daemon.json based on system capabilities
-	ensureDaemonConfig(iptablesAvailable, storageDriver)
+	// Phase 5: Detect bridge network capability
+	bridgeAvailable := detectBridgeSupport()
 
-	// Phase 6: Ensure containerd is ready (Docker depends on it)
+	// Phase 6: Write adaptive daemon.json based on system capabilities
+	ensureDaemonConfig(iptablesAvailable, storageDriver, bridgeAvailable)
+
+	// Phase 7: Ensure containerd is ready (Docker depends on it)
 	ensureContainerd(isSystemd)
 
-	// Phase 7: Enable Docker service
+	// Phase 8: Enable Docker service
 	if isSystemd {
 		exec.Command("systemctl", "enable", "docker").Run()        //nolint:errcheck
 		exec.Command("systemctl", "enable", "docker.socket").Run() //nolint:errcheck
 	}
 
-	// Phase 8: Start Docker
+	// Phase 9: Start Docker
 	if err := tryStartDocker(ctx, isSystemd); err == nil {
 		return nil
 	}
 
-	// Phase 9: First start failed — read logs, attempt targeted fixes, retry
+	// Phase 10: First start failed — read logs, attempt targeted fixes, retry
 	logOutput := getDockerLogs(isSystemd)
+	needsRestart := false
 
-	// Auto-fix: iptables failure in Docker logs (may not have been caught in pre-flight)
-	if strings.Contains(logOutput, "iptables") || strings.Contains(logOutput, "NAT chain") {
-		printWarning("Docker failed due to iptables — reconfiguring with iptables disabled...")
-		iptablesAvailable = false
-		writeDaemonJSON(false, storageDriver)
-		stopDocker(isSystemd)
-		if err := tryStartDocker(ctx, isSystemd); err == nil {
-			printSuccess("Docker started with iptables disabled")
-			return nil
+	// Auto-fix: bridge creation blocked
+	if strings.Contains(logOutput, "Failed to create bridge") ||
+		strings.Contains(logOutput, "error creating default \"bridge\" network") {
+		if bridgeAvailable {
+			printWarning("Bridge network creation failed — disabling default bridge...")
+			bridgeAvailable = false
+			needsRestart = true
 		}
-		logOutput = getDockerLogs(isSystemd)
 	}
 
-	// Auto-fix: storage driver issues — switch to fallback driver
-	if strings.Contains(logOutput, "graphdriver") || strings.Contains(logOutput, "overlay") ||
-		strings.Contains(logOutput, "driver not supported") {
-		fallbackDriver := "fuse-overlayfs"
-		if _, err := exec.LookPath("fuse-overlayfs"); err != nil {
-			fallbackDriver = "vfs"
+	// Auto-fix: iptables/ip6tables failure in Docker logs
+	if strings.Contains(logOutput, "iptables") && strings.Contains(logOutput, "Permission denied") {
+		if iptablesAvailable {
+			printWarning("Docker failed due to iptables — disabling...")
+			iptablesAvailable = false
+			needsRestart = true
 		}
-		printWarning("Storage driver %q failed — switching to %q...", storageDriver, fallbackDriver)
-		storageDriver = fallbackDriver
+	}
+
+	// Auto-fix: storage driver failure (only match actual driver init errors)
+	if strings.Contains(logOutput, "error initializing graphdriver") ||
+		strings.Contains(logOutput, "driver not supported") {
+		if storageDriver != "vfs" {
+			fallbackDriver := "fuse-overlayfs"
+			if _, err := exec.LookPath("fuse-overlayfs"); err != nil {
+				fallbackDriver = "vfs"
+			}
+			printWarning("Storage driver %q failed — switching to %q...", storageDriver, fallbackDriver)
+			storageDriver = fallbackDriver
+			os.RemoveAll("/var/lib/docker/overlay2") //nolint:errcheck
+			os.RemoveAll("/var/lib/docker/network")  //nolint:errcheck
+			needsRestart = true
+		}
+	}
+
+	// Apply fixes and retry
+	if needsRestart {
+		writeDaemonJSON(iptablesAvailable, storageDriver, bridgeAvailable)
 		stopDocker(isSystemd)
-		os.RemoveAll("/var/lib/docker/overlay2") //nolint:errcheck
-		os.RemoveAll("/var/lib/docker/network")  //nolint:errcheck
-		writeDaemonJSON(iptablesAvailable, storageDriver)
 		if err := tryStartDocker(ctx, isSystemd); err == nil {
-			printSuccess("Docker started with storage driver %q", storageDriver)
+			printSuccess("Docker started after auto-fix")
 			return nil
 		}
 		logOutput = getDockerLogs(isSystemd)
-
-		// If fuse-overlayfs also failed, try vfs as absolute last resort
-		if fallbackDriver != "vfs" {
-			printWarning("Storage driver %q also failed — trying vfs (slow but universal)...", fallbackDriver)
-			storageDriver = "vfs"
-			stopDocker(isSystemd)
-			os.RemoveAll("/var/lib/docker/fuse-overlayfs") //nolint:errcheck
-			writeDaemonJSON(iptablesAvailable, storageDriver)
-			if err := tryStartDocker(ctx, isSystemd); err == nil {
-				printSuccess("Docker started with storage driver vfs")
-				return nil
-			}
-			logOutput = getDockerLogs(isSystemd)
-		}
 	}
 
 	// All auto-fixes exhausted — report clearly
@@ -526,8 +529,20 @@ func detectStorageDriver() string {
 	return "vfs"
 }
 
+// detectBridgeSupport tests if the kernel allows creating bridge network interfaces.
+func detectBridgeSupport() bool {
+	testBridge := "sk-br-test"
+	createCmd := exec.Command("ip", "link", "add", "name", testBridge, "type", "bridge")
+	if err := createCmd.Run(); err != nil {
+		printWarning("Bridge networking not available — Docker will use host networking")
+		return false
+	}
+	exec.Command("ip", "link", "delete", testBridge).Run() //nolint:errcheck
+	return true
+}
+
 // ensureDaemonConfig writes /etc/docker/daemon.json adapted to system capabilities.
-func ensureDaemonConfig(iptablesAvailable bool, storageDriver string) {
+func ensureDaemonConfig(iptablesAvailable bool, storageDriver string, bridgeAvailable bool) {
 	// Don't overwrite if user has a custom config
 	if _, err := os.Stat("/etc/docker/daemon.json"); err == nil {
 		existing, readErr := os.ReadFile("/etc/docker/daemon.json")
@@ -536,41 +551,54 @@ func ensureDaemonConfig(iptablesAvailable bool, storageDriver string) {
 			return
 		}
 	}
-	writeDaemonJSON(iptablesAvailable, storageDriver)
+	writeDaemonJSON(iptablesAvailable, storageDriver, bridgeAvailable)
 }
 
 // writeDaemonJSON writes an adaptive daemon.json based on system capabilities.
-func writeDaemonJSON(iptablesAvailable bool, storageDriver string) {
+func writeDaemonJSON(iptablesAvailable bool, storageDriver string, bridgeAvailable bool) {
 	os.MkdirAll("/etc/docker", 0755) //nolint:errcheck
 
 	iptablesStr := "true"
+	ip6tablesStr := "true"
 	if !iptablesAvailable {
 		iptablesStr = "false"
+		ip6tablesStr = "false"
 	}
 
 	// Detect DNS: systemd-resolved uses 127.0.0.53 which doesn't work in containers
 	dnsLine := ""
 	if resolv, err := os.ReadFile("/etc/resolv.conf"); err == nil {
 		if strings.Contains(string(resolv), "127.0.0.53") {
-			dnsLine = `"dns": ["1.1.1.1", "8.8.8.8"],`
+			dnsLine = `  "dns": ["1.1.1.1", "8.8.8.8"],` + "\n"
 		}
+	}
+
+	// Bridge config: disable default bridge if kernel blocks it
+	bridgeLine := ""
+	if !bridgeAvailable {
+		bridgeLine = `  "bridge": "none",` + "\n"
 	}
 
 	config := fmt.Sprintf(`{
   "storage-driver": "%s",
   "iptables": %s,
-  "live-restore": true,
+  "ip6tables": %s,
+%s%s  "live-restore": true,
   "log-driver": "json-file",
   "log-opts": {
     "max-size": "10m",
     "max-file": "3"
   },
-  %s
   "max-concurrent-downloads": 3
-}`, storageDriver, iptablesStr, dnsLine)
+}`, storageDriver, iptablesStr, ip6tablesStr, bridgeLine, dnsLine)
 
 	os.WriteFile("/etc/docker/daemon.json", []byte(config), 0644) //nolint:errcheck
-	printInfo("Configured /etc/docker/daemon.json (storage=%s, iptables=%s)", storageDriver, iptablesStr)
+
+	details := fmt.Sprintf("storage=%s, iptables=%s", storageDriver, iptablesStr)
+	if !bridgeAvailable {
+		details += ", bridge=none"
+	}
+	printInfo("Configured /etc/docker/daemon.json (%s)", details)
 }
 
 // ensureContainerd starts containerd and waits for its socket to be ready.
