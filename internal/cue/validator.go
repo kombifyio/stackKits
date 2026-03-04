@@ -10,7 +10,7 @@ import (
 	"cuelang.org/go/cue/cuecontext"
 	"cuelang.org/go/cue/errors"
 	"cuelang.org/go/cue/load"
-	"github.com/kombihq/stackkits/pkg/models"
+	"github.com/kombifyio/stackkits/pkg/models"
 )
 
 // Validator handles CUE schema validation
@@ -240,7 +240,7 @@ func ensureCueModule(dir string) error {
 		return fmt.Errorf("create cue.mod: %w", err)
 	}
 
-	content := `module: "github.com/kombihq/stackkits"
+	content := `module: "github.com/kombifyio/stackkits"
 language: {
 	version: "v0.9.0"
 }

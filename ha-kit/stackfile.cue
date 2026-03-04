@@ -33,7 +33,7 @@ package ha_kit
 
 import (
 	"list"
-	"github.com/kombihq/stackkits/base"
+	"github.com/kombifyio/stackkits/base"
 )
 
 // =============================================================================

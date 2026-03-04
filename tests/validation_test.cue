@@ -9,9 +9,9 @@
 package tests
 
 import (
-	"github.com/kombihq/stackkits/base"
-	"github.com/kombihq/stackkits/platforms/docker"
-	base_kit "github.com/kombihq/stackkits/base-kit"
+	"github.com/kombifyio/stackkits/base"
+	"github.com/kombifyio/stackkits/platforms/docker"
+	base_kit "github.com/kombifyio/stackkits/base-kit"
 )
 
 // =============================================================================

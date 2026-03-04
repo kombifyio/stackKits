@@ -8,7 +8,7 @@ metadata:
   description: "Single-environment deployment with Docker, Dokploy and monitoring"
   author: "kombify Stack Team"
   license: "Apache-2.0"
-  repository: "https://github.com/kombihq/stackkits"
+  repository: "https://github.com/kombifyio/stackkits"
   tags:
     - homelab
     - single-node

@@ -27,7 +27,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/kombihq/stackkits/internal/api"
+	"github.com/kombifyio/stackkits/internal/api"
 )
 
 // Version is set at build time via ldflags.

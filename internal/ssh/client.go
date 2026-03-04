@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kombihq/stackkits/pkg/models"
+	"github.com/kombifyio/stackkits/pkg/models"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
 )

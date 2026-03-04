@@ -25,7 +25,7 @@ by `stackkit prepare`, never by the developer directly.
 ### 1. Clone and install dependencies
 
 ```bash
-git clone https://github.com/kombihq/stackkits.git
+git clone https://github.com/kombifyio/stackkits.git
 cd stackkits
 go mod download
 ```

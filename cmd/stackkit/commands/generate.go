@@ -8,10 +8,10 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/kombihq/stackkits/internal/config"
-	cueval "github.com/kombihq/stackkits/internal/cue"
-	"github.com/kombihq/stackkits/internal/template"
-	"github.com/kombihq/stackkits/pkg/models"
+	"github.com/kombifyio/stackkits/internal/config"
+	cueval "github.com/kombifyio/stackkits/internal/cue"
+	"github.com/kombifyio/stackkits/internal/template"
+	"github.com/kombifyio/stackkits/pkg/models"
 	"github.com/spf13/cobra"
 	"golang.org/x/crypto/bcrypt"
 )

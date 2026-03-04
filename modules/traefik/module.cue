@@ -13,7 +13,7 @@
 // a stand-in for the PaaS Traefik, connected via socket-proxy.
 package traefik
 
-import "github.com/kombihq/stackkits/base"
+import "github.com/kombifyio/stackkits/base"
 
 // Contract declares what this module requires and provides.
 Contract: base.#ModuleContract & {

@@ -5,7 +5,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/kombihq/stackkits/pkg/models"
+	"github.com/kombifyio/stackkits/pkg/models"
 	"github.com/stretchr/testify/assert"
 )
 

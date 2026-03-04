@@ -4,7 +4,7 @@
 // Required for modern-homelab and recommended for ha-kit.
 //
 // Usage in stackfile.cue:
-//   import "github.com/kombihq/stackkits/addons/vpn-overlay"
+//   import "github.com/kombifyio/stackkits/addons/vpn-overlay"
 //
 //   addons: {
 //       "vpn-overlay": vpnoverlay.#Config & {

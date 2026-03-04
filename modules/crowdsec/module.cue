@@ -11,7 +11,7 @@
 // Reference: NETWORK-SECURITY-STACKKITS_1.md §7.3
 package crowdsec
 
-import "github.com/kombihq/stackkits/base"
+import "github.com/kombifyio/stackkits/base"
 
 // Contract declares what this module requires and provides.
 Contract: base.#ModuleContract & {

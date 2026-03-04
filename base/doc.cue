@@ -11,7 +11,7 @@
 //
 // Example:
 //
-//   import "github.com/kombihq/stackkits/base"
+//   import "github.com/kombifyio/stackkits/base"
 //
 //   #MyStackKit: base.#BaseStackKit & {
 //       metadata: { name: "my-stackkit", ... }

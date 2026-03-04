@@ -7,7 +7,7 @@
 // PROVEN CONFIG: Validated via reference-compose.yml (8/8 tests pass).
 package tinyauth
 
-import "github.com/kombihq/stackkits/base"
+import "github.com/kombifyio/stackkits/base"
 
 // Contract declares what this module requires and provides.
 Contract: base.#ModuleContract & {

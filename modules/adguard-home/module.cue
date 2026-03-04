@@ -8,7 +8,7 @@
 // PROVEN CONFIG: Validated via reference-compose.yml.
 package adguard_home
 
-import "github.com/kombihq/stackkits/base"
+import "github.com/kombifyio/stackkits/base"
 
 // Contract declares what this module requires and provides.
 Contract: base.#ModuleContract & {

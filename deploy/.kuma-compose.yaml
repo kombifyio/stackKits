@@ -26,7 +26,7 @@ services:
     environment:
       KUMA_URL: "http://uptime-kuma:3001"
       KUMA_USER: "admin"
-      KUMA_PASS: "p0fsvFc8zM3fP3Dj"
+      KUMA_PASS: "5vJEuzdOZ1bfQmPh"
       DOMAIN: "stack.local"
     command:
       - sh

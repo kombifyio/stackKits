@@ -111,7 +111,7 @@ Create `stackfile.cue` to define your StackKit's structure:
 // stackfile.cue
 package my_media_server
 
-import "github.com/kombihq/stackkits/base"
+import "github.com/kombifyio/stackkits/base"
 
 // #MediaServerKit extends the base StackKit
 #MediaServerKit: base.#BaseStackKit & {
@@ -212,7 +212,7 @@ Create `services.cue` with your service definitions:
 // services.cue
 package my_media_server
 
-import "github.com/kombihq/stackkits/base"
+import "github.com/kombifyio/stackkits/base"
 
 // =============================================================================
 // CORE SERVICES

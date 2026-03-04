@@ -4,7 +4,7 @@
 // Requires Traefik for ingress routing.
 package pocketid
 
-import "github.com/kombihq/stackkits/base"
+import "github.com/kombifyio/stackkits/base"
 
 Contract: base.#ModuleContract & {
 	metadata: {

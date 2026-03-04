@@ -5,7 +5,7 @@
 package modern_homelab
 
 import (
-	"github.com/kombihq/stackkits/base"
+	"github.com/kombifyio/stackkits/base"
 )
 
 // =============================================================================

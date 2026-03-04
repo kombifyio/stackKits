@@ -5,7 +5,7 @@
 	import TerminalDemo from '$lib/components/TerminalDemo.svelte';
 
 	const detailedSteps = [
-		{ number: '01', title: 'Clone the repository', command: 'git clone https://github.com/kombihq/stackkits.git\ncd stackkits' },
+		{ number: '01', title: 'Clone the repository', command: 'git clone https://github.com/kombifyio/stackkits.git\ncd stackkits' },
 		{ number: '02', title: 'Copy the default spec', command: 'cp base/default-spec.yaml my-spec.yaml' },
 		{ number: '03', title: 'Configure your server', command: '# Edit my-spec.yaml\n# Set your server IP, SSH credentials, and domain' },
 		{ number: '04', title: 'Validate your configuration', command: 'stackkit validate my-spec.yaml' },
@@ -130,7 +130,7 @@
 							Check the documentation or join our community for support.
 						</p>
 						<a
-							href="https://github.com/kombihq/stackkits"
+							href="https://github.com/kombifyio/stackkits"
 							target="_blank"
 							rel="noopener"
 							class="btn btn-primary btn-sm"

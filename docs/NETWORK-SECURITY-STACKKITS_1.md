@@ -756,7 +756,7 @@ security:
 These are the files within the StackKits repository that implement this security architecture:
 
 ```
-github.com/kombihq/stackkits/
+github.com/kombifyio/stackkits/
 ├── base/
 │   ├── security.cue                   # L1: SSH, firewall, Docker daemon, container defaults
 │   ├── network.cue                    # L2: Traefik middlewares, Docker networks, CrowdSec

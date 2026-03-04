@@ -5,7 +5,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/kombihq/stackkits/internal/validation"
+	"github.com/kombifyio/stackkits/internal/validation"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

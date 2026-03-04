@@ -9,7 +9,7 @@ metadata:
   description: "Enterprise-grade homelab with Docker Swarm HA and automatic failover"
   author: "kombify Stack Team"
   license: "Apache-2.0"
-  repository: "https://github.com/kombihq/stackkits"
+  repository: "https://github.com/kombifyio/stackkits"
   status: scaffolding
   tags:
     - homelab

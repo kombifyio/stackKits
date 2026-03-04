@@ -5,7 +5,7 @@
 // Requires Traefik for ingress routing.
 package dokploy
 
-import "github.com/kombihq/stackkits/base"
+import "github.com/kombifyio/stackkits/base"
 
 Contract: base.#ModuleContract & {
 	metadata: {

@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	skerrors "github.com/kombihq/stackkits/internal/errors"
+	skerrors "github.com/kombifyio/stackkits/internal/errors"
 )
 
 // ServerConfig holds configuration for the API server.

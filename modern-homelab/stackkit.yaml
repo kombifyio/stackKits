@@ -10,7 +10,7 @@ metadata:
   description: "Hybrid homelab bridging local servers with cloud VPS via identity-aware proxies"
   author: "kombify Team"
   license: "Apache-2.0"
-  repository: "https://github.com/kombihq/stackkits"
+  repository: "https://github.com/kombifyio/stackkits"
   status: scaffolding
   tags:
     - homelab

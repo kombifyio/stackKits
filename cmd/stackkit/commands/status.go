@@ -7,9 +7,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/kombihq/stackkits/internal/config"
-	"github.com/kombihq/stackkits/internal/docker"
-	"github.com/kombihq/stackkits/pkg/models"
+	"github.com/kombifyio/stackkits/internal/config"
+	"github.com/kombifyio/stackkits/internal/docker"
+	"github.com/kombifyio/stackkits/pkg/models"
 	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
 )

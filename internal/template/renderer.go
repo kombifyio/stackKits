@@ -11,7 +11,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/kombihq/stackkits/pkg/models"
+	"github.com/kombifyio/stackkits/pkg/models"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 	"gopkg.in/yaml.v3"

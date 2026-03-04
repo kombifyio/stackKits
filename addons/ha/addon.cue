@@ -23,7 +23,7 @@
 //   See docs/license-compliance-saas.md for full analysis.
 //
 // Usage in stackfile.cue:
-//   import "github.com/kombihq/stackkits/addons/ha"
+//   import "github.com/kombifyio/stackkits/addons/ha"
 //
 //   addons: {
 //       "ha": ha.#Config & {

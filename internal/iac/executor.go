@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/kombihq/stackkits/internal/terramate"
-	"github.com/kombihq/stackkits/internal/tofu"
-	"github.com/kombihq/stackkits/pkg/models"
+	"github.com/kombifyio/stackkits/internal/terramate"
+	"github.com/kombifyio/stackkits/internal/tofu"
+	"github.com/kombifyio/stackkits/pkg/models"
 )
 
 // ExecutionMode represents the IaC execution mode

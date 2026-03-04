@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kombihq/stackkits/pkg/models"
+	"github.com/kombifyio/stackkits/pkg/models"
 )
 
 // containerNameRegex validates Docker container/network/volume names

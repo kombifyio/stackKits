@@ -13,11 +13,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/kombihq/stackkits/api/openapi"
-	"github.com/kombihq/stackkits/internal/config"
-	cuepkg "github.com/kombihq/stackkits/internal/cue"
-	skerrors "github.com/kombihq/stackkits/internal/errors"
-	"github.com/kombihq/stackkits/pkg/models"
+	"github.com/kombifyio/stackkits/api/openapi"
+	"github.com/kombifyio/stackkits/internal/config"
+	cuepkg "github.com/kombifyio/stackkits/internal/cue"
+	skerrors "github.com/kombifyio/stackkits/internal/errors"
+	"github.com/kombifyio/stackkits/pkg/models"
 )
 
 // ── Health ────────────────────────────────────────────────────────

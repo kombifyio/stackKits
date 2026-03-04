@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/kombihq/stackkits/internal/config"
+	"github.com/kombifyio/stackkits/internal/config"
 	"github.com/spf13/cobra"
 )
 

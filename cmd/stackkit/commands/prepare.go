@@ -9,12 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kombihq/stackkits/internal/config"
-	"github.com/kombihq/stackkits/internal/cue"
-	"github.com/kombihq/stackkits/internal/docker"
-	"github.com/kombihq/stackkits/internal/ssh"
-	"github.com/kombihq/stackkits/internal/tofu"
-	"github.com/kombihq/stackkits/pkg/models"
+	"github.com/kombifyio/stackkits/internal/config"
+	"github.com/kombifyio/stackkits/internal/cue"
+	"github.com/kombifyio/stackkits/internal/docker"
+	"github.com/kombifyio/stackkits/internal/ssh"
+	"github.com/kombifyio/stackkits/internal/tofu"
+	"github.com/kombifyio/stackkits/pkg/models"
 	"github.com/spf13/cobra"
 )
 

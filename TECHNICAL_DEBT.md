@@ -224,7 +224,7 @@ Items are categorized by severity and mapped to roadmap milestones.
 ### TD-24: GitHub Org References (kombihq)
 
 **Location:** `cue.mod/module.cue`, all CUE imports (20+ files)  
-**Problem:** References `github.com/kombihq/stackkits` — org name may change.  
+**Problem:** References `github.com/kombifyio/stackkits` — org name may change.  
 **Impact:** Low until Go module depends on resolvable import. CUE local evaluation still works.  
 **Fix:** Update when org name is finalized. Deferred due to impact on 3+ Go modules.  
 **Milestone:** Deferred

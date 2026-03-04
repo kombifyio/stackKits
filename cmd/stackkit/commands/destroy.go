@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/kombihq/stackkits/internal/config"
-	"github.com/kombihq/stackkits/internal/iac"
-	"github.com/kombihq/stackkits/pkg/models"
+	"github.com/kombifyio/stackkits/internal/config"
+	"github.com/kombifyio/stackkits/internal/iac"
+	"github.com/kombifyio/stackkits/pkg/models"
 	"github.com/spf13/cobra"
 )
 

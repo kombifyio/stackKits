@@ -417,7 +417,7 @@ The integration mode is **not a user choice**. It is determined automatically by
 ### Module Structure
 
 ```
-github.com/kombihq/stackkits/
+github.com/kombifyio/stackkits/
 ├── base/                           # Core schemas (Layer 1 + 2)
 │   ├── stackkit.cue               # #BaseStackKit definition
 │   ├── system.cue                 # #SystemConfig
@@ -657,7 +657,7 @@ services:
 8. Redefine `ha-kit` as High Availability Kit (HA cluster pattern)
 9. Implement context-driven defaults resolution in CUE
 10. Update `stackkit` CLI for Add-On support (`stackkit addon add/list/remove`)
-11. Align CUE module path with kombify Stack (`github.com/kombihq/stackkits`)
+11. Align CUE module path with kombify Stack (`github.com/kombifyio/stackkits`)
 
 ### P2: Integration (Weeks 9–12)
 

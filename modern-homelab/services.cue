@@ -21,7 +21,7 @@
 
 package modern_homelab
 
-import "github.com/kombihq/stackkits/base"
+import "github.com/kombifyio/stackkits/base"
 
 // =============================================================================
 // CORE: TRAEFIK (Cloud Entry Point)

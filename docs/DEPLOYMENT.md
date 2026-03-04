@@ -208,7 +208,7 @@ cue vet ./base-kit/stackfile.cue
 Ensure `cue.mod/module.cue` exists and has correct module path:
 
 ```cue
-module: "github.com/kombihq/stackkits"
+module: "github.com/kombifyio/stackkits"
 ```
 
 ---

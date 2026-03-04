@@ -2,7 +2,7 @@
 package tests
 
 import (
-	homelab "github.com/kombihq/stackkits/base-kit"
+	homelab "github.com/kombifyio/stackkits/base-kit"
 	"list"
 )
 

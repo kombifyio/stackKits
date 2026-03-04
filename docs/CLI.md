@@ -19,7 +19,7 @@ git clone https://github.com/kombifyio/stackKits.git && cd stackKits && make ins
 Go install (requires Go 1.24+):
 
 ```bash
-go install github.com/kombihq/stackkits/cmd/stackkit@latest
+go install github.com/kombifyio/stackkits/cmd/stackkit@latest
 ```
 
 Verify:

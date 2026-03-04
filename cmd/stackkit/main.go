@@ -4,7 +4,7 @@ package main
 import (
 	"os"
 
-	"github.com/kombihq/stackkits/cmd/stackkit/commands"
+	"github.com/kombifyio/stackkits/cmd/stackkit/commands"
 )
 
 // Version information (set by build)

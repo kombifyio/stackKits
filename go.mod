@@ -1,4 +1,4 @@
-module github.com/kombihq/stackkits
+module github.com/kombifyio/stackkits
 
 go 1.24.0
 
@@ -10,6 +10,7 @@ require (
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.9.0
 	golang.org/x/crypto v0.47.0
+	golang.org/x/text v0.33.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -38,6 +39,5 @@ require (
 	golang.org/x/oauth2 v0.34.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
 	golang.org/x/sys v0.40.0 // indirect
-	golang.org/x/text v0.33.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )

@@ -15,7 +15,7 @@
 // Reference: IDENTITY-STACKKITS.md §2
 package lldap
 
-import "github.com/kombihq/stackkits/base"
+import "github.com/kombifyio/stackkits/base"
 
 // Contract declares what this module requires and provides.
 Contract: base.#ModuleContract & {

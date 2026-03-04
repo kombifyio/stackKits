@@ -85,7 +85,7 @@ variants:
 	// Create a minimal CUE schema file
 	schemaCUE := `package base_kit
 
-import "github.com/kombihq/stackkits/base"
+import "github.com/kombifyio/stackkits/base"
 
 #BaseKitStack: base.#StackConfig & {
   metadata: name: "base-kit"

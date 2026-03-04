@@ -7,7 +7,7 @@
 
 package ha_kit
 
-import "github.com/kombihq/stackkits/base"
+import "github.com/kombifyio/stackkits/base"
 
 // =============================================================================
 // DOCKER SWARM HA

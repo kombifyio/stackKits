@@ -28,7 +28,7 @@
 
 package base_kit
 
-import "github.com/kombihq/stackkits/base"
+import "github.com/kombifyio/stackkits/base"
 
 // =============================================================================
 // CORE SERVICES (Always Required)

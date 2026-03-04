@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"cuelang.org/go/cue/cuecontext"
-	"github.com/kombihq/stackkits/pkg/models"
+	"github.com/kombifyio/stackkits/pkg/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
