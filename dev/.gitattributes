@@ -1,4 +1,0 @@
-# Force LF line endings for all shell scripts in dev/
-# Prevents Windows CRLF from breaking Docker entrypoints
-*.sh text eol=lf
-entrypoint.sh text eol=lf

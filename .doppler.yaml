@@ -1,6 +1,0 @@
-# Doppler Configuration for kombify StackKits
-# Commit this file to version control
-
-setup:
-  project: kombify-platform
-  config: dev
