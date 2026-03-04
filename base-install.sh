@@ -113,51 +113,9 @@ ok "  stackkit $(stackkit version 2>/dev/null || echo v${LATEST}) installed"
 info "Step 2/4 -- Preparing system (Docker + OpenTofu)"
 
 if [ "$(id -u)" -eq 0 ]; then
-  stackkit prepare
+  stackkit prepare || die "System preparation failed. Check errors above."
 else
-  sudo stackkit prepare
-fi
-
-# Ensure Docker daemon is running (prepare installs but may not start it)
-if ! docker info >/dev/null 2>&1; then
-  info "  Starting Docker..."
-  # Check if systemd is actually running (PID 1), not just installed
-  if [ -d /run/systemd/system ]; then
-    if [ "$(id -u)" -eq 0 ]; then
-      systemctl start docker
-    else
-      sudo systemctl start docker
-    fi
-  elif command -v service >/dev/null 2>&1; then
-    if [ "$(id -u)" -eq 0 ]; then
-      service docker start
-    else
-      sudo service docker start
-    fi
-  else
-    # Direct start as fallback (containers, WSL, etc.)
-    if [ "$(id -u)" -eq 0 ]; then
-      dockerd &
-    else
-      sudo dockerd &
-    fi
-  fi
-  # Wait for Docker daemon to become ready (up to 30 seconds)
-  DOCKER_WAIT=0
-  DOCKER_MAX_WAIT=30
-  while [ "$DOCKER_WAIT" -lt "$DOCKER_MAX_WAIT" ]; do
-    if docker info >/dev/null 2>&1; then
-      break
-    fi
-    sleep 2
-    DOCKER_WAIT=$((DOCKER_WAIT + 2))
-    info "  Waiting for Docker daemon... (${DOCKER_WAIT}s/${DOCKER_MAX_WAIT}s)"
-  done
-  if docker info >/dev/null 2>&1; then
-    ok "  Docker started"
-  else
-    die "  Could not start Docker. Start it manually and re-run: systemctl start docker"
-  fi
+  sudo stackkit prepare || die "System preparation failed. Check errors above."
 fi
 
 ok "  System ready"

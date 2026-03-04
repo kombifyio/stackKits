@@ -132,12 +132,11 @@ func prepareLocalSystem(ctx context.Context, spec *models.StackSpec) error {
 				if prepareDryRun {
 					printWarning("Docker daemon is not running - would attempt to start")
 				} else {
-					printWarning("Docker daemon is not running, attempting to start...")
+					printInfo("Docker daemon is not running, starting...")
 					if err := startDockerDaemon(ctx); err != nil {
-						printWarning("Could not start Docker: %v", err)
-					} else {
-						printSuccess("Docker daemon started")
+						return fmt.Errorf("Docker is installed but won't start: %w", err)
 					}
+					printSuccess("Docker daemon started")
 				}
 			} else {
 				printSuccess("Docker daemon is running")
@@ -339,28 +338,60 @@ func checkLocalResources(spec *models.StackSpec) {
 }
 
 func startDockerDaemon(ctx context.Context) error {
-	// Try systemd first, then SysV init
-	var cmd *exec.Cmd
+	isSystemd := false
 	if _, err := os.Stat("/run/systemd/system"); err == nil {
-		cmd = exec.Command("systemctl", "start", "docker")
-	} else {
-		cmd = exec.Command("service", "docker", "start")
-	}
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("start command failed: %w", err)
+		isSystemd = true
 	}
 
-	// Wait for Docker to become ready (up to 30 seconds)
+	if isSystemd {
+		// Ensure containerd is running (Docker depends on it)
+		containerdEnable := exec.Command("systemctl", "enable", "containerd")
+		containerdEnable.Run() //nolint:errcheck // best-effort
+		containerdStart := exec.Command("systemctl", "start", "containerd")
+		containerdStart.Stdout = os.Stdout
+		containerdStart.Stderr = os.Stderr
+		containerdStart.Run() //nolint:errcheck // Docker may bundle containerd
+
+		// Enable Docker so it starts on reboot
+		enableCmd := exec.Command("systemctl", "enable", "docker")
+		enableCmd.Run() //nolint:errcheck // best-effort, start is what matters
+
+		// Start Docker
+		startCmd := exec.Command("systemctl", "start", "docker")
+		startCmd.Stdout = os.Stdout
+		startCmd.Stderr = os.Stderr
+		if err := startCmd.Run(); err != nil {
+			return fmt.Errorf("systemctl start docker failed: %w", err)
+		}
+	} else {
+		cmd := exec.Command("service", "docker", "start")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("service docker start failed: %w", err)
+		}
+	}
+
+	// Wait for Docker to become ready (up to 60 seconds — fresh installs can be slow)
 	dockerClient := docker.NewClient()
-	for i := 0; i < 15; i++ {
+	maxWait := 60
+	for i := 0; i < maxWait/2; i++ {
 		if dockerClient.IsRunning(ctx) {
 			return nil
 		}
 		time.Sleep(2 * time.Second)
 	}
-	return fmt.Errorf("Docker daemon did not become ready within 30 seconds")
+
+	// If still not ready, check journald for clues
+	if isSystemd {
+		printWarning("Docker not ready after %ds — checking logs...", maxWait)
+		logCmd := exec.Command("journalctl", "-u", "docker", "--no-pager", "-n", "10")
+		logCmd.Stdout = os.Stdout
+		logCmd.Stderr = os.Stderr
+		logCmd.Run() //nolint:errcheck
+	}
+
+	return fmt.Errorf("Docker daemon did not become ready within %d seconds", maxWait)
 }
 
 func installDockerLocal(ctx context.Context) error {
@@ -370,9 +401,9 @@ func installDockerLocal(ctx context.Context) error {
 	if err := cmd.Run(); err != nil {
 		return err
 	}
-	// Enable and start Docker daemon after install
+	// Enable and start Docker daemon — this must succeed for deployment to work
 	if err := startDockerDaemon(ctx); err != nil {
-		printWarning("Docker installed but daemon start deferred: %v", err)
+		return fmt.Errorf("Docker installed but failed to start: %w", err)
 	}
 	return nil
 }
