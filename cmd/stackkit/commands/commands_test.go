@@ -135,7 +135,10 @@ func TestApplyCommand_NoSpecFile(t *testing.T) {
 
 	_, err := executeCommand("apply", "--spec", filepath.Join(tmpDir, "nonexistent.yaml"), "--chdir", tmpDir)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to load spec")
+	// apply now attempts auto-init when spec is missing
+	assert.True(t,
+		strings.Contains(err.Error(), "failed to load spec") || strings.Contains(err.Error(), "no spec file"),
+		"unexpected error: %s", err.Error())
 }
 
 func TestDestroyCommand_NoDeployDir(t *testing.T) {
