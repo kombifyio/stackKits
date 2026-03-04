@@ -134,11 +134,36 @@ variable "admin_password_plaintext" {
   sensitive   = true
 }
 
+variable "network_mode" {
+  type        = string
+  description = "Docker networking mode: 'bridge' (default) or 'host' (restricted VPS fallback)"
+  default     = "bridge"
+}
+
 # =============================================================================
 # LOCALS
 # =============================================================================
 
 locals {
+  # Networking mode
+  is_host = var.network_mode == "host"
+
+  # In host mode, all containers share the host network. Services that would
+  # conflict on the same port need unique port assignments.
+  host_ports = {
+    tinyauth  = 3000  # TinyAuth native port
+    pocketid  = 1411  # Pocket ID (set via PORT env)
+    dokploy   = 3002  # Dokploy (moved from 3000 — avoids TinyAuth & Kuma conflict)
+    kuma      = 3001  # Kuma native port
+    postgres  = 5432  # PostgreSQL standard
+    redis     = 6379  # Redis standard
+    dashboard = 8090  # nginx (moved from 80 to avoid Traefik conflict)
+    whoami    = 8091  # whoami (moved from 80 to avoid Traefik conflict)
+  }
+
+  # Host-mode hint for dashboard
+  host_mode_hint = local.is_host ? "<div style=\"background:#78350F;border:1px solid #D97706;border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#FEF3C7;\"><strong>&#9888; Host Networking Mode</strong> &mdash; Your VPS does not support Docker bridge networking. All containers run on the host network. For full network isolation, consider a KVM-based VPS (Hetzner, DigitalOcean, Linode).</div>" : ""
+
   domains = {
     dokploy   = "dokploy.${var.domain}"
     traefik   = "traefik.${var.domain}"
@@ -218,6 +243,7 @@ locals {
         <a class="nav-kuma" href="http://kuma.${var.domain}" target="_blank">&#9650; Status</a>
       </nav>
       <main>
+        ${local.host_mode_hint}
         <div class="hdr">
           <h1>Service <span class="accent">Dashboard</span></h1>
           <p>Running on <code style="font-family:monospace">${var.domain}</code> &middot; Managed by StackKits</p>
@@ -290,6 +316,7 @@ provider "docker" {
 # =============================================================================
 
 resource "docker_network" "base_net" {
+  count  = local.is_host ? 0 : 1
   name   = var.network_name
   driver = "bridge"
 
@@ -308,6 +335,7 @@ resource "docker_network" "base_net" {
 }
 
 resource "docker_network" "internal_db" {
+  count    = local.is_host ? 0 : 1
   name     = "${var.network_name}_db"
   driver   = "bridge"
   internal = true
@@ -469,8 +497,13 @@ resource "docker_container" "traefik" {
     protocol = "tcp"
   }
 
-  networks_advanced {
-    name = docker_network.base_net.name
+  network_mode = local.is_host ? "host" : null
+
+  dynamic "networks_advanced" {
+    for_each = local.is_host ? [] : [1]
+    content {
+      name = docker_network.base_net[0].name
+    }
   }
 
   volumes {
@@ -490,13 +523,12 @@ resource "docker_container" "traefik" {
     read_only = true
   }
 
-  command = [
+  command = concat([
     "--api.dashboard=true",
     "--api.insecure=true",
     "--ping=true",
     "--providers.docker=true",
     "--providers.docker.exposedbydefault=false",
-    "--providers.docker.network=${docker_network.base_net.name}",
     "--entrypoints.web.address=:80",
     "--entrypoints.websecure.address=:443",
     "--certificatesresolvers.local.acme.tlschallenge=true",
@@ -504,7 +536,9 @@ resource "docker_container" "traefik" {
     "--certificatesresolvers.local.acme.storage=/letsencrypt/acme.json",
     "--log.level=INFO",
     "--accesslog=true",
-  ]
+  ], local.is_host ? [] : [
+    "--providers.docker.network=${docker_network.base_net[0].name}",
+  ])
 
   env = [
     "TZ=Europe/Berlin",
@@ -577,8 +611,13 @@ resource "docker_container" "tinyauth" {
     drop = ["ALL"]
   }
 
-  networks_advanced {
-    name = docker_network.base_net.name
+  network_mode = local.is_host ? "host" : null
+
+  dynamic "networks_advanced" {
+    for_each = local.is_host ? [] : [1]
+    content {
+      name = docker_network.base_net[0].name
+    }
   }
 
   volumes {
@@ -634,7 +673,7 @@ resource "docker_container" "tinyauth" {
   # ForwardAuth middleware
   labels {
     label = "traefik.http.middlewares.tinyauth.forwardauth.address"
-    value = "http://tinyauth:3000/api/auth/traefik"
+    value = local.is_host ? "http://127.0.0.1:${local.host_ports.tinyauth}/api/auth/traefik" : "http://tinyauth:3000/api/auth/traefik"
   }
 
   labels {
@@ -682,8 +721,13 @@ resource "docker_container" "pocketid" {
 
   security_opts = ["no-new-privileges:true"]
 
-  networks_advanced {
-    name = docker_network.base_net.name
+  network_mode = local.is_host ? "host" : null
+
+  dynamic "networks_advanced" {
+    for_each = local.is_host ? [] : [1]
+    content {
+      name = docker_network.base_net[0].name
+    }
   }
 
   volumes {
@@ -778,9 +822,14 @@ resource "docker_container" "dokploy_postgres" {
     add  = ["CHOWN", "SETGID", "SETUID", "DAC_OVERRIDE"]
   }
 
-  # No external ports - only reachable on internal_db network
-  networks_advanced {
-    name = docker_network.internal_db.name
+  # Bridge: reachable only on internal_db network. Host: on host loopback.
+  network_mode = local.is_host ? "host" : null
+
+  dynamic "networks_advanced" {
+    for_each = local.is_host ? [] : [1]
+    content {
+      name = docker_network.internal_db[0].name
+    }
   }
 
   volumes {
@@ -846,8 +895,13 @@ resource "docker_container" "dokploy_redis" {
     add  = ["SETUID", "SETGID"]
   }
 
-  networks_advanced {
-    name = docker_network.internal_db.name
+  network_mode = local.is_host ? "host" : null
+
+  dynamic "networks_advanced" {
+    for_each = local.is_host ? [] : [1]
+    content {
+      name = docker_network.internal_db[0].name
+    }
   }
 
   labels {
@@ -894,12 +948,20 @@ resource "docker_container" "dokploy" {
     add  = ["CHOWN", "SETGID", "SETUID"]
   }
 
-  networks_advanced {
-    name = docker_network.base_net.name
+  network_mode = local.is_host ? "host" : null
+
+  dynamic "networks_advanced" {
+    for_each = local.is_host ? [] : [1]
+    content {
+      name = docker_network.base_net[0].name
+    }
   }
 
-  networks_advanced {
-    name = docker_network.internal_db.name
+  dynamic "networks_advanced" {
+    for_each = local.is_host ? [] : [1]
+    content {
+      name = docker_network.internal_db[0].name
+    }
   }
 
   volumes {
@@ -915,14 +977,14 @@ resource "docker_container" "dokploy" {
 
   env = [
     "DOCKER_HOST=unix:///var/run/docker.sock",
-    "DATABASE_URL=postgresql://dokploy:${random_password.dokploy_db_password[0].result}@dokploy-postgres:5432/dokploy",
-    "REDIS_URL=redis://dokploy-redis:6379",
+    "DATABASE_URL=postgresql://dokploy:${random_password.dokploy_db_password[0].result}@${local.is_host ? "127.0.0.1" : "dokploy-postgres"}:5432/dokploy",
+    "REDIS_URL=redis://${local.is_host ? "127.0.0.1" : "dokploy-redis"}:6379",
     "NODE_ENV=production",
-    "PORT=3000",
+    "PORT=${local.is_host ? tostring(local.host_ports.dokploy) : "3000"}",
     "TRPC_PLAYGROUND=false",
     "LETSENCRYPT_EMAIL=admin@stack.local",
     "TRAEFIK_ENABLED=true",
-    "TRAEFIK_NETWORK=${docker_network.base_net.name}",
+    "TRAEFIK_NETWORK=${local.is_host ? "" : docker_network.base_net[0].name}",
   ]
 
   labels {
@@ -962,11 +1024,11 @@ resource "docker_container" "dokploy" {
 
   labels {
     label = "traefik.http.services.dokploy.loadbalancer.server.port"
-    value = "3000"
+    value = local.is_host ? tostring(local.host_ports.dokploy) : "3000"
   }
 
   healthcheck {
-    test         = ["CMD-SHELL", "curl -s -o /dev/null -w '%%{http_code}' http://localhost:3000/api/settings | grep -qE '^[2-4]'"]
+    test         = ["CMD-SHELL", "curl -s -o /dev/null -w '%%{http_code}' http://localhost:${local.is_host ? local.host_ports.dokploy : 3000}/api/settings | grep -qE '^[2-4]'"]
     interval     = "30s"
     timeout      = "10s"
     retries      = 5
@@ -999,16 +1061,23 @@ resource "docker_container" "init_dokploy" {
   restart = "no"
   rm      = true
 
-  networks_advanced {
-    name = docker_network.base_net.name
+  network_mode = local.is_host ? "host" : null
+
+  dynamic "networks_advanced" {
+    for_each = local.is_host ? [] : [1]
+    content {
+      name = docker_network.base_net[0].name
+    }
   }
 
   command = [
     "sh", "-c",
     <<-EOT
+      DOKPLOY_HOST="${local.is_host ? "127.0.0.1" : "dokploy"}"
+      DOKPLOY_PORT="${local.is_host ? local.host_ports.dokploy : 3000}"
       echo "Waiting for Dokploy to be ready..."
       for i in $(seq 1 60); do
-        if curl -sf http://dokploy:3000/api/settings >/dev/null 2>&1; then
+        if curl -sf "http://$DOKPLOY_HOST:$DOKPLOY_PORT/api/settings" >/dev/null 2>&1; then
           echo "Dokploy is ready"
           break
         fi
@@ -1018,7 +1087,7 @@ resource "docker_container" "init_dokploy" {
       curl -sf -X POST \
         -H "Content-Type: application/json" \
         -d '{"0":{"json":{"email":"${var.admin_email}","password":"${var.admin_password_plaintext}"}}}' \
-        "http://dokploy:3000/api/trpc/auth.createAdmin?batch=1" && \
+        "http://$DOKPLOY_HOST:$DOKPLOY_PORT/api/trpc/auth.createAdmin?batch=1" && \
       echo "Dokploy admin created" || echo "Dokploy admin creation skipped (may already exist)"
     EOT
   ]
@@ -1054,13 +1123,18 @@ resource "docker_container" "dashboard" {
 
   security_opts = ["no-new-privileges:true"]
 
-  networks_advanced {
-    name = docker_network.base_net.name
+  network_mode = local.is_host ? "host" : null
+
+  dynamic "networks_advanced" {
+    for_each = local.is_host ? [] : [1]
+    content {
+      name = docker_network.base_net[0].name
+    }
   }
 
   command = [
     "sh", "-c",
-    "printf '%s' '${base64encode(local.dashboard_html)}' | base64 -d > /usr/share/nginx/html/index.html && exec nginx -g 'daemon off;'"
+    local.is_host ? "printf '%s' '${base64encode(local.dashboard_html)}' | base64 -d > /usr/share/nginx/html/index.html && sed -i 's/listen.*80/listen       ${local.host_ports.dashboard}/' /etc/nginx/conf.d/default.conf && exec nginx -g 'daemon off;'" : "printf '%s' '${base64encode(local.dashboard_html)}' | base64 -d > /usr/share/nginx/html/index.html && exec nginx -g 'daemon off;'"
   ]
 
   labels {
@@ -1090,7 +1164,7 @@ resource "docker_container" "dashboard" {
 
   labels {
     label = "traefik.http.services.dashboard.loadbalancer.server.port"
-    value = "80"
+    value = local.is_host ? tostring(local.host_ports.dashboard) : "80"
   }
 
   labels {
@@ -1099,7 +1173,7 @@ resource "docker_container" "dashboard" {
   }
 
   healthcheck {
-    test         = ["CMD-SHELL", "wget -q --spider http://127.0.0.1:80/ || exit 1"]
+    test         = ["CMD-SHELL", "wget -q --spider http://127.0.0.1:${local.is_host ? local.host_ports.dashboard : 80}/ || exit 1"]
     interval     = "30s"
     timeout      = "5s"
     retries      = 3
@@ -1122,7 +1196,87 @@ resource "local_file" "kuma_compose" {
   count = var.enable_dokploy && var.enable_dokploy_apps ? 1 : 0
 
   filename = "${path.module}/.kuma-compose.yaml"
-  content  = <<-EOT
+  content  = local.is_host ? <<-EOT
+    services:
+      uptime-kuma:
+        image: louislam/uptime-kuma:1
+        container_name: kuma
+        restart: unless-stopped
+        network_mode: host
+        volumes:
+          - kuma-data:/app/data
+        labels:
+          - "traefik.enable=true"
+          - "traefik.http.routers.kuma.rule=Host(`kuma.${var.domain}`)"
+          - "traefik.http.routers.kuma.entrypoints=web"
+          - "traefik.http.services.kuma.loadbalancer.server.port=${local.host_ports.kuma}"
+          - "traefik.http.routers.kuma.middlewares=tinyauth@docker"
+        healthcheck:
+          test: ["CMD-SHELL", "curl -sf http://localhost:${local.host_ports.kuma}/ || exit 1"]
+          interval: 30s
+          timeout: 10s
+          retries: 5
+          start_period: 45s
+
+      init-kuma:
+        image: python:3.11-alpine
+        restart: "no"
+        network_mode: host
+        environment:
+          KUMA_URL: "http://127.0.0.1:${local.host_ports.kuma}"
+          KUMA_USER: "${var.admin_email}"
+          KUMA_PASS: "${var.enable_dokploy_apps ? random_password.kuma_admin[0].result : "admin"}"
+          DOMAIN: "${var.domain}"
+        command:
+          - sh
+          - -c
+          - |
+            pip install -q uptime-kuma-api
+            python3 << 'PYEOF'
+            from uptime_kuma_api import UptimeKumaApi, MonitorType
+            import os, sys
+            url    = os.environ["KUMA_URL"]
+            user   = os.environ["KUMA_USER"]
+            pw     = os.environ["KUMA_PASS"]
+            domain = os.environ["DOMAIN"]
+            api = UptimeKumaApi(url, wait_events=True, timeout=30)
+            try:
+                api.setup(user, pw)
+                print("Admin user created")
+            except Exception as e:
+                print(f"Setup skipped: {e}")
+            try:
+                api.login(user, pw)
+                print("Logged in")
+            except Exception as e:
+                print(f"Login failed: {e}", file=sys.stderr)
+                api.disconnect()
+                sys.exit(1)
+            monitors = [
+                ("Traefik Dashboard", f"http://traefik.{domain}"),
+                ("TinyAuth",          f"http://auth.{domain}"),
+                ("Dokploy",           f"http://dokploy.{domain}"),
+                ("Dashboard",         f"http://base.{domain}"),
+            ]
+            for name, murl in monitors:
+                try:
+                    api.add_monitor(type=MonitorType.HTTP, name=name, url=murl,
+                                    interval=60, maxretries=1,
+                                    accepted_statuscodes=["200-399"])
+                    print(f"Monitor added: {name}")
+                except Exception as e:
+                    print(f"Skip {name}: {e}")
+            api.disconnect()
+            print("Kuma setup complete!")
+            PYEOF
+        depends_on:
+          uptime-kuma:
+            condition: service_healthy
+
+    volumes:
+      kuma-data:
+  EOT
+  : <<-EOT
     services:
       uptime-kuma:
         image: louislam/uptime-kuma:1
@@ -1215,7 +1369,22 @@ resource "local_file" "whoami_compose" {
   count = var.enable_dokploy && var.enable_dokploy_apps ? 1 : 0
 
   filename = "${path.module}/.whoami-compose.yaml"
-  content  = <<-EOT
+  content  = local.is_host ? <<-EOT
+    services:
+      whoami:
+        image: traefik/whoami:latest
+        container_name: whoami
+        restart: unless-stopped
+        network_mode: host
+        command: ["--port=${local.host_ports.whoami}"]
+        labels:
+          - "traefik.enable=true"
+          - "traefik.http.routers.whoami.rule=Host(`whoami.${var.domain}`)"
+          - "traefik.http.routers.whoami.entrypoints=web"
+          - "traefik.http.services.whoami.loadbalancer.server.port=${local.host_ports.whoami}"
+          - "traefik.http.routers.whoami.middlewares=tinyauth@docker"
+  EOT
+  : <<-EOT
     services:
       whoami:
         image: traefik/whoami:latest
@@ -1286,8 +1455,8 @@ resource "null_resource" "deploy_whoami" {
 # =============================================================================
 
 output "network_name" {
-  description = "Docker network name"
-  value       = docker_network.base_net.name
+  description = "Docker network name (empty in host mode)"
+  value       = local.is_host ? "host" : docker_network.base_net[0].name
 }
 
 output "domains" {
@@ -1365,6 +1534,7 @@ output "architecture_summary" {
     ║              BASE KIT - SINGLE SERVER DEPLOYMENT                 ║
     ╠═══════════════════════════════════════════════════════════════════╣
     ║                                                                   ║
+    ║  Network: ${local.is_host ? "HOST MODE (bridge unavailable)" : "Bridge (isolated Docker networks)"}${local.is_host ? "                       " : "         "}║
     ║  ALL SERVICES RUN ON THE TARGET SERVER                            ║
     ║                                                                   ║
     ║  LAYER 1 (Foundation) - Managed by OpenTofu:                      ║

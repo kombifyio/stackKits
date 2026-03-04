@@ -246,9 +246,11 @@ func ensurePrerequisites(ctx context.Context) error {
 	// Ensure Docker daemon is running (start it if needed)
 	if !dockerClient.IsRunning(ctx) {
 		printInfo("Docker daemon is not running, starting...")
-		if err := startDockerDaemon(ctx); err != nil {
+		caps, err := startDockerDaemon(ctx)
+		if err != nil {
 			return fmt.Errorf("failed to start Docker daemon: %w", err)
 		}
+		writeDockerCapabilities(caps)
 		printSuccess("Docker daemon started")
 	}
 

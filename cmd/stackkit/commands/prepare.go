@@ -2,9 +2,11 @@ package commands
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -133,10 +135,12 @@ func prepareLocalSystem(ctx context.Context, spec *models.StackSpec) error {
 					printWarning("Docker daemon is not running - would attempt to start")
 				} else {
 					printInfo("Docker daemon is not running, starting...")
-					if err := startDockerDaemon(ctx); err != nil {
+					caps, err := startDockerDaemon(ctx)
+					if err != nil {
 						return fmt.Errorf("Docker is installed but won't start: %w", err)
 					}
 					printSuccess("Docker daemon started")
+					writeDockerCapabilities(caps)
 				}
 			} else {
 				printSuccess("Docker daemon is running")
@@ -337,7 +341,7 @@ func checkLocalResources(spec *models.StackSpec) {
 	}
 }
 
-func startDockerDaemon(ctx context.Context) error {
+func startDockerDaemon(ctx context.Context) (*models.DockerCapabilities, error) {
 	isSystemd := false
 	if _, err := os.Stat("/run/systemd/system"); err == nil {
 		isSystemd = true
@@ -370,9 +374,15 @@ func startDockerDaemon(ctx context.Context) error {
 		exec.Command("systemctl", "enable", "docker.socket").Run() //nolint:errcheck
 	}
 
+	caps := &models.DockerCapabilities{
+		BridgeNetworking: bridgeAvailable,
+		Iptables:         iptablesAvailable,
+		StorageDriver:    storageDriver,
+	}
+
 	// Phase 9: Start Docker
 	if err := tryStartDocker(ctx, isSystemd); err == nil {
-		return nil
+		return caps, nil
 	}
 
 	// Phase 10: First start failed — read logs, attempt targeted fixes, retry
@@ -385,6 +395,7 @@ func startDockerDaemon(ctx context.Context) error {
 		if bridgeAvailable {
 			printWarning("Bridge network creation failed — disabling default bridge...")
 			bridgeAvailable = false
+			caps.BridgeNetworking = false
 			needsRestart = true
 		}
 	}
@@ -394,6 +405,7 @@ func startDockerDaemon(ctx context.Context) error {
 		if iptablesAvailable {
 			printWarning("Docker failed due to iptables — disabling...")
 			iptablesAvailable = false
+			caps.Iptables = false
 			needsRestart = true
 		}
 	}
@@ -408,6 +420,7 @@ func startDockerDaemon(ctx context.Context) error {
 			}
 			printWarning("Storage driver %q failed — switching to %q...", storageDriver, fallbackDriver)
 			storageDriver = fallbackDriver
+			caps.StorageDriver = storageDriver
 			os.RemoveAll("/var/lib/docker/overlay2") //nolint:errcheck
 			os.RemoveAll("/var/lib/docker/network")  //nolint:errcheck
 			needsRestart = true
@@ -420,7 +433,7 @@ func startDockerDaemon(ctx context.Context) error {
 		stopDocker(isSystemd)
 		if err := tryStartDocker(ctx, isSystemd); err == nil {
 			printSuccess("Docker started after auto-fix")
-			return nil
+			return caps, nil
 		}
 		logOutput = getDockerLogs(isSystemd)
 	}
@@ -431,7 +444,26 @@ func startDockerDaemon(ctx context.Context) error {
 	if _, err := os.Stat("/var/run/docker.sock"); os.IsNotExist(err) {
 		printWarning("Docker socket /var/run/docker.sock does not exist")
 	}
-	return fmt.Errorf("Docker daemon failed to start — see diagnostics above")
+	return nil, fmt.Errorf("Docker daemon failed to start — see diagnostics above")
+}
+
+// writeDockerCapabilities persists detected Docker capabilities for use by generate.
+func writeDockerCapabilities(caps *models.DockerCapabilities) {
+	if caps == nil {
+		return
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	dir := filepath.Join(home, ".stackkits")
+	os.MkdirAll(dir, 0755) //nolint:errcheck
+
+	data, err := json.MarshalIndent(caps, "", "  ")
+	if err != nil {
+		return
+	}
+	os.WriteFile(filepath.Join(dir, "capabilities.json"), data, 0644) //nolint:errcheck
 }
 
 // loadDockerKernelModules loads kernel modules required by Docker networking and storage.
@@ -686,9 +718,11 @@ func installDockerLocal(ctx context.Context) error {
 		return err
 	}
 	// Enable and start Docker daemon — this must succeed for deployment to work
-	if err := startDockerDaemon(ctx); err != nil {
+	caps, err := startDockerDaemon(ctx)
+	if err != nil {
 		return fmt.Errorf("Docker installed but failed to start: %w", err)
 	}
+	writeDockerCapabilities(caps)
 	return nil
 }
 

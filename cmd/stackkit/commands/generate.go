@@ -254,6 +254,15 @@ func generateTfvarsJSON(spec *models.StackSpec) []byte {
 		vars["dashboard_title"] = "My Homelab"
 	}
 
+	// Docker capabilities — detect network mode
+	vars["network_mode"] = "bridge"
+	if caps := loadDockerCapabilities(); caps != nil {
+		if !caps.BridgeNetworking {
+			vars["network_mode"] = "host"
+			printInfo("Host networking mode (bridge unavailable on this system)")
+		}
+	}
+
 	// Allow spec-level service overrides
 	if spec.Services != nil {
 		for name, cfg := range spec.Services {
@@ -273,6 +282,23 @@ func generateTfvarsJSON(spec *models.StackSpec) []byte {
 }
 
 // countFiles counts files in a directory
+// loadDockerCapabilities reads the capabilities file written by `stackkit prepare`.
+func loadDockerCapabilities() *models.DockerCapabilities {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil
+	}
+	data, err := os.ReadFile(filepath.Join(home, ".stackkits", "capabilities.json"))
+	if err != nil {
+		return nil
+	}
+	var caps models.DockerCapabilities
+	if err := json.Unmarshal(data, &caps); err != nil {
+		return nil
+	}
+	return &caps
+}
+
 func countFiles(dir string) (int, error) {
 	count := 0
 	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {

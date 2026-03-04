@@ -187,6 +187,14 @@ type ValidationError struct {
 	Code    string `json:"code,omitempty"`
 }
 
+// DockerCapabilities represents detected Docker runtime capabilities.
+// Written by `stackkit prepare` and read by `stackkit generate`.
+type DockerCapabilities struct {
+	BridgeNetworking bool   `json:"bridgeNetworking"`
+	Iptables         bool   `json:"iptables"`
+	StorageDriver    string `json:"storageDriver"`
+}
+
 // SystemInfo represents system information from a node
 type SystemInfo struct {
 	Hostname      string `json:"hostname"`
