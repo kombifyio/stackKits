@@ -93,8 +93,8 @@ changelog:
 
 release:
   github:
-    owner: KombiverseLabs
-    name: kombify-StackKits
+    owner: kombifyio
+    name: stackKits
   draft: false
   prerelease: auto
   name_template: "v{{ .Version }}"
@@ -115,4 +115,4 @@ release:
 
     Or download the archive for your platform below.
   footer: |
-    **Full Changelog**: https://github.com/KombiverseLabs/kombify-StackKits/compare/{{ .PreviousTag }}...{{ .Tag }}
+    **Full Changelog**: https://github.com/kombifyio/stackKits/compare/{{ .PreviousTag }}...{{ .Tag }}

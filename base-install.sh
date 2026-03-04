@@ -26,7 +26,7 @@ cat <<'BANNER'
 BANNER
 printf '\033[0m'
 
-REPO="KombiverseLabs/kombify-StackKits"
+REPO="kombifyio/stackKits"
 INSTALL_DIR="/usr/local/bin"
 HOMELAB_DIR="$HOME/my-homelab"
 
