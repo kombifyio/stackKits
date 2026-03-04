@@ -352,30 +352,34 @@ func startDockerDaemon(ctx context.Context) error {
 	// Phase 3: Detect iptables capability and fix if possible
 	iptablesAvailable := ensureIptables()
 
-	// Phase 4: Write adaptive daemon.json based on system capabilities
-	ensureDaemonConfig(iptablesAvailable)
+	// Phase 4: Detect best storage driver
+	storageDriver := detectStorageDriver()
 
-	// Phase 5: Ensure containerd is ready (Docker depends on it)
+	// Phase 5: Write adaptive daemon.json based on system capabilities
+	ensureDaemonConfig(iptablesAvailable, storageDriver)
+
+	// Phase 6: Ensure containerd is ready (Docker depends on it)
 	ensureContainerd(isSystemd)
 
-	// Phase 6: Enable Docker service
+	// Phase 7: Enable Docker service
 	if isSystemd {
 		exec.Command("systemctl", "enable", "docker").Run()        //nolint:errcheck
 		exec.Command("systemctl", "enable", "docker.socket").Run() //nolint:errcheck
 	}
 
-	// Phase 7: Start Docker
+	// Phase 8: Start Docker
 	if err := tryStartDocker(ctx, isSystemd); err == nil {
 		return nil
 	}
 
-	// Phase 8: First start failed — read logs, attempt targeted fix, retry
+	// Phase 9: First start failed — read logs, attempt targeted fixes, retry
 	logOutput := getDockerLogs(isSystemd)
 
 	// Auto-fix: iptables failure in Docker logs (may not have been caught in pre-flight)
 	if strings.Contains(logOutput, "iptables") || strings.Contains(logOutput, "NAT chain") {
 		printWarning("Docker failed due to iptables — reconfiguring with iptables disabled...")
-		writeDaemonJSON(false)
+		iptablesAvailable = false
+		writeDaemonJSON(false, storageDriver)
 		stopDocker(isSystemd)
 		if err := tryStartDocker(ctx, isSystemd); err == nil {
 			printSuccess("Docker started with iptables disabled")
@@ -384,16 +388,38 @@ func startDockerDaemon(ctx context.Context) error {
 		logOutput = getDockerLogs(isSystemd)
 	}
 
-	// Auto-fix: storage driver issues
-	if strings.Contains(logOutput, "graphdriver") || strings.Contains(logOutput, "overlay2") {
-		printWarning("Docker storage driver issue — cleaning up and retrying...")
+	// Auto-fix: storage driver issues — switch to fallback driver
+	if strings.Contains(logOutput, "graphdriver") || strings.Contains(logOutput, "overlay") ||
+		strings.Contains(logOutput, "driver not supported") {
+		fallbackDriver := "fuse-overlayfs"
+		if _, err := exec.LookPath("fuse-overlayfs"); err != nil {
+			fallbackDriver = "vfs"
+		}
+		printWarning("Storage driver %q failed — switching to %q...", storageDriver, fallbackDriver)
+		storageDriver = fallbackDriver
 		stopDocker(isSystemd)
 		os.RemoveAll("/var/lib/docker/overlay2") //nolint:errcheck
 		os.RemoveAll("/var/lib/docker/network")  //nolint:errcheck
+		writeDaemonJSON(iptablesAvailable, storageDriver)
 		if err := tryStartDocker(ctx, isSystemd); err == nil {
+			printSuccess("Docker started with storage driver %q", storageDriver)
 			return nil
 		}
 		logOutput = getDockerLogs(isSystemd)
+
+		// If fuse-overlayfs also failed, try vfs as absolute last resort
+		if fallbackDriver != "vfs" {
+			printWarning("Storage driver %q also failed — trying vfs (slow but universal)...", fallbackDriver)
+			storageDriver = "vfs"
+			stopDocker(isSystemd)
+			os.RemoveAll("/var/lib/docker/fuse-overlayfs") //nolint:errcheck
+			writeDaemonJSON(iptablesAvailable, storageDriver)
+			if err := tryStartDocker(ctx, isSystemd); err == nil {
+				printSuccess("Docker started with storage driver vfs")
+				return nil
+			}
+			logOutput = getDockerLogs(isSystemd)
+		}
 	}
 
 	// All auto-fixes exhausted — report clearly
@@ -471,8 +497,37 @@ func switchToIptablesLegacy() bool {
 	return success
 }
 
+// detectStorageDriver tests which Docker storage driver the system supports.
+func detectStorageDriver() string {
+	// Test overlay2: try mounting an overlay filesystem
+	testDir := "/tmp/stackkit-overlay-test"
+	os.MkdirAll(testDir+"/lower", 0755)  //nolint:errcheck
+	os.MkdirAll(testDir+"/upper", 0755)  //nolint:errcheck
+	os.MkdirAll(testDir+"/work", 0755)   //nolint:errcheck
+	os.MkdirAll(testDir+"/merged", 0755) //nolint:errcheck
+	defer os.RemoveAll(testDir)          //nolint:errcheck
+
+	mountCmd := exec.Command("mount", "-t", "overlay", "overlay",
+		"-o", fmt.Sprintf("lowerdir=%s/lower,upperdir=%s/upper,workdir=%s/work", testDir, testDir, testDir),
+		testDir+"/merged")
+	if mountCmd.Run() == nil {
+		exec.Command("umount", testDir+"/merged").Run() //nolint:errcheck
+		return "overlay2"
+	}
+
+	// overlay2 not supported — try fuse-overlayfs
+	if _, err := exec.LookPath("fuse-overlayfs"); err == nil {
+		printInfo("overlay2 not available — using fuse-overlayfs")
+		return "fuse-overlayfs"
+	}
+
+	// Last resort: vfs (no copy-on-write, uses more disk, but works everywhere)
+	printWarning("overlay2 not available — using vfs storage driver (slower, uses more disk)")
+	return "vfs"
+}
+
 // ensureDaemonConfig writes /etc/docker/daemon.json adapted to system capabilities.
-func ensureDaemonConfig(iptablesAvailable bool) {
+func ensureDaemonConfig(iptablesAvailable bool, storageDriver string) {
 	// Don't overwrite if user has a custom config
 	if _, err := os.Stat("/etc/docker/daemon.json"); err == nil {
 		existing, readErr := os.ReadFile("/etc/docker/daemon.json")
@@ -481,11 +536,11 @@ func ensureDaemonConfig(iptablesAvailable bool) {
 			return
 		}
 	}
-	writeDaemonJSON(iptablesAvailable)
+	writeDaemonJSON(iptablesAvailable, storageDriver)
 }
 
 // writeDaemonJSON writes an adaptive daemon.json based on system capabilities.
-func writeDaemonJSON(iptablesAvailable bool) {
+func writeDaemonJSON(iptablesAvailable bool, storageDriver string) {
 	os.MkdirAll("/etc/docker", 0755) //nolint:errcheck
 
 	iptablesStr := "true"
@@ -502,7 +557,7 @@ func writeDaemonJSON(iptablesAvailable bool) {
 	}
 
 	config := fmt.Sprintf(`{
-  "storage-driver": "overlay2",
+  "storage-driver": "%s",
   "iptables": %s,
   "live-restore": true,
   "log-driver": "json-file",
@@ -512,10 +567,10 @@ func writeDaemonJSON(iptablesAvailable bool) {
   },
   %s
   "max-concurrent-downloads": 3
-}`, iptablesStr, dnsLine)
+}`, storageDriver, iptablesStr, dnsLine)
 
 	os.WriteFile("/etc/docker/daemon.json", []byte(config), 0644) //nolint:errcheck
-	printInfo("Configured /etc/docker/daemon.json (iptables=%s)", iptablesStr)
+	printInfo("Configured /etc/docker/daemon.json (storage=%s, iptables=%s)", storageDriver, iptablesStr)
 }
 
 // ensureContainerd starts containerd and waits for its socket to be ready.
