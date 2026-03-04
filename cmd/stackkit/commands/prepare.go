@@ -543,11 +543,11 @@ func detectBridgeSupport() bool {
 
 // ensureDaemonConfig writes /etc/docker/daemon.json adapted to system capabilities.
 func ensureDaemonConfig(iptablesAvailable bool, storageDriver string, bridgeAvailable bool) {
-	// Don't overwrite if user has a custom config
+	// Only preserve existing config if it wasn't written by stackkit
 	if _, err := os.Stat("/etc/docker/daemon.json"); err == nil {
 		existing, readErr := os.ReadFile("/etc/docker/daemon.json")
-		if readErr == nil && len(existing) > 5 {
-			// User has a custom config — respect it
+		if readErr == nil && len(existing) > 5 && !strings.Contains(string(existing), "max-concurrent-downloads") {
+			// User has a custom config (not ours) — respect it
 			return
 		}
 	}
