@@ -344,81 +344,125 @@ func startDockerDaemon(ctx context.Context) error {
 	}
 
 	// Clean up stale state from failed previous starts
-	os.Remove("/var/run/docker.pid") //nolint:errcheck // best-effort cleanup
+	os.Remove("/var/run/docker.pid") //nolint:errcheck
+
+	// Pre-flight: ensure iptables works (common VPS issue with nf_tables)
+	fixIptablesIfNeeded()
 
 	if isSystemd {
-		// Ensure containerd is running (Docker depends on it)
-		exec.Command("systemctl", "enable", "containerd").Run()  //nolint:errcheck
-		exec.Command("systemctl", "start", "containerd").Run()   //nolint:errcheck
-		exec.Command("systemctl", "enable", "docker").Run()      //nolint:errcheck
+		exec.Command("systemctl", "enable", "containerd").Run()    //nolint:errcheck
+		exec.Command("systemctl", "start", "containerd").Run()     //nolint:errcheck
+		exec.Command("systemctl", "enable", "docker").Run()        //nolint:errcheck
 		exec.Command("systemctl", "enable", "docker.socket").Run() //nolint:errcheck
+	} else {
+		exec.Command("service", "containerd", "start").Run() //nolint:errcheck
+	}
 
-		startCmd := exec.Command("systemctl", "start", "docker")
-		startCmd.Stdout = os.Stdout
-		startCmd.Stderr = os.Stderr
-		if err := startCmd.Run(); err != nil {
-			return fmt.Errorf("systemctl start docker failed: %w", err)
+	// Try starting Docker — if it fails, attempt auto-fix and retry
+	if err := tryStartDocker(ctx, isSystemd); err == nil {
+		return nil
+	}
+
+	// Check Docker logs for known fixable issues
+	logOutput := getDockerLogs(isSystemd)
+	if strings.Contains(logOutput, "iptables") && strings.Contains(logOutput, "Permission denied") {
+		printWarning("nf_tables iptables backend failed — switching to iptables-legacy...")
+		if switchToIptablesLegacy() {
+			printSuccess("Switched to iptables-legacy")
+			// Retry Docker start
+			if err := tryStartDocker(ctx, isSystemd); err == nil {
+				return nil
+			}
+		}
+	}
+
+	// Still not working — show diagnostics
+	printWarning("Docker failed to start — diagnostics:")
+	fmt.Println(logOutput)
+	if _, err := os.Stat("/var/run/docker.sock"); os.IsNotExist(err) {
+		printWarning("Docker socket /var/run/docker.sock does not exist")
+	}
+	return fmt.Errorf("Docker daemon failed to start — see diagnostics above")
+}
+
+// tryStartDocker starts the Docker service and waits up to 15s for it to respond.
+func tryStartDocker(ctx context.Context, isSystemd bool) error {
+	os.Remove("/var/run/docker.pid") //nolint:errcheck
+
+	if isSystemd {
+		cmd := exec.Command("systemctl", "start", "docker")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			return err
 		}
 	} else {
-		// SysV init — also ensure containerd is started
-		exec.Command("service", "containerd", "start").Run() //nolint:errcheck
 		cmd := exec.Command("service", "docker", "start")
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("service docker start failed: %w", err)
+			return err
 		}
 	}
 
-	// Wait for Docker to become ready (up to 90 seconds — fresh installs can be slow)
 	dockerClient := docker.NewClient()
-	maxWait := 30
-	for i := 0; i < maxWait; i++ {
+	for i := 0; i < 15; i++ {
 		if dockerClient.IsRunning(ctx) {
 			return nil
 		}
 		time.Sleep(1 * time.Second)
 	}
+	return fmt.Errorf("timeout")
+}
 
-	// Not ready — collect diagnostics before failing
-	printWarning("Docker not ready after %ds — collecting diagnostics...", maxWait)
-
-	// Try docker info for the actual error message
-	infoCmd := exec.Command("docker", "info")
-	infoCmd.Stdout = os.Stdout
-	infoCmd.Stderr = os.Stdout
-	infoCmd.Run() //nolint:errcheck
-
-	// Check if the daemon process is running at all
-	psCmd := exec.Command("sh", "-c", "ps aux | grep -E 'dockerd|containerd' | grep -v grep")
-	psCmd.Stdout = os.Stdout
-	psCmd.Run() //nolint:errcheck
-
-	// Check logs — journald for systemd, /var/log for SysV
-	if isSystemd {
-		logCmd := exec.Command("journalctl", "-u", "docker", "--no-pager", "-n", "20")
-		logCmd.Stdout = os.Stdout
-		logCmd.Stderr = os.Stderr
-		logCmd.Run() //nolint:errcheck
-	} else {
-		// SysV init logs
-		for _, logFile := range []string{"/var/log/docker.log", "/var/log/syslog"} {
-			if _, err := os.Stat(logFile); err == nil {
-				printInfo("Last 20 lines of %s:", logFile)
-				tailCmd := exec.Command("tail", "-20", logFile)
-				tailCmd.Stdout = os.Stdout
-				tailCmd.Run() //nolint:errcheck
-				break
+// fixIptablesIfNeeded checks if nf_tables iptables is broken and switches to legacy.
+func fixIptablesIfNeeded() {
+	// Test if iptables works at all
+	testCmd := exec.Command("iptables", "--wait", "-t", "nat", "-L", "-n")
+	if output, err := testCmd.CombinedOutput(); err != nil {
+		if strings.Contains(string(output), "Permission denied") ||
+			strings.Contains(string(output), "nf_tables") {
+			printWarning("iptables nf_tables backend broken — switching to legacy...")
+			if switchToIptablesLegacy() {
+				printSuccess("Switched to iptables-legacy")
 			}
 		}
 	}
+}
 
-	// Check socket
-	if _, err := os.Stat("/var/run/docker.sock"); os.IsNotExist(err) {
-		printWarning("Docker socket /var/run/docker.sock does not exist")
+// switchToIptablesLegacy switches iptables from nf_tables to legacy backend.
+func switchToIptablesLegacy() bool {
+	cmds := []struct{ name, link string }{
+		{"iptables", "/usr/sbin/iptables-legacy"},
+		{"ip6tables", "/usr/sbin/ip6tables-legacy"},
 	}
+	success := false
+	for _, c := range cmds {
+		if _, err := os.Stat(c.link); err == nil {
+			cmd := exec.Command("update-alternatives", "--set", c.name, c.link)
+			if err := cmd.Run(); err == nil {
+				success = true
+			}
+		}
+	}
+	return success
+}
 
-	return fmt.Errorf("Docker daemon did not become ready within %d seconds — see diagnostics above", maxWait)
+// getDockerLogs returns recent Docker daemon log output.
+func getDockerLogs(isSystemd bool) string {
+	if isSystemd {
+		cmd := exec.Command("journalctl", "-u", "docker", "--no-pager", "-n", "20")
+		output, _ := cmd.CombinedOutput()
+		return string(output)
+	}
+	for _, logFile := range []string{"/var/log/docker.log", "/var/log/syslog"} {
+		if _, err := os.Stat(logFile); err == nil {
+			cmd := exec.Command("tail", "-20", logFile)
+			output, _ := cmd.CombinedOutput()
+			return string(output)
+		}
+	}
+	return "no Docker logs found"
 }
 
 func installDockerLocal(ctx context.Context) error {
