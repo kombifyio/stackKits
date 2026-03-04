@@ -372,12 +372,12 @@ func startDockerDaemon(ctx context.Context) error {
 
 	// Wait for Docker to become ready (up to 90 seconds — fresh installs can be slow)
 	dockerClient := docker.NewClient()
-	maxWait := 90
-	for i := 0; i < maxWait/2; i++ {
+	maxWait := 30
+	for i := 0; i < maxWait; i++ {
 		if dockerClient.IsRunning(ctx) {
 			return nil
 		}
-		time.Sleep(2 * time.Second)
+		time.Sleep(1 * time.Second)
 	}
 
 	// Not ready — collect diagnostics before failing
