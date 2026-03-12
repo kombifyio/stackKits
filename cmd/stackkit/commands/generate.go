@@ -302,8 +302,8 @@ func generateTfvarsJSON(spec *models.StackSpec) ([]byte, error) { //nolint:gocyc
 			domain = suggested
 			vars["domain"] = domain
 			// For kombify.me, ensure SubdomainPrefix will be set during registration
-			if isKombifyMeDomain(domain) && spec.Domain != "kombify.me" {
-				spec.Domain = "kombify.me"
+			if isKombifyMeDomain(domain) && spec.Domain != models.DomainKombifyMe {
+				spec.Domain = models.DomainKombifyMe
 			}
 		}
 	}
@@ -575,7 +575,7 @@ func countFiles(dir string) (int, error) {
 
 // isKombifyMeDomain returns true if the domain is kombify.me (the subdomain service).
 func isKombifyMeDomain(domain string) bool {
-	return strings.EqualFold(domain, "kombify.me")
+	return strings.EqualFold(domain, models.DomainKombifyMe)
 }
 
 // registerKombifyMeSubdomains registers base + service subdomains on the kombify.me API

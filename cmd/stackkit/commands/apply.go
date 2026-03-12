@@ -613,7 +613,7 @@ func formatApplyError(stderr string) string {
 // registerWithKombify registers the stackkit-server instance with kombify for Direct Connect.
 // Only runs when the deployment uses a kombify.me domain.
 func registerWithKombify(spec *models.StackSpec, state *models.DeploymentState) {
-	if spec == nil || spec.Domain != "kombify.me" {
+	if spec == nil || spec.Domain != models.DomainKombifyMe {
 		return
 	}
 
