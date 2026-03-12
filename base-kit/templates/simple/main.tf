@@ -2432,7 +2432,8 @@ resource "null_resource" "jellyfin_media_dir" {
   count = var.enable_jellyfin ? 1 : 0
 
   provisioner "local-exec" {
-    command = "mkdir -p ${var.media_path}"
+    command     = "mkdir -p ${var.media_path}"
+    on_failure  = continue
   }
 }
 

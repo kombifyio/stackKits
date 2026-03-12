@@ -104,6 +104,9 @@ if [ -d "$TMP/base-kit" ]; then
 fi
 if [ -d "$TMP/base" ]; then
   cp -r "$TMP/base" "$STACKKITS_DIR/"
+  # Also place inside base-kit/ so CUE module resolution finds it
+  # (CUE module root is base-kit/, so it looks for "base" at base-kit/base/)
+  cp -r "$TMP/base" "$STACKKITS_DIR/base-kit/"
 fi
 
 ok "  stackkit $(stackkit version 2>/dev/null || echo v${LATEST}) installed"

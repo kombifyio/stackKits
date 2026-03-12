@@ -64,13 +64,19 @@ func Detect(ctx context.Context) *Result {
 
 // isKombifyCloud checks if the server was provisioned by kombify Cloud.
 // It checks for the KOMBIFY_CONTEXT env var or the /etc/kombify/context file.
+// Both "cloud" and "vps" are treated as cloud context — VPS-type Sim nodes
+// are injected with "cloud" by the Sim engine, but "vps" is accepted as a
+// defence-in-depth fallback.
 func isKombifyCloud() bool {
-	if ctx := os.Getenv("KOMBIFY_CONTEXT"); ctx == "cloud" {
+	if ctx := os.Getenv("KOMBIFY_CONTEXT"); ctx == "cloud" || ctx == "vps" {
 		return true
 	}
 	data, err := os.ReadFile("/etc/kombify/context")
-	if err == nil && strings.TrimSpace(string(data)) == "cloud" {
-		return true
+	if err == nil {
+		val := strings.TrimSpace(string(data))
+		if val == "cloud" || val == "vps" {
+			return true
+		}
 	}
 	return false
 }

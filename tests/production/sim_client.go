@@ -25,6 +25,7 @@ type Node struct {
 	SSHPort    int    `json:"ssh_port,omitempty"`
 	SSHUser    string `json:"ssh_user,omitempty"`
 	SSHKeyPath string `json:"ssh_key_path,omitempty"`
+	ProxyJump  string `json:"proxy_jump,omitempty"` // bastion hint from Sim (e.g. "root@simulate.kombify.io")
 }
 
 // HealthResponse from the Sim API health endpoint.
@@ -161,7 +162,46 @@ func (s *SimClient) DeleteNode(nodeID string) error {
 	return nil
 }
 
-// GetNode gets a node by ID.
+// GetNodeSSH returns SSH connection info for a node (including ProxyJump hint).
+func (s *SimClient) GetNodeSSH(nodeID string) (*Node, error) {
+	var result Node
+	path := fmt.Sprintf("/v1/simulation/nodes/%s/ssh", nodeID)
+	resp, err := s.client.Get(path, &result)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("get SSH info failed: status %d", resp.StatusCode)
+	}
+	return &result, nil
+}
+
+// WaitForNode polls until the node status is "running" or timeout expires.
+func (s *SimClient) WaitForNode(simID, nodeID string, timeout time.Duration) (*Node, error) {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		node, err := s.GetNode(nodeID)
+		if err == nil && node.Status == "running" {
+			return node, nil
+		}
+		time.Sleep(5 * time.Second)
+	}
+	return nil, fmt.Errorf("node %s did not reach running status within %s", nodeID, timeout)
+}
+
+// CreateVPSNode is a convenience wrapper that creates an Ubuntu VPS node with
+// external access enabled.
+func (s *SimClient) CreateVPSNode(simID, name string) (*Node, error) {
+	return s.CreateNode(simID, CreateNodeRequest{
+		Name:     name,
+		Template: "ubuntu",
+		Config: map[string]string{
+			"location":        "vps",
+			"os":              "ubuntu",
+			"external_access": "true",
+		},
+	})
+}
 func (s *SimClient) GetNode(nodeID string) (*Node, error) {
 	var result Node
 	path := fmt.Sprintf("/v1/simulation/nodes/%s", nodeID)
