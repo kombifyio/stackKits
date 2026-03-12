@@ -72,8 +72,14 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 		spec.Context = contextFlag
 	}
 
+	// Resolve NodeContext: use stored capabilities or detect on-the-fly
+	resolvedCtx := resolveNodeContextForGenerate(spec)
+	if spec.Context == "" {
+		spec.Context = string(resolvedCtx)
+	}
+
 	printInfo("Generating OpenTofu files for: %s", bold(spec.Name))
-	printInfo("StackKit: %s, Mode: %s, Context: %s", spec.StackKit, spec.Mode, contextOrDefault(spec.Context))
+	printInfo("StackKit: %s, Mode: %s, Context: %s", spec.StackKit, spec.Mode, netenv.FormatNodeContext(resolvedCtx))
 
 	// Find StackKit directory
 	stackkitDir, err := loader.FindStackKitDir(spec.StackKit)
@@ -277,25 +283,10 @@ func generateTfvarsJSON(spec *models.StackSpec) ([]byte, error) { //nolint:gocyc
 	// Network environment: check capabilities written by `stackkit prepare`
 	// or detect on-the-fly if prepare wasn't run
 	caps := loadDockerCapabilities()
-	var netEnv models.NetworkEnvironment
-	if caps != nil && caps.NetworkEnv != "" {
-		netEnv = caps.NetworkEnv
-	} else {
-		// Detect on-the-fly if prepare wasn't run or didn't detect
-		detected := netenv.Detect(context.Background())
-		netEnv = detected.Environment
-		if caps == nil {
-			caps = &models.DockerCapabilities{}
-		}
-		caps.NetworkEnv = detected.Environment
-		caps.PublicIP = detected.PublicIP
-		caps.PrivateIP = detected.PrivateIP
-		caps.IsNAT = detected.IsNAT
-		caps.HasPublicInterface = detected.HasPublicInterface
-	}
+	resolvedCtx := resolveNodeContextFromCaps(caps, spec)
 
-	// Smart domain resolution: detect mismatches between domain and environment
-	if suggested, reason := netenv.SuggestDomain(netEnv, domain); reason != "" {
+	// Smart domain resolution: use NodeContext instead of raw NetworkEnvironment
+	if suggested, reason := netenv.SuggestDomainForContext(resolvedCtx, domain); reason != "" {
 		printWarning("Domain mismatch: %s", reason)
 		if domain != suggested {
 			printInfo("Auto-correcting domain: %s -> %s", domain, suggested)
@@ -571,6 +562,49 @@ func countFiles(dir string) (int, error) {
 		return nil
 	})
 	return count, err
+}
+
+// resolveNodeContextForGenerate resolves the NodeContext for the generate command.
+// Uses stored capabilities from prepare, or detects on-the-fly.
+func resolveNodeContextForGenerate(spec *models.StackSpec) models.NodeContext {
+	// If --context flag was provided, use it directly
+	if spec.Context != "" {
+		return models.NodeContext(spec.Context)
+	}
+
+	caps := loadDockerCapabilities()
+	return resolveNodeContextFromCaps(caps, spec)
+}
+
+// resolveNodeContextFromCaps resolves NodeContext from DockerCapabilities.
+// If capabilities aren't available, detects on-the-fly.
+func resolveNodeContextFromCaps(caps *models.DockerCapabilities, spec *models.StackSpec) models.NodeContext {
+	// If --context flag was set on spec, honor it
+	if spec.Context != "" {
+		return models.NodeContext(spec.Context)
+	}
+
+	// Use stored resolved context from prepare
+	if caps != nil && caps.ResolvedContext != "" {
+		return caps.ResolvedContext
+	}
+
+	// Detect on-the-fly if prepare wasn't run
+	detected := netenv.Detect(context.Background())
+
+	// Update caps with detection results for downstream use
+	if caps == nil {
+		caps = &models.DockerCapabilities{}
+	}
+	caps.NetworkEnv = detected.Environment
+	caps.PublicIP = detected.PublicIP
+	caps.PrivateIP = detected.PrivateIP
+	caps.IsNAT = detected.IsNAT
+	caps.HasPublicInterface = detected.HasPublicInterface
+
+	resolved := netenv.ResolveFromResult(detected, caps.CPUCores, caps.MemoryGB)
+	caps.ResolvedContext = resolved
+	return resolved
 }
 
 // isKombifyMeDomain returns true if the domain is kombify.me (the subdomain service).

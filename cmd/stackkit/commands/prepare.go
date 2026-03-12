@@ -176,7 +176,7 @@ func prepareLocalSystem(ctx context.Context, spec *models.StackSpec, loader *con
 		}
 	}
 
-	// Network environment detection: home LAN vs VPS vs cloud
+	// Network environment detection + NodeContext resolution
 	if !prepareDryRun {
 		printInfo("Detecting network environment...")
 		netResult := netenv.Detect(ctx)
@@ -199,9 +199,21 @@ func prepareLocalSystem(ctx context.Context, spec *models.StackSpec, loader *con
 		caps.PrivateIP = netResult.PrivateIP
 		caps.IsNAT = netResult.IsNAT
 		caps.HasPublicInterface = netResult.HasPublicInterface
+
+		// Resolve NodeContext from network + hardware detection
+		// Hardware info may not be available yet (detected later in prepare),
+		// so we resolve with what we have now; generate will re-resolve with full info.
+		resolved := netenv.ResolveFromResult(netResult, caps.CPUCores, caps.MemoryGB)
+
+		// CLI --context flag overrides auto-detection
+		if contextFlag != "" {
+			resolved = models.NodeContext(contextFlag)
+		}
+		caps.ResolvedContext = resolved
 		writeDockerCapabilities(caps)
 
 		printSuccess("Network: %s", netenv.FormatEnvironment(netResult.Environment))
+		printSuccess("Context: %s", netenv.FormatNodeContext(resolved))
 		if netResult.PublicIP != "" {
 			printInfo("  Public IP: %s", netResult.PublicIP)
 		}
@@ -343,6 +355,21 @@ func prepareLocalSystem(ctx context.Context, spec *models.StackSpec, loader *con
 				slog.Int("cpu", caps.CPUCores),
 				slog.Float64("memory_gb", caps.MemoryGB),
 			)
+
+			// Re-resolve NodeContext now that hardware info is available
+			// (initial resolution in network detection may not have had CPU/memory)
+			if caps.NetworkEnv != "" {
+				netResult := &netenv.Result{Environment: caps.NetworkEnv}
+				resolved := netenv.ResolveFromResult(netResult, caps.CPUCores, caps.MemoryGB)
+				if contextFlag != "" {
+					resolved = models.NodeContext(contextFlag)
+				}
+				if resolved != caps.ResolvedContext {
+					printInfo("Context refined: %s -> %s (with hardware info)", caps.ResolvedContext, resolved)
+					caps.ResolvedContext = resolved
+					writeDockerCapabilities(caps)
+				}
+			}
 		}
 	}
 

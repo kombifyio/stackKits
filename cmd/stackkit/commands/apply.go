@@ -16,6 +16,7 @@ import (
 	"github.com/kombifyio/stackkits/internal/docker"
 	"github.com/kombifyio/stackkits/internal/iac"
 	"github.com/kombifyio/stackkits/internal/kombifyme"
+	"github.com/kombifyio/stackkits/internal/netenv"
 	"github.com/kombifyio/stackkits/internal/tofu"
 	"github.com/kombifyio/stackkits/pkg/models"
 	"github.com/spf13/cobra"
@@ -738,8 +739,8 @@ func verifyServiceURLs(ctx context.Context, spec *models.StackSpec) {
 	printWarning("Service URL check: %s is not reachable", testURL)
 
 	caps := loadDockerCapabilities()
-	if caps != nil && (caps.NetworkEnv == models.NetEnvVPS || caps.NetworkEnv == models.NetEnvCloud) {
-		// On a VPS/cloud with local domains — this is the root cause
+	if caps != nil && netenv.NodeContextIsCloud(caps.ResolvedContext) {
+		// On a cloud/VPS context with local domains — this is the root cause
 		if strings.HasSuffix(domain, ".local") || strings.HasSuffix(domain, ".lab") ||
 			strings.HasSuffix(domain, ".lan") || strings.HasSuffix(domain, ".home") || domain == models.DomainHomelab {
 			printError("Local domain '%s' is not accessible on a public server", domain)

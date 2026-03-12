@@ -265,7 +265,22 @@ const (
 	TierIncompatible CompatibilityTier = "incompatible"
 )
 
+// NodeContext classifies the deployment environment.
+// Matches CUE #NodeContext: "local" | "cloud" | "pi".
+// Auto-detected from network environment + hardware, overridable via --context flag.
+type NodeContext string
+
+const (
+	// ContextLocal means a home/office server (behind NAT, no public IP).
+	ContextLocal NodeContext = "local"
+	// ContextCloud means a VPS, dedicated server, or kombify Cloud instance (public IP).
+	ContextCloud NodeContext = "cloud"
+	// ContextPi means a low-resource ARM64 device (Raspberry Pi, etc.).
+	ContextPi NodeContext = "pi"
+)
+
 // NetworkEnvironment classifies where the server is running.
+// This is a lower-level detection detail used internally by context resolution.
 type NetworkEnvironment string
 
 const (
@@ -314,7 +329,10 @@ type DockerCapabilities struct {
 	CPUCores int     `json:"cpuCores,omitempty"`
 	MemoryGB float64 `json:"memoryGB,omitempty"`
 
-	// Network environment detection
+	// Resolved NodeContext (auto-detected or overridden via --context flag)
+	ResolvedContext NodeContext `json:"resolvedContext,omitempty"` // "local", "cloud", "pi"
+
+	// Network environment detection (lower-level detail feeding into context resolution)
 	NetworkEnv         NetworkEnvironment `json:"networkEnv,omitempty"`         // "home", "vps", "cloud", "unknown"
 	PublicIP           string             `json:"publicIP,omitempty"`           // External IP (empty if detection failed)
 	PrivateIP          string             `json:"privateIP,omitempty"`          // LAN/internal IP

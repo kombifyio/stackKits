@@ -41,13 +41,20 @@ Always present regardless of StackKit.
 
 ### 2. Context = Where + What Hardware
 
-Auto-detected from the runtime environment. Drives infrastructure-level defaults ONLY.
+Auto-detected during `stackkit prepare` from the runtime environment. Drives infrastructure-level defaults ONLY.
 
 | Context | Detection | Effects |
 |---------|-----------|---------|
-| `local` | Physical hardware, no cloud metadata | Self-signed TLS (Step-CA), Dokploy, overlay2 |
-| `cloud` | Cloud provider metadata detected | Let's Encrypt, Coolify, public IP routing |
-| `pi` | ARM arch + low RAM | Dockge, ARM images, constrained resources |
+| `local` | Home/office network (private IP, no cloud metadata) | Self-signed TLS (Step-CA), Dokploy, overlay2 |
+| `cloud` | Cloud provider metadata or VPS detected (public IP, cloud signatures) | Let's Encrypt, Coolify, public IP routing |
+| `pi` | ARM64 architecture + low resources (<4 cores or <4 GB RAM) | Dockge, ARM images, constrained resources |
+
+**How auto-detection works:**
+
+1. Network environment detection (`netenv.Detect()`) checks cloud metadata endpoints, public/private IPs, and environment variables to classify as `home`, `vps`, or `cloud`.
+2. Hardware detection identifies CPU architecture (amd64/arm64) and resource levels (cores, RAM).
+3. `ResolveNodeContext()` combines both signals: ARM64 + low resources → `pi`, cloud/VPS → `cloud`, home network → `local`.
+4. The `--context` CLI flag can override auto-detection (e.g., `--context pi` on an old laptop).
 
 Context does NOT determine which use cases are available. That's the StackKit's job + Compute Tier gating.
 
@@ -139,7 +146,11 @@ StackKit selected (Base Kit / Modern Homelab / HA Kit)
 Mode applied (--mode pi overrides auto-detection)
     |
     v
-Context auto-detected (local / cloud / pi)
+Context auto-detected:
+  netenv.Detect() → network environment (home/vps/cloud)
+  + hardware info (arch, CPU cores, RAM)
+  → ResolveNodeContext() → local / cloud / pi
+  (--context flag overrides if set)
     |
     v
 Compute Tier derived (high / standard / low)
