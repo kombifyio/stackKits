@@ -7,7 +7,7 @@
 kombify.me is a wildcard subdomain tunnel service — the kombify equivalent of traefik.me or ngrok. It gives any homelab service a permanent, publicly reachable HTTPS URL at `*.kombify.me` without requiring the user to manage domains, certificates, or port forwarding.
 
 **Architecture:**
-- **Gateway** (`ca-kombify-me-prod`, Azure Container App): receives all `*.kombify.me` traffic, manages tunnel registry
+- **Gateway** (`kombify-me-gateway`, Docker container on VPS): receives all `*.kombify.me` traffic via Cloudflare Tunnel, manages tunnel registry
 - **Agent** (binary on homelab/VPS): opens a WebSocket control channel to the gateway, forwards HTTP requests to local services
 
 ---
@@ -32,9 +32,7 @@ Rules:
 
 ## API Reference
 
-**Base URL:** `https://ca-kombify-me-prod.gentlemoss-1ad74075.westeurope.azurecontainerapps.io/_kombify/api`
-
-> Note: once `kombify.me` bare domain DNS is pointed at AFD, use `https://kombify.me/_kombify/api`
+**Base URL:** `https://kombify.me/_kombify/api`
 
 **Via Kong (kombify Stack internal):** `https://api.kombify.io/v1/subdomains/*`
 
@@ -142,7 +140,7 @@ go build -o agent ./cmd/agent
 
 ```yaml
 # Gateway WebSocket endpoint — do NOT include /_kombify/tunnel (agent appends it)
-gateway_url: wss://ca-kombify-me-prod.gentlemoss-1ad74075.westeurope.azurecontainerapps.io
+gateway_url: wss://kombify.me
 
 # API key from registration (kbi_ prefix)
 api_key: kbi_<your_api_key>
@@ -200,9 +198,10 @@ loginctl enable-linger $USER   # persist after logout
 
 ```
 Browser → https://mylab-u8f3k2.kombify.me/path
-  → AFD (afd-kombify-prod, wildcard *.kombify.me)
-  → Container App ca-kombify-me-prod (gateway)
-    → looks up subdomain "mylab-u8f3k2" in DB
+  → Cloudflare CDN (wildcard *.kombify.me)
+  → Cloudflare Tunnel (cloudflared on VPS)
+  → kombify-me-gateway container (port 8080, dokploy-network)
+    → looks up subdomain "mylab-u8f3k2" in kombify-DB
     → sends HTTP request over WebSocket tunnel
       → Agent on homelab receives request
       → forwards to http://127.0.0.1:80/path
@@ -210,7 +209,7 @@ Browser → https://mylab-u8f3k2.kombify.me/path
   → Browser receives response
 ```
 
-The `Host` header the agent receives is always `{subdomain}.kombify.me` (canonical form), regardless of what AFD sends to the origin. The agent matches requests using `strings.HasPrefix(req.Host, subdomain+".")`.
+The `Host` header the agent receives is always `{subdomain}.kombify.me` (canonical form). The agent matches requests using `strings.HasPrefix(req.Host, subdomain+".")`.
 
 ---
 
@@ -223,9 +222,11 @@ The `Host` header the agent receives is always `{subdomain}.kombify.me` (canonic
 
 ---
 
-## StackKit Integration Pattern
+## StackKit Integration Patterns
 
-When a StackKit is deployed and needs a public URL:
+### Pattern 1: Tunnel (Agent-Based)
+
+When a StackKit is deployed behind NAT and needs a public URL via tunnel:
 
 1. **On first deploy**: call `/auto-register` with `homelab_name` + `user_id_suffix` derived from the stack's metadata → get base subdomain
 2. **For each service**: call `/auto-register-service` with `service_name` matching the StackKit service definition → set `expose: true`
@@ -234,17 +235,87 @@ When a StackKit is deployed and needs a public URL:
 
 The base subdomain (`mylab-u8f3k2.kombify.me`) can serve as the stack's management dashboard URL. Individual services get their own subdomain (`mylab-u8f3k2-grafana.kombify.me`, etc.).
 
+### Pattern 2: Direct Connect (Registry-Based)
+
+When a stackkit-server instance is publicly reachable (e.g., VPS with public IP), Kong can proxy directly to it without the tunnel agent.
+
+**How it works:**
+
+1. **On deploy** (`stackkit apply`): if `domain: kombify.me`, the CLI registers the instance with kombify's registry API (`POST /registry/instances`). The instance ID is derived from subdomain prefix + StackKit name + device fingerprint.
+2. **Heartbeat**: `stackkit-server` sends a heartbeat every 60 seconds (`PUT /registry/instances/{id}/heartbeat`) so Kong knows the instance is alive.
+3. **On shutdown**: `stackkit-server` deregisters itself (`DELETE /registry/instances/{id}`).
+4. **Kong routing**: Kong reads the registry and routes `*.kombify.me` traffic directly to the instance's public endpoint.
+
+**stack-spec.yaml:**
+
+```yaml
+domain: kombify.me
+subdomainPrefix: mylab
+```
+
+**Environment variables:**
+
+- `KOMBIFY_API_KEY` — API key for kombify registry (required)
+- `STACKKITS_INSTANCE_ID` — Override auto-generated instance ID (optional)
+
+**stackkit-server flags:**
+
+```bash
+stackkit-server --instance-id "mylab-base-kit-a1b2c3"
+# or via env: STACKKITS_INSTANCE_ID=mylab-base-kit-a1b2c3
+```
+
+**Registry API endpoints** (on kombify.me):
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `POST` | `/registry/instances` | Register instance |
+| `PUT` | `/registry/instances/{id}/heartbeat` | Send heartbeat |
+| `DELETE` | `/registry/instances/{id}` | Deregister instance |
+
+**Registration payload:**
+
+```json
+{
+  "instance_id": "mylab-base-kit-a1b2c3",
+  "endpoint_url": "https://api.mylab.kombify.me",
+  "stackkit": "base-kit",
+  "services": [
+    {"name": "traefik", "status": "running"},
+    {"name": "dashboard", "url": "https://base.mylab.kombify.me", "status": "running"}
+  ],
+  "status": "running",
+  "api_port": 8082
+}
+```
+
+**When to use which pattern:**
+
+| Scenario | Pattern | Why |
+|----------|---------|-----|
+| Homelab behind NAT, no public IP | Tunnel (Agent) | Can't receive inbound connections |
+| VPS with public IP | Direct Connect | Lower latency, no tunnel overhead |
+| Cloud VM (Hetzner, DO, etc.) | Direct Connect | Public IP available |
+| Mixed (local + cloud nodes) | Both | Tunnel for local, Direct Connect for cloud |
+
 ---
 
 ## Health Check
 
 ```bash
-curl https://ca-kombify-me-prod.gentlemoss-1ad74075.westeurope.azurecontainerapps.io/_kombify/health
+curl https://kombify.me/_kombify/health
 # {"status":"ok","active_tunnels":N}
 ```
 
 ---
 
-## Live Demo
+## Hosting
 
-`https://demolab-e2etest-demo.kombify.me` — a Node.js service running on `srv1161760` via systemd, tunnelled through kombify.me. Shows the accessed URL, host, protocol, and demonstrates Zitadel PKCE auth flow.
+The gateway runs as a Docker container on the kombify-ionos VPS (217.154.174.107), managed via Dokploy. A secondary instance runs on srv1161760 (72.62.49.6).
+
+| Component | Location | Details |
+|-----------|----------|---------|
+| **Gateway** | kombify-ionos + srv1161760 | `ghcr.io/kombiverselabs/kombify-me-gateway:latest`, port 8080, `dokploy-network` |
+| **Database** | kombify-DB | Database `kombify_me` on shared PostgreSQL |
+| **DNS/TLS** | Cloudflare | Domain `kombify.me`, wildcard TLS, Cloudflare Tunnel |
+| **Tunnel ingress** | cloudflared on VPS | Routes `*.kombify.me` traffic to gateway container |

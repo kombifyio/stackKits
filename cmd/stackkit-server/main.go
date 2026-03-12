@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/kombifyio/stackkits/internal/api"
+	"github.com/kombifyio/stackkits/internal/kombifyme"
 )
 
 // Version is set at build time via ldflags.
@@ -39,12 +40,14 @@ func main() {
 	apiKey := flag.String("api-key", "", "API key for authentication (or set STACKKITS_API_KEY env var)")
 	corsOrigins := flag.String("cors-origins", "", "Comma-separated allowed CORS origins (or set STACKKITS_CORS_ORIGINS; empty = *)")
 	rateLimit := flag.Int("rate-limit", 60, "Max requests per IP per minute; 0 = no limit (or set STACKKITS_RATE_LIMIT)")
+	logDir := flag.String("log-dir", "", "Directory containing deploy logs (or set STACKKITS_LOG_DIR)")
 	logLevel := flag.String("log-level", "info", "Log level: debug, info, warn, error")
+	instanceID := flag.String("instance-id", "", "Instance ID for kombify registry heartbeat (or set STACKKITS_INSTANCE_ID)")
 	flag.Parse()
 
 	setupLogging(*logLevel)
 
-	cfg := resolveConfig(*port, *baseDir, *apiKey, *corsOrigins, *rateLimit)
+	cfg := resolveConfig(*port, *baseDir, *apiKey, *corsOrigins, *rateLimit, *logDir)
 
 	slog.Info("starting kombify StackKits API server",
 		"version", Version,
@@ -61,6 +64,11 @@ func main() {
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  120 * time.Second,
 	}
+
+	// Start heartbeat if instance is registered with kombify
+	heartbeatCtx, heartbeatCancel := context.WithCancel(context.Background())
+	defer heartbeatCancel()
+	startHeartbeat(heartbeatCtx, *instanceID)
 
 	runServer(httpServer)
 }
@@ -81,11 +89,12 @@ func setupLogging(logLevel string) {
 	slog.SetDefault(logger)
 }
 
-func resolveConfig(port int, baseDir, apiKey, corsOrigins string, rateLimit int) api.ServerConfig {
+func resolveConfig(port int, baseDir, apiKey, corsOrigins string, rateLimit int, logDir string) api.ServerConfig {
 	dir := resolveBaseDir(baseDir)
 	key := resolveAPIKey(apiKey)
 	origins := resolveCORSOrigins(corsOrigins)
 	rl := resolveRateLimit(rateLimit)
+	ld := resolveLogDir(logDir, dir)
 
 	return api.ServerConfig{
 		Port:        port,
@@ -94,7 +103,23 @@ func resolveConfig(port int, baseDir, apiKey, corsOrigins string, rateLimit int)
 		APIKey:      key,
 		CORSOrigins: origins,
 		RateLimit:   rl,
+		LogDir:      ld,
 	}
+}
+
+func resolveLogDir(flagVal, baseDir string) string {
+	dir := flagVal
+	if dir == "" {
+		dir = os.Getenv("STACKKITS_LOG_DIR")
+	}
+	if dir == "" {
+		// Default: .stackkit/logs/ relative to base dir
+		dir = filepath.Join(baseDir, ".stackkit", "logs")
+	}
+	if dir != "" {
+		slog.Info("deploy logs directory", "log_dir", dir)
+	}
+	return dir
 }
 
 func resolveBaseDir(flagVal string) string {
@@ -155,6 +180,54 @@ func resolveRateLimit(flagVal int) int {
 		slog.Info("rate limiting enabled", "max_per_minute", rl)
 	}
 	return rl
+}
+
+// startHeartbeat sends periodic heartbeats to kombify so Kong knows this instance is alive.
+// Requires KOMBIFY_API_KEY env var and a valid instance ID.
+func startHeartbeat(ctx context.Context, flagInstanceID string) {
+	iid := flagInstanceID
+	if iid == "" {
+		iid = os.Getenv("STACKKITS_INSTANCE_ID")
+	}
+	if iid == "" {
+		return
+	}
+
+	apiKey := os.Getenv("KOMBIFY_API_KEY")
+	if apiKey == "" {
+		slog.Warn("heartbeat skipped — no KOMBIFY_API_KEY set")
+		return
+	}
+
+	client := kombifyme.NewClient(apiKey)
+	slog.Info("heartbeat enabled", "instance_id", iid, "interval", "60s")
+
+	go func() {
+		ticker := time.NewTicker(60 * time.Second)
+		defer ticker.Stop()
+
+		// Send initial heartbeat immediately
+		if err := client.Heartbeat(iid, "running"); err != nil {
+			slog.Warn("heartbeat failed", "error", err)
+		}
+
+		for {
+			select {
+			case <-ctx.Done():
+				// Deregister on shutdown
+				if err := client.DeregisterInstance(iid); err != nil {
+					slog.Warn("deregister failed", "error", err)
+				} else {
+					slog.Info("deregistered from kombify", "instance_id", iid)
+				}
+				return
+			case <-ticker.C:
+				if err := client.Heartbeat(iid, "running"); err != nil {
+					slog.Warn("heartbeat failed", "error", err)
+				}
+			}
+		}
+	}()
 }
 
 func runServer(httpServer *http.Server) {

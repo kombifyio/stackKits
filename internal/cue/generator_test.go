@@ -222,7 +222,7 @@ func TestTFVarsJSON(t *testing.T) {
 func TestModuleTFContent(t *testing.T) {
 	dir := t.TempDir()
 	modulesDir := filepath.Join(dir, "modules")
-	os.MkdirAll(modulesDir, 0750)
+	_ = os.MkdirAll(modulesDir, 0750)
 
 	gen := NewGenerator("test.local")
 	graph := testGraph()
@@ -303,7 +303,7 @@ func TestModuleTFContent(t *testing.T) {
 func TestDomainTemplating(t *testing.T) {
 	dir := t.TempDir()
 	modulesDir := filepath.Join(dir, "modules")
-	os.MkdirAll(modulesDir, 0750)
+	_ = os.MkdirAll(modulesDir, 0750)
 
 	gen := NewGenerator("test.local")
 	graph := testGraph()
@@ -409,7 +409,7 @@ func TestEmptyDomainFallback(t *testing.T) {
 
 	data, _ := os.ReadFile(filepath.Join(dir, "terraform.tfvars.json"))
 	var vars map[string]any
-	json.Unmarshal(data, &vars)
+	_ = json.Unmarshal(data, &vars)
 
 	if vars["domain"] != "stack.local" {
 		t.Errorf("empty domain should default to stack.local, got %v", vars["domain"])

@@ -208,9 +208,6 @@ func validateStackKit(sk *models.StackKit) error {
 
 // applySpecDefaults applies default values to a stack spec
 func applySpecDefaults(spec *models.StackSpec) {
-	if spec.Variant == "" {
-		spec.Variant = "default"
-	}
 	if spec.Mode == "" {
 		spec.Mode = "simple"
 	}
@@ -248,4 +245,35 @@ func GetDefaultSpecPath() string {
 // GetDeployDir returns the deployment output directory
 func GetDeployDir() string {
 	return "deploy"
+}
+
+// DiscoverStackKits scans directories for stackkit.yaml files and returns loaded StackKits.
+// It scans the given directories in order and deduplicates by name.
+func (l *Loader) DiscoverStackKits(dirs ...string) ([]*models.StackKit, error) {
+	var kits []*models.StackKit
+	seen := make(map[string]bool)
+
+	for _, dir := range dirs {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				continue
+			}
+			yamlPath := filepath.Join(dir, entry.Name(), "stackkit.yaml")
+			if _, err := os.Stat(yamlPath); err != nil {
+				continue
+			}
+			sk, err := l.LoadStackKit(yamlPath)
+			if err != nil || seen[sk.Metadata.Name] {
+				continue
+			}
+			seen[sk.Metadata.Name] = true
+			kits = append(kits, sk)
+		}
+	}
+
+	return kits, nil
 }

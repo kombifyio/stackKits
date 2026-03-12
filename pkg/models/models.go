@@ -20,13 +20,13 @@ type StackKitMetadata struct {
 
 // StackKit represents a complete stackkit.yaml file
 type StackKit struct {
-	Metadata       StackKitMetadata   `yaml:"metadata" json:"metadata"`
-	SupportedOS    []string           `yaml:"supportedOS" json:"supportedOS"`
-	Requirements   Requirements       `yaml:"requirements" json:"requirements"`
-	Modes          Modes              `yaml:"modes" json:"modes"`
-	Variants       map[string]Variant `yaml:"variants" json:"variants"`
-	DefaultVariant string             `yaml:"defaultVariant,omitempty" json:"defaultVariant,omitempty"`
-	Features       Features           `yaml:"features,omitempty" json:"features,omitempty"`
+	Metadata     StackKitMetadata       `yaml:"metadata" json:"metadata"`
+	SupportedOS  []string               `yaml:"supportedOS" json:"supportedOS"`
+	Requirements Requirements           `yaml:"requirements" json:"requirements"`
+	Modes        Modes                  `yaml:"modes" json:"modes"`
+	UseCases     map[string]UseCaseDef  `yaml:"useCases,omitempty" json:"useCases,omitempty"`
+	Platform     map[string]PlatformDef `yaml:"platform,omitempty" json:"platform,omitempty"`
+	Features     Features               `yaml:"features,omitempty" json:"features,omitempty"`
 }
 
 // Requirements defines system requirements
@@ -38,8 +38,8 @@ type Requirements struct {
 // ResourceSpec defines resource specifications
 type ResourceSpec struct {
 	CPU  int `yaml:"cpu" json:"cpu"`
-	RAM  int `yaml:"ram" json:"ram"`   // in GB
-	Disk int `yaml:"disk" json:"disk"` // in GB
+	RAM  int `yaml:"memory" json:"ram"` // in GB (yaml: "memory" to match stackkit.yaml)
+	Disk int `yaml:"disk" json:"disk"`  // in GB
 }
 
 // Modes defines deployment modes
@@ -56,13 +56,59 @@ type ModeSpec struct {
 	Default     bool   `yaml:"default,omitempty" json:"default,omitempty"`
 }
 
-// Variant defines a service variant
-type Variant struct {
-	DisplayName       string   `yaml:"name" json:"displayName"`
-	Description       string   `yaml:"description" json:"description"`
-	ServiceCollection string   `yaml:"serviceCollection,omitempty" json:"serviceCollection,omitempty"`
-	Services          []string `yaml:"services" json:"services"`
-	Default           bool     `yaml:"default,omitempty" json:"default,omitempty"`
+const (
+	ComputeTierLow      = "low"
+	ComputeTierStandard = "standard"
+	ComputeTierHigh     = "high"
+
+	RuntimeNative = "native"
+
+	StorageOverlay2    = "overlay2"
+	StorageVFS         = "vfs"
+	StorageFuseOverlay = "fuse-overlayfs"
+
+	VirtNone   = "none"
+	VirtKVM    = "kvm"
+	VirtLXC    = "lxc"
+	VirtOpenVZ = "openvz"
+
+	DNSFixNone = "none"
+
+	// PAAS platform types
+	PAASDokploy = "dokploy"
+	PAASCoolify = "coolify"
+	PAASDockge  = "dockge"
+	PAASNone    = "none"
+
+	// Reverse proxy backend — determines which Traefik instance routes platform services
+	ReverseProxyStandalone = "standalone" // StackKit deploys its own Traefik
+	ReverseProxyDokploy    = "dokploy"    // Platform services use Dokploy's Traefik
+	ReverseProxyCoolify    = "coolify"    // Platform services use Coolify's Traefik
+)
+
+// ToolRole represents the role of a tool within a StackKit (v5).
+type ToolRole string
+
+const (
+	RoleDefault     ToolRole = "default"
+	RoleAlternative ToolRole = "alternative"
+	RoleOptional    ToolRole = "optional"
+	RoleAddon       ToolRole = "addon"
+)
+
+// UseCaseDef defines a use case in stackkit.yaml (v5).
+type UseCaseDef struct {
+	Role         ToolRole `yaml:"role" json:"role"`
+	DefaultTool  string   `yaml:"defaultTool,omitempty" json:"defaultTool,omitempty"`
+	Alternatives []string `yaml:"alternatives,omitempty" json:"alternatives,omitempty"`
+	Description  string   `yaml:"description,omitempty" json:"description,omitempty"`
+}
+
+// PlatformDef defines a platform service in stackkit.yaml (v5).
+type PlatformDef struct {
+	Role         ToolRole `yaml:"role" json:"role"`
+	DefaultTool  string   `yaml:"defaultTool,omitempty" json:"defaultTool,omitempty"`
+	Alternatives []string `yaml:"alternatives,omitempty" json:"alternatives,omitempty"`
 }
 
 // Features defines optional features
@@ -74,21 +120,37 @@ type Features struct {
 
 // StackSpec represents the user's deployment specification (stack-spec.yaml)
 type StackSpec struct {
-	Name        string            `yaml:"name" json:"name"`
-	StackKit    string            `yaml:"stackkit" json:"stackkit"`
-	Variant     string            `yaml:"variant,omitempty" json:"variant,omitempty"`
-	Mode        string            `yaml:"mode,omitempty" json:"mode,omitempty"`
-	Context     string            `yaml:"context,omitempty" json:"context,omitempty"`
-	Domain      string            `yaml:"domain,omitempty" json:"domain,omitempty"`
-	Email       string            `yaml:"email,omitempty" json:"email,omitempty"`
-	AdminEmail  string            `yaml:"adminEmail,omitempty" json:"adminEmail,omitempty"`
-	Network     NetworkSpec       `yaml:"network,omitempty" json:"network,omitempty"`
-	Compute     ComputeSpec       `yaml:"compute,omitempty" json:"compute,omitempty"`
-	SSH         SSHSpec           `yaml:"ssh,omitempty" json:"ssh,omitempty"`
-	Nodes       []NodeSpec        `yaml:"nodes,omitempty" json:"nodes,omitempty"`
-	Addons      []string          `yaml:"addons,omitempty" json:"addons,omitempty"`
-	Services    map[string]any    `yaml:"services,omitempty" json:"services,omitempty"`
-	Environment map[string]string `yaml:"environment,omitempty" json:"environment,omitempty"`
+	Name            string            `yaml:"name" json:"name"`
+	StackKit        string            `yaml:"stackkit" json:"stackkit"`
+	Mode            string            `yaml:"mode,omitempty" json:"mode,omitempty"`
+	Runtime         string            `yaml:"runtime,omitempty" json:"runtime,omitempty"` // "docker" or "native"
+	Context         string            `yaml:"context,omitempty" json:"context,omitempty"`
+	Domain          string            `yaml:"domain,omitempty" json:"domain,omitempty"`
+	SubdomainPrefix string            `yaml:"subdomainPrefix,omitempty" json:"subdomainPrefix,omitempty"`
+	Email           string            `yaml:"email,omitempty" json:"email,omitempty"`
+	AdminEmail      string            `yaml:"adminEmail,omitempty" json:"adminEmail,omitempty"`
+	Network         NetworkSpec       `yaml:"network,omitempty" json:"network,omitempty"`
+	Compute         ComputeSpec       `yaml:"compute,omitempty" json:"compute,omitempty"`
+	Storage         StorageSpec       `yaml:"storage,omitempty" json:"storage,omitempty"`
+	SSH             SSHSpec           `yaml:"ssh,omitempty" json:"ssh,omitempty"`
+	Nodes           []NodeSpec        `yaml:"nodes,omitempty" json:"nodes,omitempty"`
+	TLS             TLSSpec           `yaml:"tls,omitempty" json:"tls,omitempty"`
+	PAAS            string            `yaml:"paas,omitempty" json:"paas,omitempty"` // "dokploy", "coolify", "dockge", "none" (auto-detected from tier if empty)
+	Addons          []string          `yaml:"addons,omitempty" json:"addons,omitempty"`
+	Services        map[string]any    `yaml:"services,omitempty" json:"services,omitempty"`
+	Environment     map[string]string `yaml:"environment,omitempty" json:"environment,omitempty"`
+}
+
+// TLSSpec defines TLS/HTTPS certificate configuration
+type TLSSpec struct {
+	Provider  string `yaml:"provider,omitempty" json:"provider,omitempty"`   // DNS provider for DNS-01 challenge (e.g. "cloudflare")
+	Challenge string `yaml:"challenge,omitempty" json:"challenge,omitempty"` // "tls" (default) or "dns"
+}
+
+// StorageSpec defines external storage configuration
+type StorageSpec struct {
+	ExternalDevice string `yaml:"externalDevice,omitempty" json:"externalDevice,omitempty"`
+	MountPoint     string `yaml:"mountPoint,omitempty" json:"mountPoint,omitempty"`
 }
 
 // NetworkSpec defines network configuration
@@ -121,7 +183,6 @@ type NodeSpec struct {
 // DeploymentState represents the current deployment state
 type DeploymentState struct {
 	StackKit    string           `yaml:"stackkit" json:"stackkit"`
-	Variant     string           `yaml:"variant" json:"variant"`
 	Mode        string           `yaml:"mode" json:"mode"`
 	Status      DeploymentStatus `yaml:"status" json:"status"`
 	LastApplied time.Time        `yaml:"lastApplied" json:"lastApplied"`
@@ -133,13 +194,13 @@ type DeploymentState struct {
 type DeploymentStatus string
 
 const (
-	StatusPending   DeploymentStatus = "pending"
-	StatusPlanning  DeploymentStatus = "planning"
-	StatusApplying  DeploymentStatus = "applying"
-	StatusRunning   DeploymentStatus = "running"
-	StatusDegraded  DeploymentStatus = "degraded"
-	StatusError     DeploymentStatus = "error"
-	StatusDestroyed DeploymentStatus = "destroyed"
+	StatusPending  DeploymentStatus = "pending"
+	StatusPlanning DeploymentStatus = "planning"
+	StatusApplying DeploymentStatus = "applying"
+	StatusRunning  DeploymentStatus = "running"
+	StatusDegraded DeploymentStatus = "degraded"
+	StatusError    DeploymentStatus = "error"
+	StatusRemoved  DeploymentStatus = "removed"
 )
 
 // ServiceState represents the state of a service
@@ -187,6 +248,32 @@ type ValidationError struct {
 	Code    string `json:"code,omitempty"`
 }
 
+// CompatibilityTier classifies a VPS by how well it supports Docker/StackKits.
+type CompatibilityTier string
+
+const (
+	// TierFull means Docker works perfectly with all features.
+	TierFull CompatibilityTier = "full"
+	// TierDegraded means Docker works with auto-workarounds (vfs, host network, DNS fix).
+	TierDegraded CompatibilityTier = "degraded"
+	// TierIncompatible means the kernel blocks unshare — Docker cannot run at all.
+	TierIncompatible CompatibilityTier = "incompatible"
+)
+
+// NetworkEnvironment classifies where the server is running.
+type NetworkEnvironment string
+
+const (
+	// NetEnvHome means the server is on a home/office LAN behind NAT.
+	NetEnvHome NetworkEnvironment = "home"
+	// NetEnvVPS means the server is a VPS/dedicated server with a public IP.
+	NetEnvVPS NetworkEnvironment = "vps"
+	// NetEnvCloud means the server was provisioned via kombify Cloud (SaaS).
+	NetEnvCloud NetworkEnvironment = "cloud"
+	// NetEnvUnknown means the environment could not be determined.
+	NetEnvUnknown NetworkEnvironment = "unknown"
+)
+
 // DockerCapabilities represents detected Docker runtime capabilities.
 // Written by `stackkit prepare` and read by `stackkit generate`.
 type DockerCapabilities struct {
@@ -199,11 +286,109 @@ type DockerCapabilities struct {
 	DockerFunctional bool   `json:"dockerFunctional"`
 	RuntimeError     string `json:"runtimeError,omitempty"`
 
+	// VPS environment detection
+	VirtualizationType string            `json:"virtualizationType,omitempty"` // "kvm", "openvz", "lxc", "none"
+	CompatibilityTier  CompatibilityTier `json:"compatibilityTier,omitempty"`  // "full", "degraded", "incompatible"
+	UnshareAvailable   bool              `json:"unshareAvailable"`
+	CgroupVersion      string            `json:"cgroupVersion,omitempty"` // "v1", "v2"
+
 	// DNS and image pre-pull status (troubleshooting engine)
 	DNSWorking      bool     `json:"dnsWorking"`
-	DNSFix          string   `json:"dnsFix,omitempty"`          // "none", "daemon-json", "host-prepull"
+	DNSFix          string   `json:"dnsFix,omitempty"` // "none", "daemon-json", "host-prepull"
 	PrePulledImages []string `json:"prePulledImages,omitempty"`
 	PrePullFailed   []string `json:"prePullFailed,omitempty"`
+
+	// Disk space (detected during prepare)
+	DiskTotalGB float64 `json:"diskTotalGB,omitempty"`
+	DiskAvailGB float64 `json:"diskAvailGB,omitempty"`
+	DiskMount   string  `json:"diskMount,omitempty"`   // mount point checked (e.g. "/" or "/var/lib/docker")
+	LVMDetected bool    `json:"lvmDetected,omitempty"` // root is on LVM
+	LVMExtended bool    `json:"lvmExtended,omitempty"` // auto-extended during prepare
+
+	// Hardware profile (detected during prepare)
+	CPUCores int     `json:"cpuCores,omitempty"`
+	MemoryGB float64 `json:"memoryGB,omitempty"`
+
+	// Network environment detection
+	NetworkEnv         NetworkEnvironment `json:"networkEnv,omitempty"`         // "home", "vps", "cloud", "unknown"
+	PublicIP           string             `json:"publicIP,omitempty"`           // External IP (empty if detection failed)
+	PrivateIP          string             `json:"privateIP,omitempty"`          // LAN/internal IP
+	IsNAT              bool               `json:"isNAT,omitempty"`              // true if behind NAT (home network)
+	HasPublicInterface bool               `json:"hasPublicInterface,omitempty"` // true if a network interface has a public IP directly
+
+	// Block devices and storage resolution
+	BlockDevices      []BlockDevice      `json:"blockDevices,omitempty"`
+	StorageResolution *StorageResolution `json:"storageResolution,omitempty"`
+}
+
+// BlockDevice represents a detected block device on the host.
+type BlockDevice struct {
+	Name       string  `json:"name"`
+	Path       string  `json:"path"`
+	SizeGB     float64 `json:"sizeGB"`
+	Type       string  `json:"type"` // "disk", "part"
+	Mountpoint string  `json:"mountpoint"`
+	FSType     string  `json:"fstype"`
+	Model      string  `json:"model"`
+	Removable  bool    `json:"removable"`
+}
+
+// StorageResolution records the strategy chosen to resolve insufficient storage.
+type StorageResolution struct {
+	Strategy string `json:"strategy"` // "none", "external-device", "tier-downgrade", "force"
+	Device   string `json:"device,omitempty"`
+	Mount    string `json:"mount,omitempty"`
+}
+
+// InstanceRegistration is the payload sent to kombify when a stackkit-server
+// registers itself for Direct Connect (Kong proxies directly to it).
+type InstanceRegistration struct {
+	InstanceID  string        `json:"instance_id"`        // Unique instance identifier (device fingerprint + stackkit name)
+	EndpointURL string        `json:"endpoint_url"`       // Public URL where stackkit-server is reachable (e.g. https://api.mylab.kombify.me)
+	StackKit    string        `json:"stackkit"`           // StackKit name (e.g. "base-kit")
+	Version     string        `json:"version,omitempty"`  // StackKit version
+	Services    []ServiceInfo `json:"services"`           // Running services
+	Status      string        `json:"status"`             // "running", "degraded", "stopped"
+	APIPort     int           `json:"api_port,omitempty"` // Port stackkit-server listens on
+	LastSeen    time.Time     `json:"last_seen"`          // Last heartbeat timestamp
+}
+
+// ServiceInfo is a lightweight service descriptor for registry registration.
+type ServiceInfo struct {
+	Name   string `json:"name"`
+	URL    string `json:"url,omitempty"`
+	Status string `json:"status"` // "running", "stopped", "error"
+}
+
+// ResolveReverseProxy determines which Traefik instance routes platform services
+// based on the PAAS selection. When PAAS manages its own Traefik (Dokploy, Coolify),
+// platform services attach to that Traefik instead of deploying a separate one.
+func (s *StackSpec) ResolveReverseProxy() string {
+	switch s.PAAS {
+	case PAASDokploy:
+		return ReverseProxyDokploy
+	case PAASCoolify:
+		return ReverseProxyCoolify
+	default:
+		return ReverseProxyStandalone
+	}
+}
+
+// ResolvePAAS determines the PAAS platform from explicit setting or compute tier.
+func (s *StackSpec) ResolvePAAS() string {
+	if s.PAAS != "" {
+		return s.PAAS
+	}
+	tier := s.Compute.Tier
+	if tier == "" {
+		tier = ComputeTierStandard
+	}
+	switch tier {
+	case ComputeTierLow:
+		return PAASDockge
+	default:
+		return PAASDokploy
+	}
 }
 
 // SystemInfo represents system information from a node

@@ -27,7 +27,6 @@ func TestLoadStackSpec(t *testing.T) {
 	t.Run("loads valid spec file", func(t *testing.T) {
 		specContent := `name: test-deployment
 stackkit: base-kit
-variant: default
 mode: simple
 domain: homelab.local
 network:
@@ -49,7 +48,6 @@ ssh:
 		require.NoError(t, err)
 		assert.Equal(t, "test-deployment", spec.Name)
 		assert.Equal(t, "base-kit", spec.StackKit)
-		assert.Equal(t, "default", spec.Variant)
 		assert.Equal(t, "local", spec.Network.Mode)
 	})
 
@@ -72,7 +70,6 @@ stackkit: base-kit
 		spec, err := loader.LoadStackSpec("minimal-spec.yaml")
 
 		require.NoError(t, err)
-		assert.Equal(t, "default", spec.Variant)
 		assert.Equal(t, "simple", spec.Mode)
 		assert.Equal(t, "local", spec.Network.Mode)
 		assert.Equal(t, "172.20.0.0/16", spec.Network.Subnet)
@@ -103,7 +100,6 @@ func TestSaveStackSpec(t *testing.T) {
 		spec := &models.StackSpec{
 			Name:     "saved-deployment",
 			StackKit: "base-kit",
-			Variant:  "default",
 			Mode:     "simple",
 			Network: models.NetworkSpec{
 				Mode:   "local",
@@ -181,12 +177,6 @@ modes:
     engine: opentofu
     default: true
 
-variants:
-  default:
-    name: Default
-    description: Full services
-    services: [traefik, dokploy]
-    default: true
 `
 		stackkitPath := filepath.Join(tmpDir, "stackkit.yaml")
 		err := os.WriteFile(stackkitPath, []byte(stackkitContent), 0600)
@@ -199,7 +189,6 @@ variants:
 		assert.Equal(t, "test-stackkit", sk.Metadata.Name)
 		assert.Equal(t, "1.0.0", sk.Metadata.Version)
 		assert.Contains(t, sk.SupportedOS, "ubuntu-24")
-		assert.Len(t, sk.Variants, 1)
 	})
 
 	t.Run("validates required fields", func(t *testing.T) {
@@ -229,7 +218,6 @@ func TestDeploymentState(t *testing.T) {
 	t.Run("saves and loads deployment state", func(t *testing.T) {
 		state := &models.DeploymentState{
 			StackKit: "base-kit",
-			Variant:  "default",
 			Mode:     "simple",
 			Status:   models.StatusRunning,
 			Services: []models.ServiceState{
@@ -423,7 +411,6 @@ func TestSaveStackSpecEdgeCases(t *testing.T) {
 		spec := &models.StackSpec{
 			Name:     "round-trip-test",
 			StackKit: "base-kit",
-			Variant:  "default",
 			Network: models.NetworkSpec{
 				Mode:   "local",
 				Subnet: "172.20.0.0/16",
@@ -456,7 +443,6 @@ func TestApplySpecDefaults(t *testing.T) {
 		spec := &models.StackSpec{}
 		applySpecDefaults(spec)
 
-		assert.Equal(t, "default", spec.Variant)
 		assert.Equal(t, "simple", spec.Mode)
 		assert.Equal(t, "local", spec.Network.Mode)
 		assert.Equal(t, "172.20.0.0/16", spec.Network.Subnet)
@@ -467,7 +453,6 @@ func TestApplySpecDefaults(t *testing.T) {
 
 	t.Run("preserves existing values", func(t *testing.T) {
 		spec := &models.StackSpec{
-			Variant: "custom",
 			Network: models.NetworkSpec{
 				Mode:   "public",
 				Subnet: "10.0.0.0/8",
@@ -482,7 +467,6 @@ func TestApplySpecDefaults(t *testing.T) {
 		}
 		applySpecDefaults(spec)
 
-		assert.Equal(t, "custom", spec.Variant)
 		assert.Equal(t, "public", spec.Network.Mode)
 		assert.Equal(t, "10.0.0.0/8", spec.Network.Subnet)
 		assert.Equal(t, "high", spec.Compute.Tier)

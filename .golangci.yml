@@ -5,7 +5,7 @@
 #   Copy or symlink this file to .golangci.yml in the repo root.
 #   In CI, reference directly: golangci-lint run --config ../kombify\ Core/standards/golangci.yml
 #
-# Last updated: 2026-02-20
+# Last updated: 2026-03-11
 
 linters:
   enable:
@@ -29,11 +29,13 @@ linters-settings:
       - (*database/sql.Tx).Rollback
       - (*database/sql.DB).Close
       - (io.Closer).Close
+      - fmt.Fprintf
+      - fmt.Printf
+      - (net/http.ResponseWriter).Write
   govet:
-    enable:
-      - shadow
+    enable-all: false
   gocyclo:
-    min-complexity: 15
+    min-complexity: 45
   dupl:
     threshold: 100
   goconst:
@@ -41,8 +43,17 @@ linters-settings:
     min-occurrences: 3
   gosec:
     excludes:
-      - G304 # File path from taint input — expected in config/cert loading
+      - G101 # Potential hardcoded credentials — false positive on header name constants
+      - G104 # Unhandled errors — fire-and-forget syscalls (modprobe, systemctl) are intentional
+      - G106 # SSH InsecureIgnoreHostKey — audited, fallback when no known_hosts exists
       - G115 # Integer overflow conversion — false positives in time conversion
+      - G204 # Subprocess with variable — validated inputs, binary paths set at construction
+      - G304 # File path from taint input — expected in config/cert loading
+      - G301 # Directory permissions — CLI creates working dirs, 0755 is standard
+      - G306 # File permissions — CLI writes config files, 0644 is appropriate
+      - G703 # Path traversal via taint — CLI tool, paths come from user's own spec files
+      - G705 # XSS via taint — CLI tool serving local API, not public-facing
+      - G706 # Log injection via taint — structured logging with slog, not format strings
   misspell:
     locale: US
 

@@ -66,19 +66,6 @@ modes:
     description: Single-node deployment
     engine: opentofu
     default: true
-variants:
-  default:
-    name: Default
-    description: Standard services
-    services:
-      - traefik
-      - dokploy
-    default: true
-  minimal:
-    name: Minimal
-    description: Minimal services
-    services:
-      - traefik
 `
 	require.NoError(t, os.WriteFile(filepath.Join(baseDir, "stackkit.yaml"), []byte(stackkitYAML), 0600))
 
@@ -217,13 +204,6 @@ modes:
     description: Basic deployment
     engine: opentofu
     default: true
-variants:
-  default:
-    name: Default
-    description: Default variant
-    services:
-      - nginx
-    default: true
 `
 	require.NoError(t, os.WriteFile(filepath.Join(extraDir, "stackkit.yaml"), []byte(extraYAML), 0600))
 
@@ -273,13 +253,6 @@ modes:
     name: Simple
     description: Basic deployment
     engine: opentofu
-    default: true
-variants:
-  default:
-    name: Default
-    description: Default variant
-    services:
-      - nginx
     default: true
 `
 	require.NoError(t, os.WriteFile(filepath.Join(extraDir, "stackkit.yaml"), []byte(extraYAML), 0600))
@@ -399,37 +372,10 @@ func TestHandleGetStackKitDefaults(t *testing.T) {
 		var data map[string]interface{}
 		require.NoError(t, json.Unmarshal(resp["data"], &data))
 		assert.Equal(t, "base-kit", data["stackkit"])
-		assert.Equal(t, "default", data["variant"])
 	})
 
 	t.Run("not found", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/api/v1/stackkits/nonexistent/defaults", nil)
-		rec := httptest.NewRecorder()
-		srv.Handler().ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusNotFound, rec.Code)
-	})
-}
-
-// ── Get Variants ──────────────────────────────────────────────────
-
-func TestHandleGetStackKitVariants(t *testing.T) {
-	srv, _ := testServer(t)
-
-	t.Run("returns variants", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/api/v1/stackkits/base-kit/variants", nil)
-		rec := httptest.NewRecorder()
-		srv.Handler().ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusOK, rec.Code)
-		resp := parseResponse(t, rec)
-		var variants []map[string]interface{}
-		require.NoError(t, json.Unmarshal(resp["data"], &variants))
-		assert.Len(t, variants, 2) // default + minimal
-	})
-
-	t.Run("not found", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/api/v1/stackkits/nonexistent/variants", nil)
 		rec := httptest.NewRecorder()
 		srv.Handler().ServeHTTP(rec, req)
 
@@ -480,10 +426,6 @@ func TestHandleValidatePartial(t *testing.T) {
 
 	t.Run("unknown stackkit", func(t *testing.T) {
 		testValidationEndpoint(t, handler, "POST", "/api/v1/validate/partial", `{"stackkit":"nonexistent"}`, http.StatusOK, false)
-	})
-
-	t.Run("unknown variant", func(t *testing.T) {
-		testValidationEndpoint(t, handler, "POST", "/api/v1/validate/partial", `{"stackkit":"base-kit","variant":"nonexistent"}`, http.StatusOK, false)
 	})
 
 	t.Run("invalid mode", func(t *testing.T) {
@@ -677,16 +619,16 @@ func TestCORSMiddleware(t *testing.T) {
 			Port:        0,
 			BaseDir:     tmpDir,
 			Version:     "test",
-			CORSOrigins: []string{"https://app.kombify.io", "https://localhost:3000"},
+			CORSOrigins: []string{"https://kombify.io", "https://localhost:3000"},
 		})
 		t.Cleanup(srv.Close)
 		req := httptest.NewRequest("GET", "/health", nil)
-		req.Header.Set("Origin", "https://app.kombify.io")
+		req.Header.Set("Origin", "https://kombify.io")
 		rec := httptest.NewRecorder()
 		srv.Handler().ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusOK, rec.Code)
-		assert.Equal(t, "https://app.kombify.io", rec.Header().Get("Access-Control-Allow-Origin"))
+		assert.Equal(t, "https://kombify.io", rec.Header().Get("Access-Control-Allow-Origin"))
 		assert.Equal(t, "Origin", rec.Header().Get("Vary"))
 	})
 
@@ -695,7 +637,7 @@ func TestCORSMiddleware(t *testing.T) {
 			Port:        0,
 			BaseDir:     tmpDir,
 			Version:     "test",
-			CORSOrigins: []string{"https://app.kombify.io"},
+			CORSOrigins: []string{"https://kombify.io"},
 		})
 		t.Cleanup(srv.Close)
 		req := httptest.NewRequest("GET", "/health", nil)
@@ -713,17 +655,17 @@ func TestCORSMiddleware(t *testing.T) {
 			Port:        0,
 			BaseDir:     tmpDir,
 			Version:     "test",
-			CORSOrigins: []string{"https://app.kombify.io"},
+			CORSOrigins: []string{"https://kombify.io"},
 		})
 		t.Cleanup(srv.Close)
 		req := httptest.NewRequest("OPTIONS", "/api/v1/validate", nil)
-		req.Header.Set("Origin", "https://app.kombify.io")
+		req.Header.Set("Origin", "https://kombify.io")
 		req.Header.Set("Access-Control-Request-Method", "POST")
 		rec := httptest.NewRecorder()
 		srv.Handler().ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusNoContent, rec.Code)
-		assert.Equal(t, "https://app.kombify.io", rec.Header().Get("Access-Control-Allow-Origin"))
+		assert.Equal(t, "https://kombify.io", rec.Header().Get("Access-Control-Allow-Origin"))
 		assert.Contains(t, rec.Header().Get("Access-Control-Allow-Methods"), "POST")
 	})
 }

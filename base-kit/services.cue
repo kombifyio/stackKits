@@ -803,6 +803,274 @@ import "github.com/kombifyio/stackkits/base"
 }
 
 // =============================================================================
+// LAYER 3: APPLICATION USE CASES
+// =============================================================================
+
+// #VaultwardenService - Self-hosted password manager (Layer 3)
+#VaultwardenService: base.#ServiceDefinition & {
+	name:        "vaultwarden"
+	displayName: "Vaultwarden"
+	category:    "application"
+	type:        "vault"
+	required:    false
+	enabled:     true // All tiers (~128MB RAM)
+	image:       "vaultwarden/server"
+	tag:         "latest"
+	description: "Bitwarden-compatible password vault for passwords, TOTP, and secure notes"
+	needs:       ["traefik"]
+
+	network: {
+		ports: [
+			{host: 8092, container: 80, protocol: "tcp", description: "Web UI"},
+		]
+		traefik: {
+			enabled: true
+			rule:    "Host(`vault.{{.domain}}`)"
+			tls:     true
+			port:    80
+		}
+	}
+
+	volumes: [
+		{
+			source:      "vaultwarden-data"
+			target:      "/data"
+			type:        "volume"
+			backup:      true
+			description: "Vaultwarden database and attachments"
+		},
+	]
+
+	environment: {
+		"DOMAIN":           "https://vault.{{.domain}}"
+		"SIGNUPS_ALLOWED":  "false"
+		"ADMIN_TOKEN":      "{{.vaultwarden_admin_token}}"
+	}
+
+	healthCheck: {
+		enabled: true
+		http: {
+			path:   "/alive"
+			port:   80
+			scheme: "http"
+		}
+		interval:    "30s"
+		timeout:     "5s"
+		retries:     3
+		startPeriod: "15s"
+	}
+
+	resources: {
+		memory:    "128m"
+		memoryMax: "256m"
+		cpus:      0.25
+	}
+
+	labels: {
+		"traefik.enable":                                             "true"
+		"traefik.http.routers.vaultwarden.entrypoints":               "websecure"
+		"traefik.http.routers.vaultwarden.rule":                      "Host(`vault.{{.domain}}`)"
+		"traefik.http.routers.vaultwarden.tls.certresolver":          "letsencrypt"
+		"traefik.http.services.vaultwarden.loadbalancer.server.port": "80"
+		"stackkit.layer":      "3-application"
+		"stackkit.managed-by": "compose"
+	}
+
+	output: {
+		url:         "https://vault.{{.domain}}"
+		description: "Vaultwarden - Password Manager"
+		credentials: {
+			note: "Has its own authentication. Admin panel via /admin with generated token."
+		}
+	}
+
+	restartPolicy: "unless-stopped"
+}
+
+// #JellyfinService - Media server (Layer 3, standard+ tiers)
+#JellyfinService: base.#ServiceDefinition & {
+	name:        "jellyfin"
+	displayName: "Jellyfin"
+	category:    "application"
+	type:        "media"
+	required:    false
+	enabled:     false // Standard+ tiers only
+	image:       "jellyfin/jellyfin"
+	tag:         "latest"
+	description: "Free media server for movies, TV, music, and photos"
+	needs:       ["traefik"]
+
+	network: {
+		ports: [
+			{host: 8096, container: 8096, protocol: "tcp", description: "Web UI"},
+		]
+		traefik: {
+			enabled: true
+			rule:    "Host(`media.{{.domain}}`)"
+			tls:     true
+			port:    8096
+		}
+	}
+
+	volumes: [
+		{
+			source:      "jellyfin-config"
+			target:      "/config"
+			type:        "volume"
+			backup:      true
+			description: "Jellyfin configuration and metadata"
+		},
+		{
+			source:      "jellyfin-cache"
+			target:      "/cache"
+			type:        "volume"
+			backup:      false
+			description: "Jellyfin transcoding cache"
+		},
+		{
+			source:      "/opt/media"
+			target:      "/media"
+			type:        "bind"
+			readOnly:    true
+			backup:      false
+			description: "Host media directory (user content)"
+		},
+	]
+
+	healthCheck: {
+		enabled: true
+		http: {
+			path:   "/health"
+			port:   8096
+			scheme: "http"
+		}
+		interval:    "30s"
+		timeout:     "5s"
+		retries:     3
+		startPeriod: "30s"
+	}
+
+	resources: {
+		memory:    "512m"
+		memoryMax: "2g"
+		cpus:      2.0
+	}
+
+	labels: {
+		"traefik.enable":                                          "true"
+		"traefik.http.routers.jellyfin.entrypoints":               "websecure"
+		"traefik.http.routers.jellyfin.rule":                      "Host(`media.{{.domain}}`)"
+		"traefik.http.routers.jellyfin.tls.certresolver":          "letsencrypt"
+		"traefik.http.services.jellyfin.loadbalancer.server.port": "8096"
+		"stackkit.layer":      "3-application"
+		"stackkit.managed-by": "compose"
+	}
+
+	output: {
+		url:         "https://media.{{.domain}}"
+		description: "Jellyfin - Media Server"
+		credentials: {
+			note: "Has its own authentication. Create account on first access."
+		}
+	}
+
+	restartPolicy: "unless-stopped"
+}
+
+// #ImmichService - Photo management (Layer 3, standard+ tiers)
+// Multi-container: server + ML + PostgreSQL (pgvecto-rs) + Redis
+#ImmichService: base.#ServiceDefinition & {
+	name:        "immich"
+	displayName: "Immich"
+	category:    "application"
+	type:        "photos"
+	required:    false
+	enabled:     false // Standard+ tiers only
+	image:       "ghcr.io/immich-app/immich-server"
+	tag:         "release"
+	description: "Self-hosted photo and video management with AI-powered search and mobile backup"
+	needs:       ["traefik"]
+
+	network: {
+		ports: [
+			{host: 2283, container: 2283, protocol: "tcp", description: "Web UI"},
+			{host: 3003, container: 3003, protocol: "tcp", description: "ML worker"},
+			{host: 5433, container: 5432, protocol: "tcp", description: "PostgreSQL (pgvecto-rs)"},
+			{host: 6380, container: 6379, protocol: "tcp", description: "Redis"},
+		]
+		traefik: {
+			enabled: true
+			rule:    "Host(`photos.{{.domain}}`)"
+			tls:     true
+			port:    2283
+		}
+	}
+
+	volumes: [
+		{
+			source:      "immich-upload"
+			target:      "/usr/src/app/upload"
+			type:        "volume"
+			backup:      true
+			description: "Immich photo/video uploads"
+		},
+		{
+			source:      "immich-postgres-data"
+			target:      "/var/lib/postgresql/data"
+			type:        "volume"
+			backup:      true
+			description: "Immich PostgreSQL with pgvecto-rs (vector search)"
+		},
+		{
+			source:      "immich-model-cache"
+			target:      "/cache"
+			type:        "volume"
+			backup:      false
+			description: "Immich ML model cache"
+		},
+	]
+
+	healthCheck: {
+		enabled: true
+		http: {
+			path:   "/api/server/ping"
+			port:   2283
+			scheme: "http"
+		}
+		interval:    "30s"
+		timeout:     "10s"
+		retries:     5
+		startPeriod: "60s"
+	}
+
+	resources: {
+		memory:    "1g"
+		memoryMax: "4g"
+		cpus:      2.0
+	}
+
+	labels: {
+		"traefik.enable":                                        "true"
+		"traefik.http.routers.immich.entrypoints":               "websecure"
+		"traefik.http.routers.immich.rule":                      "Host(`photos.{{.domain}}`)"
+		"traefik.http.routers.immich.tls.certresolver":          "letsencrypt"
+		"traefik.http.services.immich.loadbalancer.server.port": "2283"
+		"stackkit.layer":      "3-application"
+		"stackkit.managed-by": "compose"
+	}
+
+	output: {
+		url:         "https://photos.{{.domain}}"
+		description: "Immich - Photo Management"
+		credentials: {
+			note: "Has its own authentication. Create account on first access."
+		}
+	}
+
+	restartPolicy: "unless-stopped"
+}
+
+// =============================================================================
 // MINIMAL VARIANT SERVICES (Alternative Stack)
 // =============================================================================
 
@@ -1105,13 +1373,16 @@ import "github.com/kombifyio/stackkits/base"
 // #DefaultServices - Standard deployment (Dokploy-based, with identity)
 // Service enablement is controlled by tfvars at deployment time.
 #DefaultServices: {
-	traefik:    #TraefikService
-	tinyauth:   #TinyAuthService
-	pocketid:   #PocketIDService
-	dokploy:    #DokployService
-	uptimeKuma: #UptimeKumaService
-	dozzle:     #DozzleService
-	whoami:     #WhoamiService
+	traefik:     #TraefikService
+	tinyauth:    #TinyAuthService
+	pocketid:    #PocketIDService
+	dokploy:     #DokployService
+	uptimeKuma:  #UptimeKumaService
+	dozzle:      #DozzleService
+	whoami:      #WhoamiService
+	vaultwarden: #VaultwardenService
+	jellyfin:    #JellyfinService
+	immich:      #ImmichService
 }
 
 // #DefaultServicesWithBeszel - Alternative monitoring (with identity)

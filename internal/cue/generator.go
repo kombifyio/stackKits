@@ -422,17 +422,17 @@ func parseMemoryMB(s string) int {
 	if strings.HasSuffix(s, "g") {
 		s = strings.TrimSuffix(s, "g")
 		var n int
-		fmt.Sscanf(s, "%d", &n)
+		_, _ = fmt.Sscanf(s, "%d", &n)
 		return n * 1024
 	}
 	if strings.HasSuffix(s, "m") {
 		s = strings.TrimSuffix(s, "m")
 		var n int
-		fmt.Sscanf(s, "%d", &n)
+		_, _ = fmt.Sscanf(s, "%d", &n)
 		return n
 	}
 	var n int
-	fmt.Sscanf(s, "%d", &n)
+	_, _ = fmt.Sscanf(s, "%d", &n)
 	return n
 }
 

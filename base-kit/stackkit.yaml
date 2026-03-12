@@ -4,8 +4,8 @@ kind: StackKit
 
 metadata:
   name: base-kit
-  version: "4.0.0"
-  description: "Single-environment deployment with Docker, Dokploy and monitoring"
+  version: "5.0.0"
+  description: "Single-environment homelab with Photos, Media, and Vault"
   author: "kombify Stack Team"
   license: "Apache-2.0"
   repository: "https://github.com/kombifyio/stackkits"
@@ -27,12 +27,12 @@ supportedOS:
 requirements:
   minimum:
     cpu: 2
-    memory: 4
-    disk: 50
+    memory: 2
+    disk: 10
   recommended:
     cpu: 4
-    memory: 8
-    disk: 100
+    memory: 4
+    disk: 20
 
 # =============================================================================
 # DEPLOYMENT MODES (Available for all StackKits)
@@ -91,47 +91,84 @@ autoSelect:
   default: simple
 
 # =============================================================================
-# VARIANTS (Service Set Choices)
+# USE CASES (v5 — replaces variants)
 # =============================================================================
-variants:
-  # Default: Dokploy-based PaaS stack
-  default:
-    name: "Standard"
-    description: "Dokploy PaaS with Uptime Kuma monitoring"
-    serviceCollection: "DefaultServices"
-    services:
-      - traefik       # Core: Reverse Proxy (required)
-      - dokploy       # Platform: PaaS deployment
-      - uptime-kuma   # Monitoring: Uptime & status pages
-      - dozzle        # Observability: Log viewer
-      - whoami        # Test: Proxy verification
+# Role: default = ships enabled, alternative = curated swap, optional = user enables
+# Source of truth: admin-center (admin_sk_stackkit_tools). This section mirrors it for Level 0 CLI.
+useCases:
+  photos:
+    role: default
+    defaultTool: immich
+    alternatives: [ente-photos]
+    description: "Photo gallery and memories"
+  media:
+    role: default
+    defaultTool: jellyfin
+    alternatives: []
+    description: "Media streaming with automated library management"
+  vault:
+    role: default
+    defaultTool: vaultwarden
+    alternatives: []
+    description: "Password management and secure notes"
+  smart-home:
+    role: optional
+    defaultTool: home-assistant
+    alternatives: []
+    description: "Home automation with IoT device control"
+  files:
+    role: optional
+    defaultTool: cloudreve
+    alternatives: [nextcloud]
+    description: "File sharing and cloud storage"
+  ai:
+    role: optional
+    defaultTool: ollama
+    alternatives: []
+    description: "Local AI/LLM inference"
+  dev:
+    role: optional
+    defaultTool: gitea
+    alternatives: []
+    description: "Self-hosted Git and CI/CD"
+  mail:
+    role: optional
+    defaultTool: stalwart
+    alternatives: []
+    description: "Self-hosted email server"
+  game:
+    role: optional
+    defaultTool: null
+    alternatives: []
+    description: "Game server hosting"
+  remote:
+    role: optional
+    defaultTool: guacamole
+    alternatives: []
+    description: "Remote desktop access"
 
-  # Alternative monitoring with Beszel
-  beszel:
-    name: "Standard with Beszel"
-    description: "Dokploy PaaS with Beszel metrics monitoring"
-    serviceCollection: "DefaultServicesWithBeszel"
-    services:
-      - traefik       # Core: Reverse Proxy (required)
-      - dokploy       # Platform: PaaS deployment
-      - beszel        # Monitoring: Server metrics
-      - dozzle        # Observability: Log viewer
-      - whoami        # Test: Proxy verification
-
-  # Minimal: Traditional compose-based management
-  minimal:
-    name: "Minimal"
-    description: "Classic Dockge + Portainer stack for simple management"
-    serviceCollection: "MinimalServices"
-    services:
-      - traefik       # Core: Reverse Proxy (required)
-      - dockge        # Management: Compose UI
-      - portainer     # Management: Container UI
-      - netdata       # Monitoring: System metrics
-      - dozzle        # Observability: Log viewer
-
-# Default variant selection
-defaultVariant: default
+# Platform services (always present, non-negotiable)
+platform:
+  traefik:
+    role: default
+    alternatives: []
+  tinyauth:
+    role: default
+    alternatives: []
+  pocketid:
+    role: default
+    alternatives: []
+  paas:
+    role: default
+    defaultTool: dokploy
+    alternatives: [coolify, dockge]
+  monitoring:
+    role: default
+    defaultTool: uptime-kuma
+    alternatives: [beszel]
+  dashboard:
+    role: default
+    alternatives: []
 
 # Feature flags
 features:
@@ -147,6 +184,7 @@ computeTiers:
     requirements:
       cpu: 8
       memory: 16
+      disk: 20
     additionalServices:
       - prometheus
       - grafana
@@ -154,16 +192,17 @@ computeTiers:
     requirements:
       cpu: 4
       memory: 8
+      disk: 10
     additionalServices: []
   low:
     requirements:
       cpu: 2
       memory: 4
-    variantOverride: minimal
+      disk: 5
+    paasOverride: dockge
     serviceOverrides:
       dokploy: disabled
       uptime-kuma: disabled
-      beszel: enabled
 
 # =============================================================================
 # SERVICE OUTPUTS (URLs and Credentials)
@@ -199,9 +238,7 @@ changelog:
       - "NEW: Uptime Kuma for monitoring (default)"
       - "NEW: Beszel as alternative monitoring option"
       - "NEW: Whoami test container for verification"
-      - "NEW: Variant system (default, beszel, minimal)"
       - "NEW: Service URLs output in deployment summary"
-      - "CHANGED: Dockge/Portainer moved to 'minimal' variant"
       - "CHANGED: Two deployment modes (simple/advanced) standardized"
   - version: "1.0.0"
     date: "2025-01-08"

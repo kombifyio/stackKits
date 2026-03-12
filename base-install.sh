@@ -150,6 +150,12 @@ if [ -f "$HOMELAB_DIR/stack-spec.yaml" ]; then
   if [ -n "$_d" ]; then DOMAIN="$_d"; fi
 fi
 
+# Read subdomain prefix from tfvars (for kombify.me mode)
+SUBDOMAIN_PREFIX=""
+if [ -f "$HOMELAB_DIR/deploy/terraform.tfvars.json" ]; then
+  SUBDOMAIN_PREFIX=$(grep '"subdomain_prefix"' "$HOMELAB_DIR/deploy/terraform.tfvars.json" | head -1 | sed -E 's/.*: *"([^"]+)".*/\1/' || true)
+fi
+
 SERVER_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "YOUR_SERVER_IP")
 
 # Read generated password from tfvars
@@ -158,19 +164,80 @@ if [ -f "$HOMELAB_DIR/deploy/terraform.tfvars.json" ]; then
   ADMIN_PASSWORD=$(grep '"admin_password_plaintext"' "$HOMELAB_DIR/deploy/terraform.tfvars.json" | head -1 | sed -E 's/.*: *"([^"]+)".*/\1/' || true)
 fi
 
+# Detect network environment: is this a public server or a home network?
+# A public server has its public IP directly on an interface.
+NETWORK_ENV="unknown"
+PUBLIC_IP=$(curl -sSL --max-time 5 https://ifconfig.me/ip 2>/dev/null || true)
+if [ -n "$PUBLIC_IP" ]; then
+  if ip addr 2>/dev/null | grep -qF "$PUBLIC_IP"; then
+    NETWORK_ENV="vps"
+  else
+    NETWORK_ENV="home"
+  fi
+fi
+
+# Check if deployed via kombify Cloud
+if [ "${KOMBIFY_CONTEXT:-}" = "cloud" ] || [ -f /etc/kombify/context ] && [ "$(cat /etc/kombify/context 2>/dev/null)" = "cloud" ]; then
+  NETWORK_ENV="cloud"
+fi
+
+# Warn if local domain on a VPS — services won't be reachable
+if [ "$NETWORK_ENV" = "vps" ] || [ "$NETWORK_ENV" = "cloud" ]; then
+  case "$DOMAIN" in
+    *.local|*.lab|*.lan|*.home|*.internal|*.test|stack.local|home.lab|homelab)
+      echo ""
+      warn "WARNING: Local domain '$DOMAIN' is not reachable on a public server!"
+      echo ""
+      echo "  Your server has a public IP ($PUBLIC_IP) but services are configured with"
+      echo "  a local domain that only works on home networks with dnsmasq."
+      echo ""
+      echo "  To fix: edit $HOMELAB_DIR/stack-spec.yaml and set:"
+      echo "    domain: kombify.me     (free public subdomain via kombify.me)"
+      echo "    domain: yourdomain.com (your own domain with DNS configured)"
+      echo ""
+      echo "  Then re-deploy:"
+      echo "    cd $HOMELAB_DIR && stackkit generate --force && stackkit apply --auto-approve"
+      echo ""
+      ;;
+  esac
+fi
+
+# Build service URLs based on domain mode
+if [ -n "$SUBDOMAIN_PREFIX" ] && [ "$DOMAIN" = "kombify.me" ]; then
+  # kombify.me flat naming mode
+  PROTO="https"
+  DASH_URL="${PROTO}://${SUBDOMAIN_PREFIX}-dash.${DOMAIN}"
+  TRAEFIK_URL="${PROTO}://${SUBDOMAIN_PREFIX}-traefik.${DOMAIN}"
+  DOKPLOY_URL="${PROTO}://${SUBDOMAIN_PREFIX}-dokploy.${DOMAIN}"
+  KUMA_URL="${PROTO}://${SUBDOMAIN_PREFIX}-kuma.${DOMAIN}"
+  AUTH_URL="${PROTO}://${SUBDOMAIN_PREFIX}-tinyauth.${DOMAIN}"
+  ID_URL="${PROTO}://${SUBDOMAIN_PREFIX}-id.${DOMAIN}"
+  URL_PATTERN="<service> at ${SUBDOMAIN_PREFIX}-<service>.${DOMAIN}"
+else
+  # Standard nested naming mode
+  PROTO="http"
+  DASH_URL="${PROTO}://base.${DOMAIN}"
+  TRAEFIK_URL="${PROTO}://traefik.${DOMAIN}"
+  DOKPLOY_URL="${PROTO}://dokploy.${DOMAIN}"
+  KUMA_URL="${PROTO}://kuma.${DOMAIN}"
+  AUTH_URL="${PROTO}://auth.${DOMAIN}"
+  ID_URL="${PROTO}://id.${DOMAIN}"
+  URL_PATTERN="<service>.${DOMAIN}"
+fi
+
 echo ""
 ok "Your homelab is running!"
 echo ""
 printf '\033[38;5;208m'
-echo "  Dashboard:  http://base.${DOMAIN}"
+echo "  Dashboard:  ${DASH_URL}"
 printf '\033[0m'
 echo ""
-echo "  All services are accessible at <service>.${DOMAIN}:"
-echo "    http://base.${DOMAIN}         Dashboard (service overview)"
-echo "    http://traefik.${DOMAIN}      Reverse proxy"
-echo "    http://dokploy.${DOMAIN}      PaaS controller"
-echo "    http://kuma.${DOMAIN}         Uptime monitoring"
-echo "    http://auth.${DOMAIN}         Authentication (TinyAuth)"
+echo "  All services are accessible at ${URL_PATTERN}:"
+echo "    ${DASH_URL}         Dashboard (service overview)"
+echo "    ${TRAEFIK_URL}      Reverse proxy"
+echo "    ${DOKPLOY_URL}      PaaS controller"
+echo "    ${KUMA_URL}         Uptime monitoring"
+echo "    ${AUTH_URL}         Authentication (TinyAuth)"
 echo ""
 echo "  Login credentials:"
 echo "    Email:    ${ADMIN_EMAIL}"
@@ -179,21 +246,24 @@ if [ -n "$ADMIN_PASSWORD" ]; then
 fi
 echo ""
 echo "  Next steps:"
-echo "    1. Login at http://auth.${DOMAIN} with the credentials above"
-echo "    2. Register a passkey at http://id.${DOMAIN}/login/setup"
+echo "    1. Login at ${AUTH_URL} with the credentials above"
+echo "    2. Register a passkey at ${ID_URL}/login/setup"
 echo "    3. Change your auto-generated password"
 echo ""
-if [ "$DOMAIN" = "stack.local" ]; then
+if [ "$DOMAIN" = "kombify.me" ] && [ -n "$SUBDOMAIN_PREFIX" ]; then
+  echo "  DNS: Managed by kombify.me (Cloudflare wildcard)"
+  echo ""
+elif [ "$DOMAIN" = "stack.local" ] || [ "$DOMAIN" = "home.lab" ]; then
   echo "  DNS setup (add to /etc/hosts on your workstation):"
-  echo "    ${SERVER_IP}  base.stack.local traefik.stack.local dokploy.stack.local"
-  echo "    ${SERVER_IP}  kuma.stack.local auth.stack.local whoami.stack.local"
-  echo "    Or use wildcard: *.stack.local -> ${SERVER_IP}"
+  echo "    ${SERVER_IP}  base.${DOMAIN} traefik.${DOMAIN} dokploy.${DOMAIN}"
+  echo "    ${SERVER_IP}  kuma.${DOMAIN} auth.${DOMAIN} whoami.${DOMAIN}"
+  echo "    Or use wildcard: *.${DOMAIN} -> ${SERVER_IP}"
   echo ""
 fi
 echo "  Commands:"
 echo "    stackkit status       Check service health"
 echo "    stackkit addon list   Available add-ons"
-echo "    stackkit destroy      Tear down everything"
+echo "    stackkit remove       Tear down everything"
 echo ""
 echo "  Project directory: $HOMELAB_DIR"
 echo ""

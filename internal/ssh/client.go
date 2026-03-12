@@ -178,7 +178,7 @@ func (c *Client) Connect() error {
 			return fmt.Errorf("strict host key checking enabled but known_hosts not found: %s", c.knownHostsPath)
 		}
 	} else {
-		// Warning: Only use this for testing/development
+		fmt.Fprintf(os.Stderr, "WARNING: SSH host key verification is disabled for %s:%d. This is insecure and should only be used for testing/development.\n", c.host, c.port)
 		hostKeyCallback = ssh.InsecureIgnoreHostKey() //nolint:gosec // G106: InsecureIgnoreHostKey is the fallback when no known_hosts file exists
 	}
 

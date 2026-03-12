@@ -32,9 +32,10 @@ Alle registrierten Adressen — Tunnel-Subdomains, Worker-Eintraege, Service-Map
 ```
 kombify.me (Cloudflare DNS — Domain liegt hier)
 │
-├── *.kombify.me (root)         → Cloudflare Worker
+├── *.kombify.me (root)         → Cloudflare Tunnel → VPS
+│   └── kombify-me-gateway (Docker, Port 8080, dokploy-network)
 │   └── Tunnel-Gateway (Proxy: WebSocket → Agent → Homelab)
-│   └── Liest Tunnel-Registry aus kombify-DB via kombify-API
+│   └── Verbindet sich direkt mit kombify-DB (Datenbank kombify_me)
 │
 ├── *.lan.kombify.me            → NS-Delegation → VPS
 │   └── ns1: srv1161760 (72.62.49.6)
@@ -44,24 +45,14 @@ kombify.me (Cloudflare DNS — Domain liegt hier)
 │
 └── Worker Registry              → KEIN eigener Endpunkt
     └── API: api.kombify.io/v1/workers/* (Kong → kombify-API)
-    └── DB: kombify-DB (Supabase/Postgres)
+    └── DB: kombify-DB (PostgreSQL)
 ```
 
-**Warum Cloudflare Workers fuer HTTP-Services:**
-- Domain liegt bereits bei Cloudflare DNS — null Setup fuer Routing
-- Keine Egress/Bandwidth-Kosten (Traffic inklusive)
-- Free Tier: 100k Requests/Tag (reicht fuer Tunnel + Registry)
-- Global Edge — niedrige Latenz weltweit
-- Cloudflare KV/D1 als Cache-Layer (optional, DB bleibt kombify-DB)
-
-**Warum VPS fuer LAN DNS:**
-- Port 53 UDP/TCP — kein PaaS/Serverless kann raw DNS
-- Muss auf dedizierten Servern laufen (srv1161760 + kombify-ionos)
-
-**Warum NICHT Appwrite:**
-- Overkill — volles BaaS (Auth, DB, Storage, Functions) fuer einfache Proxy/DNS-Services
-- Bandwidth-Limits selbst im Team Plan
-- Eigene DB-Engine — widerspricht der Regel "alles in kombify-DB"
+**Warum VPS fuer alle Services:**
+- Alle kombify-Services laufen auf kombify-ionos VPS (Azure komplett deaktiviert seit 2026-03-10)
+- Cloudflare Tunnel (`cloudflared`) leitet `*.kombify.me` Traffic zum Gateway-Container
+- Gateway verbindet sich direkt mit kombify-DB auf dem gleichen VPS
+- LAN DNS braucht Port 53 UDP/TCP — nur auf dedizierten Servern moeglich
 
 ### Kosten
 
@@ -308,19 +299,19 @@ Der User muss nichts konfigurieren — keine /etc/hosts, kein lokaler DNS, kein 
 
 | # | Voraussetzung | Verantwortlich | Status |
 |---|---------------|----------------|--------|
-| 1 | Port 53 UDP/TCP offen auf srv1161760 | Infra | Offen |
-| 2 | Port 53 UDP/TCP offen auf kombify-ionos | Infra | Offen |
-| 3 | Kein anderer DNS-Service auf Port 53 (systemd-resolved etc.) | Infra | Pruefen |
-| 4 | NS-Delegation + A-Records in Cloudflare DNS Zone angelegt | DNS Admin | Offen |
+| 1 | Port 53 UDP/TCP offen auf srv1161760 | Infra | Erledigt |
+| 2 | Port 53 UDP/TCP offen auf kombify-ionos | Infra | Erledigt |
+| 3 | Kein anderer DNS-Service auf Port 53 (systemd-resolved etc.) | Infra | Erledigt |
+| 4 | NS-Delegation + A-Records in Cloudflare DNS Zone angelegt | DNS Admin | Erledigt |
 | 5 | kombify-API Endpunkte fuer Worker-Registry in Kong konfiguriert | API Team | Offen |
-| 6 | Bestehende Tunnel-Registrierungen in kombify-DB migriert | Backend | Offen |
+| 6 | Bestehende Tunnel-Registrierungen in kombify-DB migriert | Backend | Erledigt (Gateway laeuft auf VPS) |
 
 ### Abhaengigkeiten zu anderen Systemen
 
 | System | Art der Abhaengigkeit |
 |--------|----------------------|
 | Cloudflare DNS | Domain `kombify.me` liegt hier, NS-Delegation fuer `lan.kombify.me` |
-| Cloudflare Workers | Tunnel-Gateway hostet hier (HTTP-Services) |
+| Cloudflare Tunnel | Leitet `*.kombify.me` Traffic zum Gateway-Container auf VPS |
 | kombify-API (Kong) | Zentrale API fuer alle Datenoperationen — Subdomain-Registry, Worker-Registry |
 | kombify-DB | Single Source of Truth fuer alle registrierten Adressen |
 | srv1161760 | LAN DNS Server ns1 (Docker oder systemd) |
@@ -329,7 +320,7 @@ Der User muss nichts konfigurieren — keine /etc/hosts, kein lokaler DNS, kein 
 
 ### Keine Abhaengigkeit zu
 
-- Azure (Tunnel-Gateway migriert von Azure Container App → Cloudflare Worker)
+- Azure (komplett deaktiviert seit 2026-03-10, Gateway laeuft auf VPS)
 - Appwrite (nicht verwendet — DB ist kombify-DB, nicht Appwrite)
 - Eigene API-Surface (kein `api.kombify.me` — alles ueber `api.kombify.io`)
 
@@ -362,13 +353,12 @@ Der User muss nichts konfigurieren — keine /etc/hosts, kein lokaler DNS, kein 
 3. Testen: Base-Kit Demo starten, von anderem Geraet im LAN zugreifen
 4. Dokumentation aktualisieren
 
-### Phase 4: Tunnel-Gateway Migration Azure → Cloudflare Worker (separat)
+### Phase 4: Tunnel-Gateway auf VPS (erledigt)
 
-1. Cloudflare Worker erstellen fuer `*.kombify.me` Tunnel-Gateway
-2. Tunnel-Registry-Abfragen auf kombify-API (`api.kombify.io/v1/subdomains/*`) umstellen
-3. Agent-Verbindung testen (WebSocket via Cloudflare Worker)
-4. Azure Container App `ca-kombify-me-prod` abschalten nach Migration
-5. **Alle registrierten Subdomains muessen in kombify-DB liegen** (kein lokaler State im Worker)
+~~1. Cloudflare Worker erstellen fuer `*.kombify.me` Tunnel-Gateway~~
+Gateway laeuft als Docker-Container (`kombify-me-gateway`) auf kombify-ionos und srv1161760. Traffic wird ueber Cloudflare Tunnel (`cloudflared`) zum Gateway geroutet. Azure Container App `ca-kombify-me-prod` ist abgeschaltet (Azure komplett deaktiviert seit 2026-03-10).
+
+Alle registrierten Subdomains liegen in kombify-DB (Datenbank `kombify_me`).
 
 ### Phase 5: Monitoring (nach Phase 3+4)
 
@@ -410,9 +400,9 @@ Der User muss nichts konfigurieren — keine /etc/hosts, kein lokaler DNS, kein 
 | Q1 | Unterstuetzt Cloudflare NS-Delegation fuer Subdomains (`lan.kombify.me NS ...`)? | Cloudflare DNS unterstuetzt NS-Records fuer Subdomains — sollte funktionieren. Verifizieren, dass die A-Records fuer `ns1.lan`/`ns2.lan` im DNS-only Modus (kein Proxy) korrekt aufloesen. |
 | Q2 | Laeuft systemd-resolved auf den Servern und blockiert Port 53? | Pruefen mit `ss -tlnp | grep :53`. Falls ja: resolved deaktivieren oder DNS auf Port 1053 + iptables-Redirect. |
 | Q3 | Brauchen wir DNSSEC fuer `lan.kombify.me`? | Fuer LAN-DNS nicht kritisch, aber nice-to-have fuer Trust. sslip.io Go-Server unterstuetzt kein DNSSEC out-of-the-box. |
-| Q4 | Cloudflare Worker: WebSocket-Support fuer Tunnel-Gateway ausreichend? | Cloudflare Workers unterstuetzen WebSockets, aber mit Einschraenkungen (kein streaming vor Response-Header). Pruefen ob das Agent-Protokoll kompatibel ist. |
+| Q4 | ~~Cloudflare Worker: WebSocket-Support fuer Tunnel-Gateway ausreichend?~~ | Geloest: Gateway laeuft als Docker-Container auf VPS, Cloudflare Tunnel leitet Traffic weiter. Kein Worker noetig. |
 | Q5 | Kombify-API Endpunkte fuer Worker-Registry bereits definiert? | `api.kombify.io/v1/workers/*` muss in Kong konfiguriert werden. Abstimmung mit kombify-API Team noetig. |
-| Q6 | Bestehende Tunnel-Subdomains aus Azure Container App → kombify-DB migrieren? | Aktuell liegen Registrierungen moeglicherweise lokal in der Azure Container App. Muessen in kombify-DB uebertragen werden vor der Migration. |
+| Q6 | ~~Bestehende Tunnel-Subdomains aus Azure Container App → kombify-DB migrieren?~~ | Geloest: Gateway verbindet sich direkt mit kombify-DB (Datenbank `kombify_me`). Azure ist komplett deaktiviert. |
 
 ---
 

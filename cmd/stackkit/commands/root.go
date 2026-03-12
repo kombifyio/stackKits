@@ -4,8 +4,10 @@ package commands
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/fatih/color"
+	"github.com/kombifyio/stackkits/internal/logging"
 	"github.com/spf13/cobra"
 )
 
@@ -38,7 +40,11 @@ var (
 	workDir     string
 	specFile    string
 	contextFlag string
+	noLog       bool
 )
+
+// deployLog is the structured deploy logger for the current CLI run.
+var deployLog *logging.DeployLogger
 
 // rootCmd represents the base command
 var rootCmd = &cobra.Command{
@@ -59,7 +65,7 @@ Examples:
   stackkit plan                        Preview infrastructure changes
   stackkit apply                       Apply infrastructure changes
   stackkit status                      Check deployment status
-  stackkit destroy                     Tear down deployment`,
+  stackkit remove                      Tear down deployment`,
 	SilenceUsage: true,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		// Show banner for root help and key workflow commands
@@ -67,11 +73,32 @@ Examples:
 		if name == "stackkit" || name == "init" || name == "apply" {
 			printBanner()
 		}
+
+		// Initialize structured deploy logger (skip for help/completion/version)
+		switch name {
+		case "stackkit", "help", "completion", "version", "logs", "list":
+			// no logging for these commands
+		default:
+			if !noLog {
+				initDeployLogger()
+			}
+		}
+	},
+	PersistentPostRun: func(cmd *cobra.Command, args []string) {
+		if deployLog != nil {
+			deployLog.Close()
+		}
 	},
 }
 
 // Execute runs the root command
 func Execute() error {
+	defer func() {
+		if deployLog != nil {
+			deployLog.Close()
+			deployLog = nil
+		}
+	}()
 	return rootCmd.Execute()
 }
 
@@ -82,6 +109,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&workDir, "chdir", "C", ".", "Change to directory before running")
 	rootCmd.PersistentFlags().StringVarP(&specFile, "spec", "s", "stack-spec.yaml", "Path to stack specification file")
 	rootCmd.PersistentFlags().StringVar(&contextFlag, "context", "", "Node context override (local, cloud, pi). Auto-detected if omitted.")
+	rootCmd.PersistentFlags().BoolVar(&noLog, "no-log", false, "Disable structured deploy logging")
 
 	// Add subcommands
 	rootCmd.AddCommand(initCmd)
@@ -89,12 +117,13 @@ func init() {
 	rootCmd.AddCommand(generateCmd)
 	rootCmd.AddCommand(planCmd)
 	rootCmd.AddCommand(applyCmd)
-	rootCmd.AddCommand(destroyCmd)
+	rootCmd.AddCommand(removeCmd)
 	rootCmd.AddCommand(statusCmd)
 	rootCmd.AddCommand(validateCmd)
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(completionCmd)
 	rootCmd.AddCommand(addonCmd)
+	rootCmd.AddCommand(compatCmd)
 }
 
 // Helper functions for output
@@ -115,7 +144,7 @@ func printWarning(format string, args ...interface{}) {
 
 // printError prints an error message
 func printError(format string, args ...interface{}) {
-	fmt.Fprintf(os.Stderr, "%s %s\n", red("✗"), fmt.Sprintf(format, args...))
+	_, _ = fmt.Fprintf(os.Stderr, "%s %s\n", red("✗"), fmt.Sprintf(format, args...))
 }
 
 // printInfo prints an info message
@@ -140,6 +169,23 @@ func contextOrDefault(ctx string) string {
 	return ctx
 }
 
+
+// initDeployLogger creates the structured deploy logger.
+// Closes any previously open logger (for test safety).
+func initDeployLogger() {
+	if deployLog != nil {
+		deployLog.Close()
+		deployLog = nil
+	}
+	wd := getWorkDir()
+	logDir := filepath.Join(wd, ".stackkit", "logs")
+	deployLog = logging.New(logDir)
+}
+
+// getLogDir returns the log directory path for the current working directory.
+func getLogDir() string {
+	return filepath.Join(getWorkDir(), ".stackkit", "logs")
+}
 
 // getWorkDir returns the effective working directory
 func getWorkDir() string {

@@ -247,10 +247,10 @@ func (c *Client) GetStackKitContainers(ctx context.Context) ([]ContainerInfo, er
 	ctx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
 
-	// Filter by StackKit label
+	// Filter by StackKit label — all resources created by main.tf carry stackkit.layer
 	// #nosec G204 -- binary path is set at construction, not from user input
 	cmd := exec.CommandContext(ctx, c.binary, "ps", "-a",
-		"--filter", "label=managed-by=stackkit",
+		"--filter", "label=stackkit.layer",
 		"--format", "{{json .}}")
 
 	output, err := cmd.Output()
@@ -405,6 +405,166 @@ func (c *Client) Pull(ctx context.Context, image string) error {
 	}
 
 	return nil
+}
+
+// CanRunContainers tests whether the Docker daemon can actually create containers.
+// On some VPS (OpenVZ/LXC), Docker installs and the daemon starts, but the kernel
+// blocks container creation (unshare/namespace errors).
+func (c *Client) CanRunContainers(ctx context.Context) bool {
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, c.binary, "run", "--rm", "busybox", "true") // #nosec G204 -- binary path is set at construction
+	return cmd.Run() == nil
+}
+
+// removeResource executes a docker remove command and treats "not found" as success.
+func (c *Client) removeResource(ctx context.Context, args []string, resourceType, name string) error {
+	ctx, cancel := context.WithTimeout(ctx, c.timeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, c.binary, args...) // #nosec G204 -- binary path is set at construction, not from user input
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		out := strings.TrimSpace(string(output))
+		if strings.Contains(out, "not found") || strings.Contains(out, "No such") {
+			return nil // already gone
+		}
+		return fmt.Errorf("failed to remove %s %s: %w", resourceType, name, err)
+	}
+	return nil
+}
+
+// RemoveContainer force-removes a container (stopped or running).
+func (c *Client) RemoveContainer(ctx context.Context, nameOrID string) error {
+	if err := validateNameOrID(nameOrID); err != nil {
+		return fmt.Errorf("invalid container name/ID: %w", err)
+	}
+	return c.removeResource(ctx, []string{"rm", "-f", nameOrID}, "container", nameOrID)
+}
+
+// RemoveNetwork removes a Docker network by name.
+func (c *Client) RemoveNetwork(ctx context.Context, name string) error {
+	if err := validateName(name); err != nil {
+		return fmt.Errorf("invalid network name: %w", err)
+	}
+	return c.removeResource(ctx, []string{"network", "rm", name}, "network", name)
+}
+
+// RemoveVolume removes a Docker volume by name.
+func (c *Client) RemoveVolume(ctx context.Context, name string) error {
+	if err := validateName(name); err != nil {
+		return fmt.Errorf("invalid volume name: %w", err)
+	}
+	return c.removeResource(ctx, []string{"volume", "rm", name}, "volume", name)
+}
+
+// RemoveImage removes a Docker image by name/tag.
+func (c *Client) RemoveImage(ctx context.Context, image string) error {
+	if err := validateImageName(image); err != nil {
+		return fmt.Errorf("invalid image name: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, c.timeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, c.binary, "rmi", image) // #nosec G204 -- binary path is set at construction, not from user input
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		out := strings.TrimSpace(string(output))
+		if strings.Contains(out, "No such image") || strings.Contains(out, "not found") {
+			return nil // already gone
+		}
+		return fmt.Errorf("failed to remove image %s: %w", image, err)
+	}
+	return nil
+}
+
+// listByLabel lists Docker resources of the given type matching a label filter.
+func (c *Client) listByLabel(ctx context.Context, resourceType, label string) ([]string, error) {
+	ctx, cancel := context.WithTimeout(ctx, c.timeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, c.binary, resourceType, "ls", // #nosec G204 -- binary path is set at construction, not from user input
+		"--filter", "label="+label,
+		"--format", "{{.Name}}")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list %ss: %w", resourceType, err)
+	}
+
+	var names []string
+	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+		if line != "" {
+			names = append(names, line)
+		}
+	}
+	return names, nil
+}
+
+// ListNetworksByLabel lists Docker networks matching a label filter.
+func (c *Client) ListNetworksByLabel(ctx context.Context, label string) ([]string, error) {
+	return c.listByLabel(ctx, "network", label)
+}
+
+// ListVolumesByLabel lists Docker volumes matching a label filter.
+func (c *Client) ListVolumesByLabel(ctx context.Context, label string) ([]string, error) {
+	return c.listByLabel(ctx, "volume", label)
+}
+
+// Prune removes dangling images and build cache to reclaim disk space.
+// Returns the number of bytes reclaimed.
+func (c *Client) Prune(ctx context.Context) (int64, error) {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+
+	var reclaimed int64
+
+	// Prune dangling images
+	cmd := exec.CommandContext(ctx, c.binary, "image", "prune", "-f") // #nosec G204 -- binary path is set at construction
+	if output, err := cmd.Output(); err == nil {
+		reclaimed += parseReclaimedSpace(string(output))
+	}
+
+	// Prune build cache
+	cmd = exec.CommandContext(ctx, c.binary, "builder", "prune", "-f") // #nosec G204 -- binary path is set at construction
+	if output, err := cmd.Output(); err == nil {
+		reclaimed += parseReclaimedSpace(string(output))
+	}
+
+	return reclaimed, nil
+}
+
+// parseReclaimedSpace extracts "Total reclaimed space: X.YMB" from docker prune output.
+func parseReclaimedSpace(output string) int64 {
+	for _, line := range strings.Split(output, "\n") {
+		if !strings.Contains(line, "reclaimed space") {
+			continue
+		}
+		// Format: "Total reclaimed space: 123.4MB" or "... 1.2GB" or "... 456kB"
+		parts := strings.Split(line, ":")
+		if len(parts) < 2 {
+			continue
+		}
+		sizeStr := strings.TrimSpace(parts[len(parts)-1])
+		var value float64
+		var unit string
+		if _, err := fmt.Sscanf(sizeStr, "%f%s", &value, &unit); err != nil {
+			continue
+		}
+		unit = strings.ToUpper(unit)
+		switch {
+		case strings.HasPrefix(unit, "G"):
+			return int64(value * 1024 * 1024 * 1024)
+		case strings.HasPrefix(unit, "M"):
+			return int64(value * 1024 * 1024)
+		case strings.HasPrefix(unit, "K"):
+			return int64(value * 1024)
+		case strings.HasPrefix(unit, "B"):
+			return int64(value)
+		}
+	}
+	return 0
 }
 
 // GetServiceStatus converts container info to service status

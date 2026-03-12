@@ -2,8 +2,6 @@ package cue
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"cuelang.org/go/cue"
@@ -86,26 +84,16 @@ func NewExtractor(stackkitDir string) *Extractor {
 // ExtractServicesFromModules scans the modules directory and extracts services
 // from each module's Contract. This replaces the legacy variant-based extraction.
 func (e *Extractor) ExtractServicesFromModules(modulesDir string) ([]ServiceDef, error) {
-	entries, err := os.ReadDir(modulesDir)
+	modulePaths, err := discoverModulePaths(modulesDir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read modules directory: %w", err)
+		return nil, err
 	}
 
 	var allServices []ServiceDef
-	for _, entry := range entries {
-		if !entry.IsDir() || strings.HasPrefix(entry.Name(), "_") {
-			continue
-		}
-
-		modulePath := filepath.Join(modulesDir, entry.Name())
-		moduleCue := filepath.Join(modulePath, "module.cue")
-		if _, statErr := os.Stat(moduleCue); os.IsNotExist(statErr) {
-			continue
-		}
-
-		services, err := e.extractModuleServices(modulePath)
+	for _, mp := range modulePaths {
+		services, err := e.extractModuleServices(mp.Path)
 		if err != nil {
-			return nil, fmt.Errorf("failed to extract services from module %s: %w", entry.Name(), err)
+			return nil, fmt.Errorf("failed to extract services from module %s: %w", mp.Name, err)
 		}
 		allServices = append(allServices, services...)
 	}

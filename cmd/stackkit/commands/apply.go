@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
+	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +15,7 @@ import (
 	"github.com/kombifyio/stackkits/internal/config"
 	"github.com/kombifyio/stackkits/internal/docker"
 	"github.com/kombifyio/stackkits/internal/iac"
+	"github.com/kombifyio/stackkits/internal/kombifyme"
 	"github.com/kombifyio/stackkits/internal/tofu"
 	"github.com/kombifyio/stackkits/pkg/models"
 	"github.com/spf13/cobra"
@@ -58,10 +62,16 @@ func runApply(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	printInfo("Applying deployment: %s (%s variant)", spec.StackKit, spec.Variant)
+	deployLog.Event("apply.start",
+		slog.String("stackkit", spec.StackKit),
+		slog.String("mode", spec.Mode),
+		slog.Bool("auto_approve", applyAutoApprove),
+	)
 
-	// Ensure prerequisites are installed
-	if err := ensurePrerequisites(ctx); err != nil {
+	printInfo("Applying deployment: %s (mode: %s)", spec.StackKit, spec.Mode)
+
+	// Ensure prerequisites are installed (skip Docker for native runtime)
+	if err := ensurePrerequisites(ctx, spec); err != nil {
 		return err
 	}
 
@@ -73,6 +83,19 @@ func runApply(cmd *cobra.Command, args []string) error {
 	} else if hasTF, _ := tofu.HasTerraformFiles(deployDir); !hasTF {
 		needsGenerate = true
 	}
+	reason := ""
+	if needsGenerate {
+		if _, statErr := os.Stat(deployDir); os.IsNotExist(statErr) {
+			reason = "deploy_dir_missing"
+		} else {
+			reason = "no_terraform_files"
+		}
+	}
+	deployLog.Event("apply.auto_generate",
+		slog.Bool("needs_generate", needsGenerate),
+		slog.String("reason", reason),
+	)
+
 	if needsGenerate {
 		printInfo("Deploy directory not found or empty, running generate...")
 		genOutputDir = config.GetDeployDir()
@@ -93,6 +116,9 @@ func runApply(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create executor: %w", err)
 	}
+	deployLog.Event("apply.executor",
+		slog.String("mode", string(executor.Mode())),
+	)
 
 	// OpenTofu was already checked by ensurePrerequisites
 
@@ -101,14 +127,22 @@ func runApply(cmd *cobra.Command, args []string) error {
 	if _, statErr := os.Stat(tfStatePath); os.IsNotExist(statErr) {
 		printInfo("Initializing %s...", executor.Mode())
 		if initErr := executor.Init(ctx); initErr != nil {
+			deployLog.Error("tofu.init",
+				slog.String("status", "failed"),
+				slog.String("error", initErr.Error()),
+			)
 			return fmt.Errorf("init error: %w", initErr)
 		}
+		deployLog.Event("tofu.init",
+			slog.String("status", "success"),
+		)
 		printSuccess("Initialized successfully")
 	}
 
 	// Run apply with troubleshooting retry wrapper
 	printInfo("Applying changes...")
 	startTime := time.Now()
+	deployLog.Event("apply.attempt_start")
 
 	result, err := troubleshootAndApply(ctx, executor, applyAutoApprove, planFile, deployDir)
 	if err != nil {
@@ -125,28 +159,71 @@ func runApply(cmd *cobra.Command, args []string) error {
 
 	if !result.Success {
 		userMsg := formatApplyError(result.Stderr)
+		deployLog.Error("apply.failed",
+			slog.String("error", userMsg),
+			slog.Duration("duration", duration),
+		)
 		printError("%s", userMsg)
 		fmt.Println()
 		printInfo("Troubleshooting tips:")
 		fmt.Println("  1. Run 'stackkit prepare' to re-detect system capabilities")
 		fmt.Println("  2. Run 'stackkit apply' to retry the deployment")
+		fmt.Println()
+		printWarning("To clean up a failed deployment:")
+		fmt.Println("  stackkit remove               (remove deployed resources)")
+		fmt.Println("  stackkit remove --purge       (full reset, remove everything)")
 		return fmt.Errorf("deployment failed")
 	}
 
 	// Update deployment state
 	state := &models.DeploymentState{
 		StackKit:    spec.StackKit,
-		Variant:     spec.Variant,
 		Mode:        spec.Mode,
 		Status:      models.StatusRunning,
 		LastApplied: time.Now(),
 	}
 
+	deployLog.Event("apply.success",
+		slog.Duration("duration", duration),
+	)
+
 	stateFile := filepath.Join(wd, ".stackkit", "state.yaml")
 	if mkdirErr := os.MkdirAll(filepath.Dir(stateFile), 0750); mkdirErr != nil {
+		deployLog.Warn("state.saved",
+			slog.String("status", "failed"),
+			slog.String("error", mkdirErr.Error()),
+		)
 		printWarning("Failed to create state directory: %v", mkdirErr)
 	} else if saveErr := loader.SaveDeploymentState(state, stateFile); saveErr != nil {
+		deployLog.Warn("state.saved",
+			slog.String("status", "failed"),
+			slog.String("error", saveErr.Error()),
+		)
 		printWarning("Failed to save deployment state: %v", saveErr)
+	} else {
+		deployLog.Event("state.saved",
+			slog.String("status", "success"),
+		)
+	}
+
+	// Register with kombify for Direct Connect (only for kombify.me domains)
+	registerWithKombify(spec, state)
+
+	// Clean up dangling images and build cache left from deployment
+	dockerClient := docker.NewClient()
+	if dockerClient.IsInstalled() && dockerClient.IsRunning(ctx) {
+		if reclaimed, pruneErr := dockerClient.Prune(ctx); pruneErr == nil {
+			deployLog.Event("docker.prune",
+				slog.Int64("reclaimed_bytes", int64(reclaimed)),
+			)
+			if reclaimed > 1024*1024 {
+				printSuccess("Reclaimed %d MB of disk space", reclaimed/(1024*1024))
+			}
+		} else {
+			deployLog.Warn("docker.prune",
+				slog.String("error", pruneErr.Error()),
+			)
+		}
 	}
 
 	fmt.Println()
@@ -158,6 +235,9 @@ func runApply(cmd *cobra.Command, args []string) error {
 		printInfo("Deployment outputs:")
 		fmt.Println(output)
 	}
+
+	// Post-deploy: verify service URLs are reachable
+	verifyServiceURLs(ctx, spec)
 
 	return nil
 }
@@ -226,38 +306,17 @@ func createDefaultSpec(loader *config.Loader, wd string) (*models.StackSpec, err
 }
 
 // ensurePrerequisites checks that Docker and OpenTofu are available,
-// offering to install them if missing.
-func ensurePrerequisites(ctx context.Context) error {
-	// Check Docker
-	dockerClient := docker.NewClient()
-	if !dockerClient.IsInstalled() {
-		if applyAutoApprove {
-			printInfo("Docker is not installed, installing...")
-		} else {
-			printWarning("Docker is not installed")
-			fmt.Print("Install Docker now? [Y/n] ")
-			var answer string
-			_, _ = fmt.Scanln(&answer)
-			if len(answer) > 0 && (answer[0] == 'n' || answer[0] == 'N') {
-				return fmt.Errorf("Docker is required. Install it manually or run 'stackkit prepare'")
-			}
-			printInfo("Installing Docker...")
-		}
-		if err := installDockerLocal(ctx); err != nil {
-			return fmt.Errorf("failed to install Docker: %w", err)
-		}
-		printSuccess("Docker installed")
-	}
+// offering to install them if missing. Skips Docker for native runtime.
+func ensurePrerequisites(ctx context.Context, spec *models.StackSpec) error {
+	isNative := spec != nil && spec.Runtime == models.RuntimeNative
 
-	// Ensure Docker daemon is running (start it if needed)
-	if !dockerClient.IsRunning(ctx) {
-		printInfo("Docker daemon is not running, starting...")
-		caps, err := startDockerDaemon(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to start Docker daemon: %w", err)
+	// Check Docker (skip for native runtime)
+	if isNative {
+		printInfo("Native runtime — skipping Docker checks")
+	} else {
+		if err := ensureDocker(ctx); err != nil {
+			return err
 		}
-		writeDockerCapabilities(caps)
-		printSuccess("Docker daemon started")
 	}
 
 	// Check OpenTofu
@@ -278,12 +337,46 @@ func ensurePrerequisites(ctx context.Context) error {
 		if err := installTofuLocal(ctx); err != nil {
 			return fmt.Errorf("failed to install OpenTofu: %w", err)
 		}
-		// Verify installation
 		tofuExec = tofu.NewExecutor()
 		if !tofuExec.IsInstalled() {
 			return fmt.Errorf("OpenTofu installation completed but binary not found in PATH")
 		}
 		printSuccess("OpenTofu installed")
+	}
+
+	return nil
+}
+
+// ensureDocker checks Docker is installed and running, installing if needed.
+func ensureDocker(ctx context.Context) error {
+	dockerClient := docker.NewClient()
+	if !dockerClient.IsInstalled() {
+		if applyAutoApprove {
+			printInfo("Docker is not installed, installing...")
+		} else {
+			printWarning("Docker is not installed")
+			fmt.Print("Install Docker now? [Y/n] ")
+			var answer string
+			_, _ = fmt.Scanln(&answer)
+			if len(answer) > 0 && (answer[0] == 'n' || answer[0] == 'N') {
+				return fmt.Errorf("Docker is required. Install it manually or run 'stackkit prepare'")
+			}
+			printInfo("Installing Docker...")
+		}
+		if err := installDockerLocal(ctx); err != nil {
+			return fmt.Errorf("failed to install Docker: %w", err)
+		}
+		printSuccess("Docker installed")
+	}
+
+	if !dockerClient.IsRunning(ctx) {
+		printInfo("Docker daemon is not running, starting...")
+		caps, err := startDockerDaemon(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to start Docker daemon: %w", err)
+		}
+		writeDockerCapabilities(caps)
+		printSuccess("Docker daemon started")
 	}
 
 	return nil
@@ -319,7 +412,7 @@ func knownFailurePatterns() []applyFailurePattern {
 				if caps == nil {
 					caps = &models.DockerCapabilities{}
 				}
-				prePullImages(ctx, caps)
+				prePullImages(ctx, caps, "")
 				writeDockerCapabilities(caps)
 				if len(caps.PrePullFailed) > 0 {
 					return fmt.Errorf("%d images failed to pull", len(caps.PrePullFailed))
@@ -410,6 +503,10 @@ func troubleshootAndApply(
 		}
 
 		lastResult = result
+		deployLog.Event("tofu.apply",
+			slog.Int("attempt", attempt),
+			slog.Bool("success", result.Success),
+		)
 
 		if result.Success {
 			if attempt > 0 {
@@ -429,6 +526,10 @@ func troubleshootAndApply(
 				continue
 			}
 
+			deployLog.Event("troubleshoot.pattern_matched",
+				slog.String("pattern", pattern.Name),
+			)
+
 			// Don't apply the same fix twice
 			alreadyApplied := false
 			for _, name := range appliedFixes {
@@ -438,6 +539,9 @@ func troubleshootAndApply(
 				}
 			}
 			if alreadyApplied {
+				deployLog.Warn("troubleshoot.skip_duplicate",
+					slog.String("pattern", pattern.Name),
+				)
 				continue
 			}
 
@@ -445,16 +549,26 @@ func troubleshootAndApply(
 			printWarning("%s", pattern.UserMessage)
 
 			if fixErr := pattern.Fix(ctx, deployDir); fixErr != nil {
+				deployLog.Error("troubleshoot.fix_applied",
+					slog.String("pattern", pattern.Name),
+					slog.Bool("success", false),
+					slog.String("error", fixErr.Error()),
+				)
 				printWarning("Auto-fix failed: %v", fixErr)
 				continue
 			}
 
+			deployLog.Event("troubleshoot.fix_applied",
+				slog.String("pattern", pattern.Name),
+				slog.Bool("success", true),
+			)
 			appliedFixes = append(appliedFixes, pattern.Name)
 			fixed = true
 			break
 		}
 
 		if !fixed {
+			deployLog.Warn("troubleshoot.no_match")
 			break // no pattern matched — don't retry blindly
 		}
 	}
@@ -496,6 +610,59 @@ func formatApplyError(stderr string) string {
 	return "Deployment failed. Run 'stackkit prepare' then retry with 'stackkit apply'."
 }
 
+// registerWithKombify registers the stackkit-server instance with kombify for Direct Connect.
+// Only runs when the deployment uses a kombify.me domain.
+func registerWithKombify(spec *models.StackSpec, state *models.DeploymentState) {
+	if spec == nil || spec.Domain != "kombify.me" {
+		return
+	}
+
+	apiKey := os.Getenv("KOMBIFY_API_KEY")
+	if apiKey == "" {
+		deployLog.Warn("registry.skip", slog.String("reason", "no KOMBIFY_API_KEY"))
+		return
+	}
+
+	fingerprint := kombifyme.DeviceFingerprint()
+	instanceID := fmt.Sprintf("%s-%s-%s", spec.SubdomainPrefix, spec.StackKit, fingerprint)
+
+	// Build service list from deployment state
+	var services []models.ServiceInfo
+	for _, svc := range state.Services {
+		services = append(services, models.ServiceInfo{
+			Name:   svc.Name,
+			URL:    svc.URL,
+			Status: string(svc.Status),
+		})
+	}
+
+	reg := &models.InstanceRegistration{
+		InstanceID:  instanceID,
+		EndpointURL: fmt.Sprintf("https://api.%s.kombify.me", spec.SubdomainPrefix),
+		StackKit:    spec.StackKit,
+		Services:    services,
+		Status:      string(state.Status),
+		APIPort:     8082,
+	}
+
+	client := kombifyme.NewClient(apiKey)
+	resp, err := client.RegisterInstance(reg)
+	if err != nil {
+		deployLog.Warn("registry.register",
+			slog.String("status", "failed"),
+			slog.String("error", err.Error()),
+		)
+		printWarning("Failed to register with kombify: %v", err)
+		return
+	}
+
+	deployLog.Event("registry.register",
+		slog.String("status", "success"),
+		slog.String("instance_id", resp.InstanceID),
+	)
+	printSuccess("Registered with kombify (instance: %s)", resp.InstanceID)
+}
+
 // patchTfvarsNetworkMode updates terraform.tfvars.json to change network_mode.
 func patchTfvarsNetworkMode(deployDir, mode string) error {
 	tfvarsPath := filepath.Join(deployDir, "terraform.tfvars.json")
@@ -517,4 +684,82 @@ func patchTfvarsNetworkMode(deployDir, mode string) error {
 	}
 
 	return os.WriteFile(tfvarsPath, append(newData, '\n'), 0600)
+}
+
+// verifyServiceURLs checks if the key service URLs are actually reachable
+// after deployment. This catches mismatches between the configured domain
+// and the actual network environment (e.g., local domains on a public VPS).
+func verifyServiceURLs(ctx context.Context, spec *models.StackSpec) {
+	if spec == nil {
+		return
+	}
+
+	domain := spec.Domain
+	if domain == "" {
+		domain = "home.lab"
+	}
+
+	// Build the primary test URL (dashboard)
+	proto := "http"
+	testHost := "base." + domain
+	if spec.SubdomainPrefix != "" {
+		testHost = spec.SubdomainPrefix + "-dash." + domain
+	}
+	testURL := proto + "://" + testHost
+
+	// Try to resolve the hostname
+	_, err := net.LookupHost(testHost)
+	dnsOK := err == nil
+
+	// Try to reach the service
+	httpOK := false
+	if dnsOK {
+		checkCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+
+		req, reqErr := http.NewRequestWithContext(checkCtx, http.MethodGet, testURL, nil)
+		if reqErr == nil {
+			client := &http.Client{Timeout: 5 * time.Second}
+			resp, httpErr := client.Do(req)
+			if httpErr == nil {
+				resp.Body.Close()
+				httpOK = resp.StatusCode < 500
+			}
+		}
+	}
+
+	if dnsOK && httpOK {
+		printSuccess("Service URLs verified: %s is reachable", testURL)
+		return
+	}
+
+	// URLs are not reachable — provide actionable guidance
+	fmt.Println()
+	printWarning("Service URL check: %s is not reachable", testURL)
+
+	caps := loadDockerCapabilities()
+	if caps != nil && (caps.NetworkEnv == models.NetEnvVPS || caps.NetworkEnv == models.NetEnvCloud) {
+		// On a VPS/cloud with local domains — this is the root cause
+		if strings.HasSuffix(domain, ".local") || strings.HasSuffix(domain, ".lab") ||
+			strings.HasSuffix(domain, ".lan") || strings.HasSuffix(domain, ".home") || domain == "homelab" {
+			printError("Local domain '%s' is not accessible on a public server", domain)
+			fmt.Println()
+			printInfo("Your server is a VPS/cloud instance but is configured with a local domain.")
+			printInfo("Local domains (*.local, *.lab, *.lan) only work on home networks with dnsmasq.")
+			fmt.Println()
+			printInfo("To fix this, update your stack-spec.yaml domain to one of:")
+			fmt.Println("  1. domain: kombify.me    (free public subdomains via kombify.me)")
+			fmt.Println("  2. domain: yourdomain.com  (your own domain with DNS configured)")
+			fmt.Println()
+			printInfo("Then re-deploy:")
+			fmt.Println("  stackkit generate --force")
+			fmt.Println("  stackkit apply --auto-approve")
+		}
+	} else if !dnsOK {
+		printInfo("DNS resolution failed for '%s'", testHost)
+		if caps != nil && caps.PrivateIP != "" {
+			printInfo("Add to /etc/hosts on your workstation:")
+			fmt.Printf("  %s  %s\n", caps.PrivateIP, testHost)
+		}
+	}
 }

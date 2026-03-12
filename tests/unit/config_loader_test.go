@@ -86,7 +86,6 @@ func TestLoader_LoadStackSpec_ValidYAML(t *testing.T) {
 	// Create a valid stack-spec.yaml matching the actual StackSpec struct
 	specContent := `name: test-spec
 stackkit: base-kit
-variant: default
 mode: simple
 domain: example.com
 email: admin@example.com
@@ -117,7 +116,6 @@ func TestLoader_SaveStackSpec(t *testing.T) {
 	spec := &models.StackSpec{
 		Name:     "saved-spec",
 		StackKit: "base-kit",
-		Variant:  "default",
 		Mode:     "simple",
 	}
 

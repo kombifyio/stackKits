@@ -38,6 +38,9 @@ package base
 		audit:     #AuditConfig
 	}
 
+	// Virtualization environment requirements (Layer 1 Foundation)
+	virtualization: #VirtualizationConfig
+
 	// Identity services (Layer 1 Foundation)
 	identity: {
 		// Lightweight LDAP server

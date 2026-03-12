@@ -1,6 +1,6 @@
 # Deployment — kombify StackKits
 
-> **Last Updated:** 2026-01-28  
+> **Last Updated:** 2026-03-10
 > **Version:** 1.0  
 > **Component:** kombify StackKits (Infrastructure Templates)
 
@@ -10,14 +10,14 @@
 
 | Environment | Method | Notes |
 |------------|--------|-------|
-| **Production Website** | Azure Container App | CI/CD from `main` → `ca-stackkits-web-prod` |
+| **Production Website** | VPS / Dokploy | CI/CD from `main` → Docker container on kombify-ionos |
 | **Local** | Docker Compose | `docker compose up -d` |
 | **Binary** | Go binary | `make build` → `./bin/stackkit` |
 
 | Property | Value |
 |----------|-------|
 | **Production URL** | `https://stackkits.kombify.io` |
-| **Container Registry** | `acrkombifyprod.azurecr.io/stackkits-web` |
+| **Container Registry** | `ghcr.io/kombiverselabs/stackkits-web` |
 
 ---
 
@@ -78,36 +78,38 @@
 
 ---
 
-## Azure Resources
+## VPS Deployment
 
-### Domain Routing (Azure Front Door)
+### Domain Routing
 
-> **⚠️ IMPORTANT**: All kombify.io subdomains are routed through Azure Front Door.  
-> See [AZURE_INFRASTRUCTURE.md](https://github.com/kombify/kombify-administration/blob/main/docs/AZURE_INFRASTRUCTURE.md) for the complete routing architecture.
+All `*.kombify.io` subdomains are routed through Cloudflare DNS to the kombify-ionos VPS (217.154.174.107). Traefik (managed by Dokploy) handles TLS termination and reverse proxy routing.
 
 | Property | Value |
 |----------|-------|
 | **Public URL** | `https://stackkits.kombify.io` |
-| **AFD Profile** | `afd-kombify-prod` |
-| **Origin Group** | `og-stackkits` |
-| **Route Name** | `route-stackkits` |
+| **VPS** | kombify-ionos (217.154.174.107) |
+| **Reverse Proxy** | Traefik v3 (Dokploy-managed) |
+| **TLS** | Wildcard `*.kombify.io` via Let's Encrypt / Cloudflare DNS challenge |
+| **DNS** | Cloudflare |
 
-**To update routing**, modify the AFD configuration in `rg-kombify-prod`, NOT DNS records.
+**To update routing**, modify the Traefik dynamic config at `/etc/dokploy/traefik/dynamic/kombify-io.yml` on the VPS.
 
-### Resource Group: `rg-kombify-prod`
+### Infrastructure
 
 | Resource | Name | Purpose |
 |----------|------|---------|
-| Container App | `ca-stackkits-web-prod` | Documentation website |
-| Container Registry | `acrkombifyprod` | Docker images + OCI artifacts |
-| Storage Account | `stkombifyprod` | CUE schema hosting |
+| Docker Container | stackkits-web | Documentation website |
+| Container Registry | `ghcr.io/kombiverselabs` | Docker images |
+| Database | kombify-DB (`kombify_me`) | kombify.me subdomain registry |
 
 ### Required GitHub Secrets
 
 ```
-AZURE_CREDENTIALS     # Service Principal JSON for OIDC
-ACR_USERNAME          # Container Registry username
-ACR_PASSWORD          # Container Registry password
+VPS_HOST              # VPS IP address
+VPS_USER              # SSH user
+VPS_SSH_KEY           # SSH private key
+VPS_SSH_PORT          # SSH port
+DOPPLER_TOKEN         # Doppler service token (secrets injection)
 ```
 
 ---
@@ -167,14 +169,14 @@ curl -s http://localhost:5280/api/v1/health
 
 ## Publishing Artifacts
 
-StackKits artifacts are published to ACR as OCI artifacts:
+StackKits artifacts are published to GHCR as OCI artifacts:
 
 ```bash
-# Login to ACR
-az acr login --name acrkombifyprod
+# Login to GHCR
+echo $GITHUB_PAT | docker login ghcr.io -u USERNAME --password-stdin
 
 # Push as OCI artifact
-oras push acrkombifyprod.azurecr.io/stackkits/base-kit:v1.0.0 \
+oras push ghcr.io/kombiverselabs/stackkits/base-kit:v1.0.0 \
   --artifact-type application/vnd.kombify.stackkit.v1 \
   ./base-kit/:application/vnd.cuelang.cue
 ```
@@ -225,7 +227,7 @@ module: "github.com/kombifyio/stackkits"
 
 ## Related Documentation
 
-- [Azure Website Deployment](./AZURE_WEBSITE_DEPLOYMENT.md)
-- [Architecture V4](../docs/ARCHITECTURE_V4.md)
+- [Architecture](./ARCHITECTURE.md)
+- [kombify.me Integration Guide](./kombify-me-integration-guide.md)
 - [ROADMAP](../ROADMAP.md)
 - [ADR/](./ADR/) — Architecture Decision Records

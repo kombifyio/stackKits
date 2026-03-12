@@ -18,6 +18,13 @@ tools/
 # StackKit state
 .stackkit/
 
+# Generated deploy artifacts (contain secrets like plaintext passwords and API tokens)
+deploy/terraform.tfvars.json
+deploy/*.tfstate
+deploy/*.tfstate.*
+deploy/.terraform/
+deploy/.terraform.lock.hcl
+
 # Test binary, built with `go test -c`
 *.test
 

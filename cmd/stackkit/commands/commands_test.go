@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/bcrypt"
+	"gopkg.in/yaml.v3"
 )
 
 // executeCommand runs the root command with the given args and captures
@@ -24,6 +25,11 @@ func executeCommand(args ...string) (string, error) {
 	rootCmd.SetErr(buf)
 	rootCmd.SetArgs(args)
 	err := rootCmd.Execute()
+	// Close deploy logger to release file handles (PostRun skips on error)
+	if deployLog != nil {
+		deployLog.Close()
+		deployLog = nil
+	}
 	return buf.String(), err
 }
 
@@ -48,6 +54,11 @@ func executeCommandCaptureStdout(args ...string) (string, error) {
 
 	rootCmd.SetArgs(args)
 	execErr := rootCmd.Execute()
+	// Close deploy logger to release file handles (PostRun skips on error)
+	if deployLog != nil {
+		deployLog.Close()
+		deployLog = nil
+	}
 
 	_ = w.Close()
 	os.Stdout = orig
@@ -60,7 +71,7 @@ func executeCommandCaptureStdout(args ...string) (string, error) {
 func TestRootCommand_SubcommandsRegistered(t *testing.T) {
 	expected := []string{
 		"init", "prepare", "generate", "validate",
-		"plan", "apply", "destroy", "status",
+		"plan", "apply", "remove", "status",
 		"version", "completion",
 	}
 
@@ -141,21 +152,20 @@ func TestApplyCommand_NoSpecFile(t *testing.T) {
 		"unexpected error: %s", err.Error())
 }
 
-func TestDestroyCommand_NoDeployDir(t *testing.T) {
+func TestRemoveCommand_NoDeployDir(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create a minimal spec so the loader doesn't fail before the deploy-dir check.
 	specPath := filepath.Join(tmpDir, "stack-spec.yaml")
 	specContent := `name: test
 stackkit: test-kit
-variant: default
 mode: simple
 `
 	require.NoError(t, os.WriteFile(specPath, []byte(specContent), 0600))
 
-	_, err := executeCommand("destroy", "--auto-approve", "--spec", specPath, "--chdir", tmpDir)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "nothing to destroy")
+	// Remove should succeed even without a deploy dir — falls back to Docker cleanup
+	_, err := executeCommand("remove", "--auto-approve", "--spec", specPath, "--chdir", tmpDir)
+	assert.NoError(t, err)
 }
 
 func TestCompletionCommand_RequiresShellArg(t *testing.T) {
@@ -244,10 +254,11 @@ func TestGenerateTfvarsJSON_AdminEmail(t *testing.T) {
 		Domain:     "home.example.com",
 	}
 
-	data := generateTfvarsJSON(spec)
+	data, err := generateTfvarsJSON(spec)
+	require.NoError(t, err)
 
 	var vars map[string]interface{}
-	err := json.Unmarshal(data, &vars)
+	err = json.Unmarshal(data, &vars)
 	require.NoError(t, err)
 
 	assert.Equal(t, "test@example.com", vars["admin_email"])
@@ -270,10 +281,11 @@ func TestGenerateTfvarsJSON_FallbackAdmin(t *testing.T) {
 		Name: "test-homelab",
 	}
 
-	data := generateTfvarsJSON(spec)
+	data, err := generateTfvarsJSON(spec)
+	require.NoError(t, err)
 
 	var vars map[string]interface{}
-	err := json.Unmarshal(data, &vars)
+	err = json.Unmarshal(data, &vars)
 	require.NoError(t, err)
 
 	// Without adminEmail, should fall back to "admin"
@@ -289,4 +301,275 @@ func TestInitCommand_AdminEmailFlag(t *testing.T) {
 	f := initCmd.Flags().Lookup("admin-email")
 	require.NotNil(t, f, "--admin-email flag should exist")
 	assert.Equal(t, "", f.DefValue)
+}
+
+func TestParseDfOutput(t *testing.T) {
+	tests := []struct {
+		name    string
+		output  string
+		wantGB  float64
+		wantOK  bool
+	}{
+		{
+			name: "normal df output",
+			output: `     Avail      Size Target
+ 744488960 5267922944 /`,
+			wantGB:  0.69, // ~694MB
+			wantOK:  true,
+		},
+		{
+			name: "larger disk",
+			output: `        Avail         Size Target
+ 21474836480  42949672960 /`,
+			wantGB:  20.0,
+			wantOK:  true,
+		},
+		{
+			name:   "empty output",
+			output: "",
+			wantOK: false,
+		},
+		{
+			name:   "header only",
+			output: "     Avail      Size Target",
+			wantOK: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			availGB, _, _ := parseDfOutput(tt.output)
+			if tt.wantOK {
+				assert.InDelta(t, tt.wantGB, availGB, 0.1, "available GB")
+			} else {
+				assert.Equal(t, float64(0), availGB)
+			}
+		})
+	}
+}
+
+func TestIsNoSpaceError(t *testing.T) {
+	tests := []struct {
+		errMsg string
+		want   bool
+	}{
+		{"no space left on device", true},
+		{"write /var/lib/containerd/...: no space left on device", true},
+		{"Error response from daemon: mkdir /var/lib/containerd/...: no space left on device", true},
+		{"connection refused", false},
+		{"timeout", false},
+		{"", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.errMsg, func(t *testing.T) {
+			assert.Equal(t, tt.want, isNoSpaceError(tt.errMsg))
+		})
+	}
+}
+
+func TestResourceSpec_DiskFromYAML(t *testing.T) {
+	yamlData := `
+minimum:
+  cpu: 2
+  memory: 4
+  disk: 50
+recommended:
+  cpu: 4
+  memory: 8
+  disk: 100
+`
+	var reqs models.Requirements
+	err := yaml.Unmarshal([]byte(yamlData), &reqs)
+	require.NoError(t, err)
+
+	assert.Equal(t, 2, reqs.Minimum.CPU)
+	assert.Equal(t, 4, reqs.Minimum.RAM)
+	assert.Equal(t, 50, reqs.Minimum.Disk)
+	assert.Equal(t, 4, reqs.Recommended.CPU)
+	assert.Equal(t, 8, reqs.Recommended.RAM)
+	assert.Equal(t, 100, reqs.Recommended.Disk)
+}
+
+func TestDockerCapabilities_DiskFields(t *testing.T) {
+	caps := &models.DockerCapabilities{
+		DiskTotalGB: 20.0,
+		DiskAvailGB: 15.5,
+		DiskMount:   "/",
+		LVMDetected: true,
+		LVMExtended: false,
+	}
+
+	data, err := json.Marshal(caps)
+	require.NoError(t, err)
+
+	var decoded models.DockerCapabilities
+	require.NoError(t, json.Unmarshal(data, &decoded))
+
+	assert.InDelta(t, 20.0, decoded.DiskTotalGB, 0.01)
+	assert.InDelta(t, 15.5, decoded.DiskAvailGB, 0.01)
+	assert.Equal(t, "/", decoded.DiskMount)
+	assert.True(t, decoded.LVMDetected)
+	assert.False(t, decoded.LVMExtended)
+}
+
+func TestRemoveCommand_PurgeFlag(t *testing.T) {
+	f := removeCmd.Flags().Lookup("purge")
+	require.NotNil(t, f, "--purge flag should exist")
+	assert.Equal(t, "false", f.DefValue)
+}
+
+func TestCleanupFiles_Purge(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create directories that should be removed
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "deploy", ".terraform", "providers"), 0750))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "deploy", "main.tf"), []byte("# test"), 0600))
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".stackkit"), 0750))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".stackkit", "state.yaml"), []byte("status: running"), 0600))
+
+	cleanupFiles(tmpDir, true)
+
+	// All directories should be gone
+	_, err := os.Stat(filepath.Join(tmpDir, "deploy"))
+	assert.True(t, os.IsNotExist(err), "deploy/ should be removed after purge")
+
+	_, err = os.Stat(filepath.Join(tmpDir, ".stackkit"))
+	assert.True(t, os.IsNotExist(err), ".stackkit/ should be removed after purge")
+}
+
+func TestAutoDetectComputeTier(t *testing.T) {
+	tests := []struct {
+		name     string
+		cpu      int
+		memory   float64
+		expected string
+	}{
+		{"high tier", 8, 16.0, "high"},
+		{"high tier large", 16, 64.0, "high"},
+		{"standard tier", 4, 8.0, "standard"},
+		{"standard tier 6 cpu", 6, 12.0, "standard"},
+		{"low tier few cpu", 2, 4.0, "low"},
+		{"low tier low ram", 4, 4.0, "low"},
+		{"low tier minimal", 1, 1.0, "low"},
+		{"boundary high cpu low ram", 8, 8.0, "standard"},
+		{"boundary low cpu high ram", 2, 16.0, "low"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := autoDetectComputeTier(tt.cpu, tt.memory)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestGenerateTfvarsJSON_TierDriven(t *testing.T) {
+	tests := []struct {
+		name         string
+		tier         string
+		wantDokploy  bool
+		wantDockge   bool
+		wantKuma     bool
+		wantTraefik  bool
+		wantTinyauth bool
+		wantPocketid bool
+	}{
+		{
+			name:         "standard tier",
+			tier:         "standard",
+			wantDokploy:  true,
+			wantDockge:   false,
+			wantKuma:     true,
+			wantTraefik:  true,
+			wantTinyauth: true,
+			wantPocketid: true,
+		},
+		{
+			name:         "high tier",
+			tier:         "high",
+			wantDokploy:  true,
+			wantDockge:   false,
+			wantKuma:     true,
+			wantTraefik:  true,
+			wantTinyauth: true,
+			wantPocketid: true,
+		},
+		{
+			name:         "low tier",
+			tier:         "low",
+			wantDokploy:  false,
+			wantDockge:   true,
+			wantKuma:     true,
+			wantTraefik:  true,
+			wantTinyauth: true,
+			wantPocketid: true,
+		},
+		{
+			name:         "empty tier defaults to standard",
+			tier:         "",
+			wantDokploy:  true,
+			wantDockge:   false,
+			wantKuma:     true,
+			wantTraefik:  true,
+			wantTinyauth: true,
+			wantPocketid: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			spec := &models.StackSpec{
+				Name:   "test",
+				Domain: "test.local",
+				Compute: models.ComputeSpec{
+					Tier: tt.tier,
+				},
+			}
+
+			data, err := generateTfvarsJSON(spec)
+			require.NoError(t, err)
+
+			var vars map[string]interface{}
+			err = json.Unmarshal(data, &vars)
+			require.NoError(t, err)
+
+			// L1/L2 core — always enabled
+			assert.Equal(t, tt.wantTraefik, vars["enable_traefik"], "enable_traefik")
+			assert.Equal(t, tt.wantTinyauth, vars["enable_tinyauth"], "enable_tinyauth")
+			assert.Equal(t, tt.wantPocketid, vars["enable_pocketid"], "enable_pocketid")
+
+			// PAAS — tier-dependent
+			assert.Equal(t, tt.wantDokploy, vars["enable_dokploy"], "enable_dokploy")
+			assert.Equal(t, tt.wantDockge, vars["enable_dockge"], "enable_dockge")
+
+			// Monitoring — tier-dependent
+			assert.Equal(t, tt.wantKuma, vars["enable_uptime_kuma"], "enable_uptime_kuma")
+
+			// Dashboard — always
+			assert.Equal(t, true, vars["enable_dashboard"], "enable_dashboard")
+		})
+	}
+}
+
+func TestCleanupFiles_NoPurge(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create directories
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "deploy", ".terraform", "providers"), 0750))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "deploy", "main.tf"), []byte("# test"), 0600))
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".stackkit"), 0750))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".stackkit", "state.yaml"), []byte("status: running"), 0600))
+
+	cleanupFiles(tmpDir, false)
+
+	// .terraform should be removed but deploy/ and .stackkit/ should remain
+	_, err := os.Stat(filepath.Join(tmpDir, "deploy", ".terraform"))
+	assert.True(t, os.IsNotExist(err), ".terraform/ should be removed")
+
+	_, err = os.Stat(filepath.Join(tmpDir, "deploy", "main.tf"))
+	assert.NoError(t, err, "deploy/main.tf should still exist")
+
+	_, err = os.Stat(filepath.Join(tmpDir, ".stackkit", "state.yaml"))
+	assert.NoError(t, err, ".stackkit/state.yaml should still exist")
 }

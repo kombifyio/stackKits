@@ -141,29 +141,6 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
-  /api/v1/stackkits/{name}/variants:
-    get:
-      operationId: getStackKitVariants
-      summary: List available variants for a StackKit
-      tags: [Catalog]
-      parameters:
-        - $ref: "#/components/parameters/StackKitName"
-      responses:
-        "200":
-          description: List of variants
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - $ref: "#/components/schemas/SuccessEnvelope"
-                  - properties:
-                      data:
-                        type: array
-                        items:
-                          $ref: "#/components/schemas/VariantInfo"
-        "404":
-          $ref: "#/components/responses/NotFound"
-
   /api/v1/validate:
     post:
       operationId: validateSpec
@@ -275,6 +252,197 @@ paths:
         "422":
           $ref: "#/components/responses/UnprocessableEntity"
 
+  /api/v1/logs:
+    get:
+      operationId: listLogs
+      summary: List all deploy log runs
+      description: Returns a paginated list of deploy log runs sorted by timestamp.
+      tags: [Logs]
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+          description: Maximum number of results
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+          description: Number of results to skip
+      responses:
+        "200":
+          description: Paginated list of log runs
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - properties:
+                      data:
+                        $ref: "#/components/schemas/LogRunList"
+        "503":
+          description: Log directory not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/logs/latest:
+    get:
+      operationId: getLatestLog
+      summary: Get the most recent deploy log
+      description: Returns all events from the latest deploy log run.
+      tags: [Logs]
+      parameters:
+        - $ref: "#/components/parameters/LogLevel"
+        - $ref: "#/components/parameters/LogPrefix"
+      responses:
+        "200":
+          description: Log events
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - properties:
+                      data:
+                        $ref: "#/components/schemas/LogRunDetail"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/logs/{runID}:
+    get:
+      operationId: getLog
+      summary: Get deploy log by run ID
+      description: |
+        Returns events from a specific deploy log run.
+        Use query parameters to filter by level or event prefix.
+      tags: [Logs]
+      parameters:
+        - $ref: "#/components/parameters/RunID"
+        - $ref: "#/components/parameters/LogLevel"
+        - $ref: "#/components/parameters/LogPrefix"
+      responses:
+        "200":
+          description: Log events
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - properties:
+                      data:
+                        $ref: "#/components/schemas/LogRunDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/logs/{runID}/stream:
+    get:
+      operationId: streamLog
+      summary: Stream live deploy log events (SSE)
+      description: |
+        Server-Sent Events stream for real-time deploy progress.
+        Events are sent as `data:` lines with JSON payloads.
+        A final `event: done` is sent when the deploy completes.
+
+        **Client usage:**
+        ```javascript
+        const es = new EventSource('/api/v1/logs/20260311-104539/stream');
+        es.onmessage = (e) => console.log(JSON.parse(e.data));
+        es.addEventListener('done', (e) => { es.close(); });
+        ```
+      tags: [Logs]
+      parameters:
+        - $ref: "#/components/parameters/RunID"
+      responses:
+        "200":
+          description: SSE event stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: Server-Sent Events stream
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  # ── Registry (Direct Connect) ───────────────────────────────────
+
+  /api/v1/registry/instances:
+    post:
+      operationId: registerInstance
+      summary: Register a stackkit-server instance for Direct Connect
+      description: |
+        Called by stackkit-server after `stackkit apply` to register itself with
+        kombify. Kong uses this registry to discover and proxy requests to the
+        instance directly.
+      tags: [Registry]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InstanceRegistration"
+      responses:
+        "201":
+          description: Instance registered
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - properties:
+                      data:
+                        $ref: "#/components/schemas/RegistryResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/v1/registry/instances/{instanceId}:
+    delete:
+      operationId: deregisterInstance
+      summary: Remove an instance from the registry
+      tags: [Registry]
+      parameters:
+        - $ref: "#/components/parameters/InstanceId"
+      responses:
+        "204":
+          description: Instance deregistered
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/registry/instances/{instanceId}/heartbeat:
+    put:
+      operationId: heartbeat
+      summary: Send a heartbeat for a registered instance
+      description: |
+        Sent every 60 seconds by stackkit-server. If no heartbeat is received
+        within 3 minutes, Kong marks the instance as unreachable and stops
+        routing traffic to it.
+      tags: [Registry]
+      parameters:
+        - $ref: "#/components/parameters/InstanceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [instance_id, status]
+              properties:
+                instance_id:
+                  type: string
+                status:
+                  type: string
+                  enum: [running, degraded, stopped]
+      responses:
+        "204":
+          description: Heartbeat acknowledged
+        "404":
+          $ref: "#/components/responses/NotFound"
+
 components:
   parameters:
     StackKitName:
@@ -285,6 +453,41 @@ components:
       schema:
         type: string
         pattern: "^[a-z0-9][a-z0-9-]*[a-z0-9]$"
+
+    RunID:
+      name: runID
+      in: path
+      required: true
+      description: "Deploy run ID (format: YYYYMMDD-HHMMSS)"
+      schema:
+        type: string
+        pattern: "^\\d{8}-\\d{6}$"
+        example: "20260311-104539"
+
+    InstanceId:
+      name: instanceId
+      in: path
+      required: true
+      description: Unique instance identifier
+      schema:
+        type: string
+        example: "sh-mylab-abc123-base-kit-def456"
+
+    LogLevel:
+      name: level
+      in: query
+      description: Filter events by log level
+      schema:
+        type: string
+        enum: [INFO, WARN, ERROR, DEBUG]
+
+    LogPrefix:
+      name: prefix
+      in: query
+      description: "Filter events by message prefix (e.g., apply., decision., tofu.)"
+      schema:
+        type: string
+        example: "apply."
 
   schemas:
     SuccessEnvelope:
@@ -352,12 +555,6 @@ components:
           $ref: "#/components/schemas/Requirements"
         modes:
           $ref: "#/components/schemas/Modes"
-        variants:
-          type: object
-          additionalProperties:
-            $ref: "#/components/schemas/Variant"
-        defaultVariant:
-          type: string
         features:
           $ref: "#/components/schemas/Features"
 
@@ -430,38 +627,6 @@ components:
         default:
           type: boolean
 
-    Variant:
-      type: object
-      properties:
-        displayName:
-          type: string
-        description:
-          type: string
-        serviceCollection:
-          type: string
-        services:
-          type: array
-          items:
-            type: string
-        default:
-          type: boolean
-
-    VariantInfo:
-      type: object
-      properties:
-        name:
-          type: string
-        displayName:
-          type: string
-        description:
-          type: string
-        services:
-          type: array
-          items:
-            type: string
-        default:
-          type: boolean
-
     Features:
       type: object
       properties:
@@ -481,8 +646,6 @@ components:
         stackkit:
           type: string
           example: base-kit
-        variant:
-          type: string
         mode:
           type: string
           enum: [simple, advanced]
@@ -609,6 +772,131 @@ components:
         stackkit:
           $ref: "#/components/schemas/StackKitSummary"
 
+    LogRunSummary:
+      type: object
+      properties:
+        run_id:
+          type: string
+          description: "Unique run identifier (format: YYYYMMDD-HHMMSS)"
+          example: "20260311-104539"
+        timestamp:
+          type: string
+          format: date-time
+          description: Run start time in RFC3339
+        file:
+          type: string
+          description: Log filename
+          example: "20260311-104539.jsonl"
+
+    LogRunList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/LogRunSummary"
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+
+    LogRunDetail:
+      type: object
+      properties:
+        run_id:
+          type: string
+          example: "20260311-104539"
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/LogEvent"
+        total:
+          type: integer
+          description: Number of events (after filtering)
+
+    LogEvent:
+      type: object
+      description: |
+        A structured deploy log event. Common fields include:
+        - `time` (RFC3339Nano timestamp)
+        - `level` (INFO, WARN, ERROR, DEBUG)
+        - `msg` (event name, e.g. apply.start, tofu.apply, decision.template)
+        - `elapsed_ms` (milliseconds since CLI run start)
+        Additional fields vary by event type.
+      properties:
+        time:
+          type: string
+          format: date-time
+        level:
+          type: string
+          enum: [INFO, WARN, ERROR, DEBUG]
+        msg:
+          type: string
+          description: "Event name (e.g., apply.start, tofu.apply, decision.template)"
+        elapsed_ms:
+          type: integer
+          description: Milliseconds since CLI run started
+      additionalProperties: true
+
+    InstanceRegistration:
+      type: object
+      required: [instance_id, endpoint_url, stackkit, services, status]
+      properties:
+        instance_id:
+          type: string
+          description: Unique instance identifier (device fingerprint + stackkit name)
+          example: "sh-mylab-abc123-base-kit-def456"
+        endpoint_url:
+          type: string
+          format: uri
+          description: Public URL where stackkit-server is reachable
+          example: "https://api.sh-mylab-abc123.kombify.me"
+        stackkit:
+          type: string
+          example: "base-kit"
+        version:
+          type: string
+          example: "1.0.0"
+        services:
+          type: array
+          items:
+            $ref: "#/components/schemas/ServiceInfo"
+        status:
+          type: string
+          enum: [running, degraded, stopped]
+        api_port:
+          type: integer
+          example: 8082
+        last_seen:
+          type: string
+          format: date-time
+
+    ServiceInfo:
+      type: object
+      required: [name, status]
+      properties:
+        name:
+          type: string
+          example: "traefik"
+        url:
+          type: string
+          format: uri
+        status:
+          type: string
+          enum: [running, stopped, error]
+
+    RegistryResponse:
+      type: object
+      properties:
+        instance_id:
+          type: string
+        status:
+          type: string
+        message:
+          type: string
+
     HealthData:
       type: object
       properties:
@@ -664,3 +952,7 @@ tags:
     description: CUE-based spec validation
   - name: Generation
     description: OpenTofu variable generation from validated specs
+  - name: Logs
+    description: Deploy log retrieval and live streaming for dashboards and agents
+  - name: Registry
+    description: Direct Connect instance registry — deployed stackkit-servers register here so Kong can proxy to them

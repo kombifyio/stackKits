@@ -71,7 +71,7 @@ func TestCLIHelpCommand(t *testing.T) {
 	})
 
 	t.Run("shows command help", func(t *testing.T) {
-		commands := []string{"init", "prepare", "plan", "apply", "destroy", "status", "validate"}
+		commands := []string{"init", "prepare", "plan", "apply", "remove", "status", "validate"}
 
 		for _, cmd := range commands {
 			t.Run(cmd, func(t *testing.T) {
@@ -138,7 +138,6 @@ func TestCLIValidateCommand(t *testing.T) {
 		// Create a valid spec file
 		specContent := `name: test-deployment
 stackkit: base-kit
-variant: default
 mode: simple
 network:
   mode: local
@@ -160,7 +159,7 @@ network:
 		tmpDir := t.TempDir()
 
 		// Create an invalid spec file (missing required fields)
-		specContent := `variant: default`
+		specContent := `mode: simple`
 		specPath := filepath.Join(tmpDir, "stack-spec.yaml")
 		err := os.WriteFile(specPath, []byte(specContent), 0600)
 		require.NoError(t, err)

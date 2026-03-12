@@ -1,15 +1,21 @@
 package commands
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"math/big"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/kombifyio/stackkits/internal/config"
 	cueval "github.com/kombifyio/stackkits/internal/cue"
+	"github.com/kombifyio/stackkits/internal/kombifyme"
+	"github.com/kombifyio/stackkits/internal/netenv"
 	"github.com/kombifyio/stackkits/internal/template"
 	"github.com/kombifyio/stackkits/pkg/models"
 	"github.com/spf13/cobra"
@@ -43,6 +49,7 @@ func init() {
 }
 
 func runGenerate(cmd *cobra.Command, args []string) error {
+	start := time.Now()
 	wd := getWorkDir()
 
 	// Load spec (loader.resolvePath handles absolute vs relative paths)
@@ -52,6 +59,13 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to load spec file: %w", err)
 	}
+
+	deployLog.Event("spec.loaded",
+		slog.String("stackkit", spec.StackKit),
+		slog.String("mode", spec.Mode),
+		slog.String("domain", spec.Domain),
+		slog.String("tier", spec.Compute.Tier),
+	)
 
 	// Apply --context flag override if provided
 	if contextFlag != "" {
@@ -84,21 +98,44 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 	cueValidator := cueval.NewValidator(wd)
 	if cueResult, valErr := cueValidator.ValidateStackKit(stackkitDir); valErr != nil {
 		printWarning("CUE validation: %v", valErr)
+		deployLog.Warn("cue.validation",
+			slog.String("status", "error"),
+			slog.String("error", valErr.Error()),
+		)
 	} else if !cueResult.Valid {
 		for _, e := range cueResult.Errors {
 			printWarning("CUE: %s: %s", e.Path, e.Message)
 		}
+		deployLog.Warn("cue.validation",
+			slog.String("status", "invalid"),
+			slog.Int("error_count", len(cueResult.Errors)),
+		)
+	} else {
+		deployLog.Event("cue.validation",
+			slog.String("status", "valid"),
+		)
 	}
 
-	// Determine template directory based on mode
-	templateDir := filepath.Join(stackkitDir, "templates", spec.Mode)
+	// Determine template directory: runtime overrides mode for native deployments
+	templateKey := spec.Mode
+	if spec.Runtime == models.RuntimeNative {
+		templateKey = models.RuntimeNative
+	}
+	templateDir := filepath.Join(stackkitDir, "templates", templateKey)
+	templateFallback := false
 	if _, statErr := os.Stat(templateDir); os.IsNotExist(statErr) {
 		// Fall back to simple mode
+		templateFallback = true
 		templateDir = filepath.Join(stackkitDir, "templates", "simple")
 		if _, statErr2 := os.Stat(templateDir); os.IsNotExist(statErr2) {
-			return fmt.Errorf("no templates found for mode '%s' in %s", spec.Mode, stackkitDir)
+			return fmt.Errorf("no templates found for mode '%s' in %s", templateKey, stackkitDir)
 		}
 	}
+	deployLog.Event("decision.template",
+		slog.String("template_key", templateKey),
+		slog.Bool("fallback_to_simple", templateFallback),
+		slog.String("template_dir", templateDir),
+	)
 
 	// Create output directory
 	outputPath := filepath.Join(wd, genOutputDir)
@@ -124,20 +161,42 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 			Spec:     spec,
 			StackKit: stackkit,
 		}
-		mainTf := template.GenerateMainTf(renderCtx)
+		mainTf, err := template.GenerateMainTf(renderCtx)
+		if err != nil {
+			return fmt.Errorf("failed to generate main.tf: %w", err)
+		}
 		if err := os.WriteFile(mainTfPath, []byte(mainTf), 0600); err != nil {
 			return fmt.Errorf("failed to write main.tf: %w", err)
 		}
 		printSuccess("Generated: main.tf")
 	}
 
+	// kombify.me subdomain registration (when domain is kombify.me)
+	if isKombifyMeDomain(spec.Domain) {
+		if err := registerKombifyMeSubdomains(spec); err != nil {
+			printWarning("kombify.me registration: %v", err)
+			printInfo("Continuing with existing subdomainPrefix if set")
+			deployLog.Warn("kombifyme.registration",
+				slog.String("error", err.Error()),
+			)
+		} else {
+			deployLog.Event("kombifyme.registration",
+				slog.String("prefix", spec.SubdomainPrefix),
+			)
+		}
+	}
+
 	// Generate terraform.tfvars.json from spec (JSON format for consistency with API)
 	tfvarsPath := filepath.Join(outputPath, "terraform.tfvars.json")
-	tfvarsData := generateTfvarsJSON(spec)
+	tfvarsData, err := generateTfvarsJSON(spec)
+	if err != nil {
+		return fmt.Errorf("failed to generate tfvars: %w", err)
+	}
 	if err := os.WriteFile(tfvarsPath, tfvarsData, 0600); err != nil {
 		return fmt.Errorf("failed to write terraform.tfvars.json: %w", err)
 	}
 	printSuccess("Generated: terraform.tfvars.json")
+	printWarning("terraform.tfvars.json contains sensitive data (passwords, tokens). Do not commit it to version control.")
 
 	// Print summary
 	files, _ := countFiles(outputPath)
@@ -150,6 +209,11 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  1. Review generated files: %s\n", cyan("ls "+genOutputDir))
 	fmt.Printf("  2. Initialize OpenTofu:    %s\n", cyan("cd "+genOutputDir+" && tofu init"))
 	fmt.Printf("  3. Or use StackKit:        %s\n", cyan("stackkit plan"))
+
+	deployLog.Event("generate.complete",
+		slog.Int("file_count", files),
+		slog.Int64("elapsed_ms", time.Since(start).Milliseconds()),
+	)
 
 	return nil
 }
@@ -189,16 +253,137 @@ func bcryptHash(password string) (string, error) {
 }
 
 // generateTfvarsJSON generates terraform.tfvars.json matching the template variables.
-// Service enablement is module-based: all base-kit services are enabled by default.
+// Service enablement is driven by compute tier (v4 architecture):
+//   - L1/L2 core (traefik, tinyauth, pocketid) = ALWAYS enabled
+//   - L2 PAAS = tier-dependent (Dokploy for standard/high, Dockge for low)
+//   - Monitoring = tier-dependent
+//
 // Per-service overrides can be applied via spec.Services[name]["enabled"].
-func generateTfvarsJSON(spec *models.StackSpec) []byte {
+func generateTfvarsJSON(spec *models.StackSpec) ([]byte, error) {
 	vars := make(map[string]interface{})
 
 	// Domain
+	domain := "homelab"
 	if spec.Domain != "" {
-		vars["domain"] = spec.Domain
+		domain = spec.Domain
+	}
+	vars["domain"] = domain
+
+	// Subdomain prefix (kombify.me flat naming mode)
+	if spec.SubdomainPrefix != "" {
+		vars["subdomain_prefix"] = spec.SubdomainPrefix
+	}
+
+	// Network environment: check capabilities written by `stackkit prepare`
+	// or detect on-the-fly if prepare wasn't run
+	caps := loadDockerCapabilities()
+	netEnv := models.NetEnvUnknown
+	if caps != nil && caps.NetworkEnv != "" {
+		netEnv = caps.NetworkEnv
 	} else {
-		vars["domain"] = "stack.local"
+		// Detect on-the-fly if prepare wasn't run or didn't detect
+		detected := netenv.Detect(context.Background())
+		netEnv = detected.Environment
+		if caps == nil {
+			caps = &models.DockerCapabilities{}
+		}
+		caps.NetworkEnv = detected.Environment
+		caps.PublicIP = detected.PublicIP
+		caps.PrivateIP = detected.PrivateIP
+		caps.IsNAT = detected.IsNAT
+		caps.HasPublicInterface = detected.HasPublicInterface
+	}
+
+	// Smart domain resolution: detect mismatches between domain and environment
+	if suggested, reason := netenv.SuggestDomain(netEnv, domain); reason != "" {
+		printWarning("Domain mismatch: %s", reason)
+		if domain != suggested {
+			printInfo("Auto-correcting domain: %s -> %s", domain, suggested)
+			domain = suggested
+			vars["domain"] = domain
+			// For kombify.me, ensure SubdomainPrefix will be set during registration
+			if isKombifyMeDomain(domain) && spec.Domain != "kombify.me" {
+				spec.Domain = "kombify.me"
+			}
+		}
+	}
+
+	// Access mode detection
+	isLocalMode := domain == "" || domain == "homelab" || domain == "home.lab" || domain == "stack.local" ||
+		strings.HasSuffix(domain, ".local") || strings.HasSuffix(domain, ".lan") ||
+		strings.HasSuffix(domain, ".home") || strings.HasSuffix(domain, ".internal") ||
+		strings.HasSuffix(domain, ".test") || strings.HasSuffix(domain, ".lab")
+	isKombifyMe := isKombifyMeDomain(domain)
+
+	// Local mode: deploy dnsmasq for *.home.lab resolution
+	// Two-level domain required by TinyAuth (rejects single-level TLDs)
+	if isLocalMode {
+		domain = "home.lab"
+		vars["domain"] = domain
+		vars["enable_dnsmasq"] = true
+		if len(spec.Nodes) > 0 && spec.Nodes[0].IP != "" {
+			vars["server_lan_ip"] = spec.Nodes[0].IP
+		}
+		printInfo("Local mode: services at *.home.lab (dnsmasq DNS)")
+	}
+
+	deployLog.Event("decision.domain_mode",
+		slog.String("input_domain", spec.Domain),
+		slog.Bool("is_local_mode", isLocalMode),
+		slog.Bool("is_kombify_me", isKombifyMe),
+		slog.String("final_domain", domain),
+		slog.Bool("enable_dnsmasq", isLocalMode),
+	)
+
+	// TLS/HTTPS — enabled only for real public domains
+	enableHTTPS := !isLocalMode && !isKombifyMe
+	vars["enable_https"] = enableHTTPS
+
+	if enableHTTPS {
+		// ACME email
+		acmeEmail := spec.AdminEmail
+		if acmeEmail == "" || acmeEmail == "admin" {
+			acmeEmail = "admin@" + domain
+		}
+		vars["acme_email"] = acmeEmail
+
+		// Challenge type and DNS provider
+		challenge := spec.TLS.Challenge
+		if challenge == "" {
+			if spec.TLS.Provider != "" {
+				challenge = "dns" // DNS provider specified → use DNS-01
+			} else {
+				challenge = "tls" // Default to TLS-ALPN-01
+			}
+		}
+		vars["acme_challenge"] = challenge
+
+		if spec.TLS.Provider != "" {
+			vars["dns_provider"] = spec.TLS.Provider
+		}
+
+		// DNS API credentials from environment
+		dnsToken := os.Getenv("STACKKIT_DNS_TOKEN")
+		if dnsToken != "" {
+			vars["dns_api_token"] = dnsToken
+		}
+		dnsEmail := os.Getenv("STACKKIT_DNS_EMAIL")
+		if dnsEmail != "" {
+			vars["dns_api_email"] = dnsEmail
+		}
+
+		printInfo("HTTPS enabled (ACME %s challenge, email: %s)", challenge, acmeEmail)
+		deployLog.Event("decision.tls",
+			slog.Bool("enable_https", true),
+			slog.String("challenge", challenge),
+			slog.String("acme_email", acmeEmail),
+		)
+	} else {
+		deployLog.Event("decision.tls",
+			slog.Bool("enable_https", false),
+			slog.String("reason_local", fmt.Sprintf("%v", isLocalMode)),
+			slog.String("reason_kombifyme", fmt.Sprintf("%v", isKombifyMe)),
+		)
 	}
 
 	// Network
@@ -209,14 +394,67 @@ func generateTfvarsJSON(spec *models.StackSpec) []byte {
 		vars["network_subnet"] = "172.20.0.0/16"
 	}
 
-	// Module-based service defaults: all base-kit services enabled by default.
-	// Per-service overrides are applied below via spec.Services.
-	vars["enable_traefik"] = true
+	// Compute tier drives service selection (v4 architecture)
+	tier := spec.Compute.Tier
+	if tier == "" {
+		tier = models.ComputeTierStandard
+	}
+
+	// Resolve PAAS and reverse proxy backend (ADR-0006: Service URL Matrix)
+	paas := spec.ResolvePAAS()
+	reverseProxy := spec.ResolveReverseProxy()
+	vars["paas"] = paas
+	vars["reverse_proxy_backend"] = reverseProxy
+
+	// L1/L2 core — ALWAYS enabled (non-negotiable)
+	// When using Dokploy/Coolify's Traefik, we skip deploying a standalone Traefik
+	vars["enable_traefik"] = reverseProxy == models.ReverseProxyStandalone
 	vars["enable_tinyauth"] = true
 	vars["enable_pocketid"] = true
-	vars["enable_dokploy"] = true
-	vars["enable_dokploy_apps"] = true
+
+	// L2 PAAS — driven by explicit paas field or tier
+	switch paas {
+	case models.PAASDockge:
+		vars["enable_dokploy"] = false
+		vars["enable_dokploy_apps"] = false
+		vars["enable_dockge"] = true
+		vars["enable_coolify"] = false
+	case models.PAASCoolify:
+		vars["enable_dokploy"] = false
+		vars["enable_dokploy_apps"] = false
+		vars["enable_dockge"] = false
+		vars["enable_coolify"] = true
+	default: // dokploy (standard/high default)
+		vars["enable_dokploy"] = true
+		vars["enable_dokploy_apps"] = true
+		vars["enable_dockge"] = false
+		vars["enable_coolify"] = false
+	}
+
+	// Dashboard — always (lightweight)
 	vars["enable_dashboard"] = true
+
+	// Uptime Kuma — always enabled (lightweight test/validation service)
+	vars["enable_uptime_kuma"] = true
+
+	// L3 Application use cases — tier-gated
+	vars["enable_vaultwarden"] = true // all tiers (lightweight, ~128MB RAM)
+	isStandardPlus := tier == models.ComputeTierStandard || tier == models.ComputeTierHigh
+	vars["enable_jellyfin"] = isStandardPlus
+	vars["enable_immich"] = isStandardPlus
+
+	// Jellyfin media directory (host bind mount for user media files)
+	vars["media_path"] = "/opt/media"
+
+	deployLog.Event("decision.compute_tier",
+		slog.String("tier", tier),
+		slog.String("paas", paas),
+		slog.String("reverse_proxy_backend", reverseProxy),
+		slog.Bool("enable_dokploy", vars["enable_dokploy"].(bool)),
+		slog.Bool("enable_dockge", vars["enable_dockge"].(bool)),
+	)
+
+	printInfo("Compute tier: %s, PAAS: %s, Reverse proxy: %s", tier, paas, reverseProxy)
 
 	// Admin email (fallback to "admin" for backwards compatibility)
 	adminEmail := spec.AdminEmail
@@ -228,22 +466,25 @@ func generateTfvarsJSON(spec *models.StackSpec) []byte {
 	// Generate random password and bcrypt hash for TinyAuth
 	adminPassword, err := generateRandomPassword(16)
 	if err != nil {
-		// Fallback to a known default if crypto/rand fails (should never happen)
-		adminPassword = "admin123"
+		return nil, fmt.Errorf("failed to generate admin password (crypto/rand): %w", err)
 	}
 	vars["admin_password_plaintext"] = adminPassword
 
 	hash, err := bcryptHash(adminPassword)
 	if err != nil {
-		// Fallback to the old hardcoded hash
-		hash = "$2y$10$2aSDNcypqNOcOSOXkmQlSO0MBxZcUeRRtsU/gDZBIwWws.Oly8AYC"
-		adminPassword = "admin123"
-		vars["admin_password_plaintext"] = adminPassword
+		return nil, fmt.Errorf("failed to hash admin password (bcrypt): %w", err)
 	}
 
 	// TinyAuth configuration
-	domain := vars["domain"].(string)
-	vars["tinyauth_app_url"] = fmt.Sprintf("http://auth.%s", domain)
+	proto := "http"
+	if enableHTTPS {
+		proto = "https"
+	}
+	if spec.SubdomainPrefix != "" {
+		vars["tinyauth_app_url"] = fmt.Sprintf("%s://%s-tinyauth.%s", proto, spec.SubdomainPrefix, domain)
+	} else {
+		vars["tinyauth_app_url"] = fmt.Sprintf("%s://auth.%s", proto, domain)
+	}
 	vars["tinyauth_users"] = fmt.Sprintf("%s:%s", adminEmail, hash)
 
 	// Dashboard
@@ -259,22 +500,27 @@ func generateTfvarsJSON(spec *models.StackSpec) []byte {
 	vars["dns_fixed"] = false
 	vars["dns_fix_method"] = ""
 	vars["storage_driver_degraded"] = false
-	vars["storage_driver"] = "overlay2"
+	vars["storage_driver"] = models.StorageOverlay2
 	if caps := loadDockerCapabilities(); caps != nil {
 		if !caps.BridgeNetworking {
 			vars["network_mode"] = "host"
 			printInfo("Host networking mode (bridge unavailable on this system)")
 		}
-		if caps.DNSFix != "" && caps.DNSFix != "none" {
+		if caps.DNSFix != "" && caps.DNSFix != models.DNSFixNone {
 			vars["dns_fixed"] = true
 			vars["dns_fix_method"] = caps.DNSFix
 			printInfo("DNS fix applied: %s", caps.DNSFix)
 		}
-		if caps.StorageDriver != "" && caps.StorageDriver != "overlay2" {
+		if caps.StorageDriver != "" && caps.StorageDriver != models.StorageOverlay2 {
 			vars["storage_driver_degraded"] = true
 			vars["storage_driver"] = caps.StorageDriver
 			printInfo("Degraded storage driver: %s", caps.StorageDriver)
 		}
+		deployLog.Event("decision.docker_caps",
+			slog.String("network_mode", vars["network_mode"].(string)),
+			slog.Bool("dns_fix", vars["dns_fixed"].(bool)),
+			slog.String("storage_driver", vars["storage_driver"].(string)),
+		)
 	}
 
 	// Allow spec-level service overrides
@@ -290,9 +536,9 @@ func generateTfvarsJSON(spec *models.StackSpec) []byte {
 
 	data, err := json.MarshalIndent(vars, "", "  ")
 	if err != nil {
-		return []byte("{}")
+		return nil, fmt.Errorf("failed to marshal tfvars: %w", err)
 	}
-	return append(data, '\n')
+	return append(data, '\n'), nil
 }
 
 // countFiles counts files in a directory
@@ -325,4 +571,58 @@ func countFiles(dir string) (int, error) {
 		return nil
 	})
 	return count, err
+}
+
+// isKombifyMeDomain returns true if the domain is kombify.me (the subdomain service).
+func isKombifyMeDomain(domain string) bool {
+	return strings.EqualFold(domain, "kombify.me")
+}
+
+// registerKombifyMeSubdomains registers base + service subdomains on the kombify.me API
+// and sets spec.SubdomainPrefix if not already set.
+func registerKombifyMeSubdomains(spec *models.StackSpec) error {
+	apiKey := os.Getenv("KOMBIFY_API_KEY")
+	if apiKey == "" {
+		return fmt.Errorf("KOMBIFY_API_KEY environment variable is required for kombify.me domain")
+	}
+
+	homelabName := spec.Name
+	if homelabName == "" {
+		return fmt.Errorf("spec name is required for kombify.me registration")
+	}
+
+	// Device fingerprint: use existing prefix suffix or generate one
+	fingerprint := ""
+	if spec.SubdomainPrefix != "" {
+		// Extract fingerprint from existing prefix: "sh-name-FINGERPRINT"
+		parts := strings.SplitN(spec.SubdomainPrefix, "-", 3)
+		if len(parts) >= 3 {
+			fingerprint = parts[2]
+		}
+	}
+	if fingerprint == "" {
+		fingerprint = kombifyme.DeviceFingerprint()
+	}
+
+	tier := spec.Compute.Tier
+	if tier == "" {
+		tier = models.ComputeTierStandard
+	}
+
+	printInfo("Registering subdomains on kombify.me...")
+
+	result, err := kombifyme.RegisterAll(apiKey, homelabName, fingerprint, tier)
+	if err != nil {
+		return err
+	}
+
+	// Update spec with the registered prefix
+	spec.SubdomainPrefix = result.Prefix
+
+	printSuccess("Registered base subdomain: %s.kombify.me", result.Prefix)
+	for _, svc := range result.Services {
+		printSuccess("  Service: %s.kombify.me (exposed)", svc.Name)
+	}
+
+	return nil
 }

@@ -78,13 +78,21 @@ func (s *Server) handleCapabilities(w http.ResponseWriter, r *http.Request) {
 			{"name": "stackkit.get", "description": "Get StackKit details by name", "method": "GET", "path": "/api/v1/stackkits/{name}"},
 			{"name": "stackkit.schema", "description": "Get raw CUE schema for a StackKit", "method": "GET", "path": "/api/v1/stackkits/{name}/schema"},
 			{"name": "stackkit.defaults", "description": "Get default StackSpec values for a StackKit", "method": "GET", "path": "/api/v1/stackkits/{name}/defaults"},
-			{"name": "stackkit.variants", "description": "List available variants for a StackKit", "method": "GET", "path": "/api/v1/stackkits/{name}/variants"},
 			// Validation
 			{"name": "validate.spec", "description": "Validate a stack-spec against its StackKit schema", "method": "POST", "path": "/api/v1/validate"},
 			{"name": "validate.partial", "description": "Validate partial spec fields (wizard step)", "method": "POST", "path": "/api/v1/validate/partial"},
 			// Generation
 			{"name": "generate.tfvars", "description": "Generate terraform.tfvars from a validated spec", "method": "POST", "path": "/api/v1/generate/tfvars"},
 			{"name": "generate.preview", "description": "Preview the generated infrastructure without writing files", "method": "POST", "path": "/api/v1/generate/preview"},
+			// Logs
+			{"name": "logs.list", "description": "List all deploy log runs", "method": "GET", "path": "/api/v1/logs"},
+			{"name": "logs.latest", "description": "Get the latest deploy log", "method": "GET", "path": "/api/v1/logs/latest"},
+			{"name": "logs.get", "description": "Get deploy log by run ID", "method": "GET", "path": "/api/v1/logs/{runID}"},
+			{"name": "logs.stream", "description": "Stream live deploy log events (SSE)", "method": "GET", "path": "/api/v1/logs/{runID}/stream"},
+			// Registry
+			{"name": "registry.register", "description": "Register stackkit-server instance for Direct Connect", "method": "POST", "path": "/api/v1/registry/instances"},
+			{"name": "registry.heartbeat", "description": "Send instance heartbeat", "method": "PUT", "path": "/api/v1/registry/instances/{instanceId}/heartbeat"},
+			{"name": "registry.deregister", "description": "Remove instance from registry", "method": "DELETE", "path": "/api/v1/registry/instances/{instanceId}"},
 			// Discovery
 			{"name": "health", "description": "Service health check", "method": "GET", "path": "/api/v1/health"},
 			{"name": "capabilities", "description": "List all API capabilities", "method": "GET", "path": "/api/v1/capabilities"},
@@ -114,33 +122,17 @@ type stackKitSummary struct {
 
 func (s *Server) handleListStackKits(w http.ResponseWriter, r *http.Request) {
 	loader := config.NewLoader(s.config.BaseDir)
-	var kits []stackKitSummary
-	seen := make(map[string]bool)
+	discovered, _ := loader.DiscoverStackKits(s.config.BaseDir)
 
-	// Auto-discover: scan all directories containing stackkit.yaml
-	entries, err := os.ReadDir(s.config.BaseDir)
-	if err == nil {
-		for _, entry := range entries {
-			if !entry.IsDir() {
-				continue
-			}
-			yamlPath := filepath.Join(s.config.BaseDir, entry.Name(), "stackkit.yaml")
-			if _, statErr := os.Stat(yamlPath); statErr != nil {
-				continue
-			}
-			sk, err := loader.LoadStackKit(yamlPath)
-			if err != nil || seen[sk.Metadata.Name] {
-				continue
-			}
-			seen[sk.Metadata.Name] = true
-			kits = append(kits, stackKitSummary{
-				Name:        sk.Metadata.Name,
-				DisplayName: sk.Metadata.DisplayName,
-				Description: sk.Metadata.Description,
-				Version:     sk.Metadata.Version,
-				Tags:        sk.Metadata.Tags,
-			})
-		}
+	kits := make([]stackKitSummary, 0, len(discovered))
+	for _, sk := range discovered {
+		kits = append(kits, stackKitSummary{
+			Name:        sk.Metadata.Name,
+			DisplayName: sk.Metadata.DisplayName,
+			Description: sk.Metadata.Description,
+			Version:     sk.Metadata.Version,
+			Tags:        sk.Metadata.Tags,
+		})
 	}
 
 	sort.Slice(kits, func(i, j int) bool { return kits[i].Name < kits[j].Name })
@@ -286,78 +278,13 @@ func (s *Server) handleGetStackKitDefaults(w http.ResponseWriter, r *http.Reques
 	defaultSpec := models.StackSpec{
 		Name:     "",
 		StackKit: sk.Metadata.Name,
-		Variant:  sk.DefaultVariant,
 		Mode:     "simple",
 		Network:  models.NetworkSpec{Mode: "local", Subnet: "172.20.0.0/16"},
 		Compute:  models.ComputeSpec{Tier: "standard"},
 		SSH:      models.SSHSpec{Port: 22, User: "root"},
 	}
 
-	if defaultSpec.Variant == "" && len(sk.Variants) > 0 {
-		// Pick the variant marked as default, or the first alphabetically
-		for k, v := range sk.Variants {
-			if v.Default {
-				defaultSpec.Variant = k
-				break
-			}
-		}
-		if defaultSpec.Variant == "" {
-			// Sort variant names for deterministic selection
-			variantNames := make([]string, 0, len(sk.Variants))
-			for k := range sk.Variants {
-				variantNames = append(variantNames, k)
-			}
-			sort.Strings(variantNames)
-			defaultSpec.Variant = variantNames[0]
-		}
-	}
-
 	writeSuccess(w, r, http.StatusOK, defaultSpec)
-}
-
-// ── Catalog: Variants ─────────────────────────────────────────────
-
-func (s *Server) handleGetStackKitVariants(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if err := validateStackKitName(name); err != nil {
-		writeStructuredError(w, r, http.StatusBadRequest, err)
-		return
-	}
-
-	loader := config.NewLoader(s.config.BaseDir)
-	dir, err := loader.FindStackKitDir(name)
-	if err != nil {
-		writeStructuredError(w, r, http.StatusNotFound, stackKitNotFoundError(name))
-		return
-	}
-
-	sk, err := loader.LoadStackKit(filepath.Join(dir, "stackkit.yaml"))
-	if err != nil {
-		writeError(w, r, http.StatusInternalServerError, "failed to load stackkit")
-		return
-	}
-
-	type variantInfo struct {
-		Name        string   `json:"name"`
-		DisplayName string   `json:"displayName"`
-		Description string   `json:"description"`
-		Services    []string `json:"services"`
-		Default     bool     `json:"default,omitempty"`
-	}
-
-	variants := make([]variantInfo, 0, len(sk.Variants))
-	for k, v := range sk.Variants {
-		variants = append(variants, variantInfo{
-			Name:        k,
-			DisplayName: v.DisplayName,
-			Description: v.Description,
-			Services:    v.Services,
-			Default:     v.Default,
-		})
-	}
-	sort.Slice(variants, func(i, j int) bool { return variants[i].Name < variants[j].Name })
-
-	writeSuccess(w, r, http.StatusOK, variants)
 }
 
 // ── Validation ────────────────────────────────────────────────────
@@ -418,7 +345,6 @@ func (s *Server) handleValidatePartial(w http.ResponseWriter, r *http.Request) {
 	var warnings []models.ValidationError
 
 	errors = append(errors, validatePartialStackKit(partial, s.config.BaseDir)...)
-	errors = append(errors, validatePartialVariant(partial, s.config.BaseDir)...)
 	errors = append(errors, validatePartialMode(partial)...)
 
 	netErrors, netWarnings := validatePartialNetwork(partial)
@@ -452,38 +378,6 @@ func validatePartialStackKit(partial map[string]interface{}, baseDir string) []m
 			Path:    "stackkit",
 			Message: "stackkit not found: " + name,
 			Code:    "STACKKIT_NOT_FOUND",
-		}}
-	}
-	return nil
-}
-
-func validatePartialVariant(partial map[string]interface{}, baseDir string) []models.ValidationError {
-	variant, ok := partial["variant"].(string)
-	if !ok || variant == "" {
-		return nil
-	}
-	kitName, ok := partial["stackkit"].(string)
-	if !ok || kitName == "" {
-		return nil
-	}
-	loader := config.NewLoader(baseDir)
-	dir, err := loader.FindStackKitDir(kitName)
-	if err != nil {
-		return nil
-	}
-	sk, err := loader.LoadStackKit(filepath.Join(dir, "stackkit.yaml"))
-	if err != nil {
-		return nil
-	}
-	if _, exists := sk.Variants[variant]; !exists {
-		available := make([]string, 0, len(sk.Variants))
-		for k := range sk.Variants {
-			available = append(available, k)
-		}
-		return []models.ValidationError{{
-			Path:    "variant",
-			Message: "unknown variant '" + variant + "', available: " + strings.Join(available, ", "),
-			Code:    "UNKNOWN_VARIANT",
 		}}
 	}
 	return nil

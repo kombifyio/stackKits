@@ -46,7 +46,6 @@ func TestStackSpec(t *testing.T) {
 		spec := StackSpec{
 			Name:     "my-homelab",
 			StackKit: "base-kit",
-			Variant:  "default",
 			Mode:     "simple",
 			Domain:   "homelab.local",
 			Email:    "admin@example.com",
@@ -100,7 +99,6 @@ func TestDeploymentState(t *testing.T) {
 	t.Run("creates valid deployment state", func(t *testing.T) {
 		state := DeploymentState{
 			StackKit:    "base-kit",
-			Variant:     "default",
 			Mode:        "simple",
 			Status:      StatusRunning,
 			LastApplied: time.Now(),
@@ -124,7 +122,7 @@ func TestDeploymentState(t *testing.T) {
 		assert.Equal(t, DeploymentStatus("running"), StatusRunning)
 		assert.Equal(t, DeploymentStatus("degraded"), StatusDegraded)
 		assert.Equal(t, DeploymentStatus("error"), StatusError)
-		assert.Equal(t, DeploymentStatus("destroyed"), StatusDestroyed)
+		assert.Equal(t, DeploymentStatus("removed"), StatusRemoved)
 	})
 }
 
@@ -288,29 +286,6 @@ func TestHealthStatus(t *testing.T) {
 		assert.Equal(t, HealthStatus("unhealthy"), HealthStatusUnhealthy)
 		assert.Equal(t, HealthStatus("starting"), HealthStatusStarting)
 		assert.Equal(t, HealthStatus("none"), HealthStatusNone)
-	})
-}
-
-func TestVariant(t *testing.T) {
-	t.Run("defines variant", func(t *testing.T) {
-		variant := Variant{
-			Description: "Minimal service set",
-			Services:    []string{"traefik", "dockge"},
-			Default:     false,
-		}
-
-		assert.Len(t, variant.Services, 2)
-		assert.False(t, variant.Default)
-	})
-
-	t.Run("default variant", func(t *testing.T) {
-		variant := Variant{
-			Description: "Full service set",
-			Services:    []string{"traefik", "dokploy", "uptime-kuma"},
-			Default:     true,
-		}
-
-		assert.True(t, variant.Default)
 	})
 }
 

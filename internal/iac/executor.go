@@ -187,19 +187,24 @@ func (e *OpenTofuExecutor) Plan(ctx context.Context, outFile string, destroy boo
 	}, nil
 }
 
-func (e *OpenTofuExecutor) Apply(ctx context.Context, autoApprove bool, planFile string) (*ExecResult, error) {
-	e.executor.SetAutoApprove(autoApprove)
-	result, err := e.executor.Apply(ctx, planFile)
-	if err != nil {
-		return nil, err
-	}
+// tofuResultToExec converts a tofu.Result to an iac.ExecResult.
+func tofuResultToExec(result *tofu.Result) *ExecResult {
 	return &ExecResult{
 		Success:  result.Success,
 		Stdout:   result.Stdout,
 		Stderr:   result.Stderr,
 		ExitCode: result.ExitCode,
 		Duration: result.Duration,
-	}, nil
+	}
+}
+
+func (e *OpenTofuExecutor) Apply(ctx context.Context, autoApprove bool, planFile string) (*ExecResult, error) {
+	e.executor.SetAutoApprove(autoApprove)
+	result, err := e.executor.Apply(ctx, planFile)
+	if err != nil {
+		return nil, err
+	}
+	return tofuResultToExec(result), nil
 }
 
 func (e *OpenTofuExecutor) Destroy(ctx context.Context, autoApprove bool) (*ExecResult, error) {
@@ -208,13 +213,7 @@ func (e *OpenTofuExecutor) Destroy(ctx context.Context, autoApprove bool) (*Exec
 	if err != nil {
 		return nil, err
 	}
-	return &ExecResult{
-		Success:  result.Success,
-		Stdout:   result.Stdout,
-		Stderr:   result.Stderr,
-		ExitCode: result.ExitCode,
-		Duration: result.Duration,
-	}, nil
+	return tofuResultToExec(result), nil
 }
 
 func (e *OpenTofuExecutor) Validate(ctx context.Context) (*ExecResult, error) {
@@ -222,13 +221,7 @@ func (e *OpenTofuExecutor) Validate(ctx context.Context) (*ExecResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &ExecResult{
-		Success:  result.Success,
-		Stdout:   result.Stdout,
-		Stderr:   result.Stderr,
-		ExitCode: result.ExitCode,
-		Duration: result.Duration,
-	}, nil
+	return tofuResultToExec(result), nil
 }
 
 func (e *OpenTofuExecutor) Output(ctx context.Context) (string, error) {
@@ -361,19 +354,24 @@ func (e *TerramateExecutor) Plan(ctx context.Context, outFile string, destroy bo
 	}, nil
 }
 
-func (e *TerramateExecutor) Apply(ctx context.Context, autoApprove bool, planFile string) (*ExecResult, error) {
-	// Terramate handles plan-file semantics internally; planFile is ignored
-	result, err := e.executor.RunApply(ctx, autoApprove)
-	if err != nil {
-		return nil, err
-	}
+// tmResultToExec converts a terramate.Result to an iac.ExecResult.
+func tmResultToExec(result *terramate.Result) *ExecResult {
 	return &ExecResult{
 		Success:  result.Success,
 		Stdout:   result.Stdout,
 		Stderr:   result.Stderr,
 		ExitCode: result.ExitCode,
 		Duration: result.Duration,
-	}, nil
+	}
+}
+
+func (e *TerramateExecutor) Apply(ctx context.Context, autoApprove bool, planFile string) (*ExecResult, error) {
+	// Terramate handles plan-file semantics internally; planFile is ignored
+	result, err := e.executor.RunApply(ctx, autoApprove)
+	if err != nil {
+		return nil, err
+	}
+	return tmResultToExec(result), nil
 }
 
 func (e *TerramateExecutor) Destroy(ctx context.Context, autoApprove bool) (*ExecResult, error) {
@@ -381,13 +379,7 @@ func (e *TerramateExecutor) Destroy(ctx context.Context, autoApprove bool) (*Exe
 	if err != nil {
 		return nil, err
 	}
-	return &ExecResult{
-		Success:  result.Success,
-		Stdout:   result.Stdout,
-		Stderr:   result.Stderr,
-		ExitCode: result.ExitCode,
-		Duration: result.Duration,
-	}, nil
+	return tmResultToExec(result), nil
 }
 
 func (e *TerramateExecutor) Validate(ctx context.Context) (*ExecResult, error) {
@@ -396,13 +388,7 @@ func (e *TerramateExecutor) Validate(ctx context.Context) (*ExecResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &ExecResult{
-		Success:  result.Success,
-		Stdout:   result.Stdout,
-		Stderr:   result.Stderr,
-		ExitCode: result.ExitCode,
-		Duration: result.Duration,
-	}, nil
+	return tmResultToExec(result), nil
 }
 
 func (e *TerramateExecutor) Output(ctx context.Context) (string, error) {

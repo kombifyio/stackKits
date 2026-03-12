@@ -1,24 +1,23 @@
 # =============================================================================
 # Base Kit - Single Server Deployment
 # =============================================================================
-# Architecture: Platform services via OpenTofu, Apps via Dokploy
+# Architecture: Platform services via OpenTofu, Apps via Compose
 #
-# Layer 1 (FOUNDATION) - Managed by OpenTofu:
-#   ├── Pocket ID (identity)        - OIDC provider with passkey auth
-#   └── TinyAuth (ForwardAuth)      - Middleware proxy backed by Pocket ID
+# Standard/High Compute Tier:
+#   L2 PaaS: Dokploy + PostgreSQL + Redis
+#   L3 Apps: Kuma (monitoring), Whoami (test), user apps via Dokploy
 #
-# Layer 2 (PLATFORM) - Managed by OpenTofu:
-#   ├── Traefik (reverse proxy)     - CRITICAL infrastructure
-#   ├── Dokploy (PAAS controller)   - Manages Layer 3
-#   └── Dokploy PostgreSQL          - Required by Dokploy
+# Low Compute Tier (Pi-Mode):
+#   L2 PaaS: Dockge (lightweight Docker Compose manager)
+#   L3 Apps: Whoami (test), user stacks via Dockge
+#   No Uptime Kuma (resource constraint)
 #
-# Layer 3 (APPLICATIONS) - Managed BY Dokploy:
-#   ├── Kuma (monitoring)           - Deployed via Dokploy API
-#   ├── Whoami (test)               - Deployed via Dokploy API
-#   └── User applications           - Deployed via Dokploy UI/API
+# Common (all tiers):
+#   L1: Pocket ID (OIDC) + TinyAuth (ForwardAuth)
+#   L2: Traefik (reverse proxy) + Dashboard
 #
-# Security Principle: Critical infrastructure outside Dokploy ensures
-# you can diagnose/fix Dokploy issues if it fails.
+# Security Principle: Critical infrastructure outside PaaS ensures
+# you can diagnose/fix PaaS issues if it fails.
 # =============================================================================
 
 terraform {
@@ -91,6 +90,42 @@ variable "enable_dokploy_apps" {
   default     = true
 }
 
+variable "enable_dockge" {
+  type        = bool
+  description = "Enable Dockge container manager (low compute tier, replaces Dokploy)"
+  default     = false
+}
+
+variable "enable_uptime_kuma" {
+  type        = bool
+  description = "Enable Uptime Kuma monitoring"
+  default     = true
+}
+
+variable "enable_vaultwarden" {
+  type        = bool
+  description = "Enable Vaultwarden password manager (Layer 3)"
+  default     = true
+}
+
+variable "enable_jellyfin" {
+  type        = bool
+  description = "Enable Jellyfin media server (Layer 3, standard+ tier)"
+  default     = true
+}
+
+variable "enable_immich" {
+  type        = bool
+  description = "Enable Immich photo management (Layer 3, standard+ tier)"
+  default     = true
+}
+
+variable "media_path" {
+  type        = string
+  description = "Path to media files on host (bind-mounted into Jellyfin)"
+  default     = "/opt/media"
+}
+
 variable "tinyauth_users" {
   type        = string
   description = "TinyAuth users configuration (bcrypt hashed)"
@@ -146,6 +181,43 @@ variable "dns_fixed" {
   default     = false
 }
 
+variable "enable_https" {
+  type        = bool
+  description = "Enable HTTPS via Let's Encrypt ACME certificates"
+  default     = false
+}
+
+variable "acme_email" {
+  type        = string
+  description = "Email address for Let's Encrypt ACME certificate registration"
+  default     = ""
+}
+
+variable "acme_challenge" {
+  type        = string
+  description = "ACME challenge type: 'tls' (TLS-ALPN-01, needs port 443) or 'dns' (DNS-01, works behind NAT)"
+  default     = "tls"
+}
+
+variable "dns_provider" {
+  type        = string
+  description = "DNS provider for DNS-01 ACME challenge (e.g. 'cloudflare', 'hetzner', 'digitalocean')"
+  default     = ""
+}
+
+variable "dns_api_token" {
+  type        = string
+  description = "API token for DNS provider (used for DNS-01 ACME challenge)"
+  default     = ""
+  sensitive   = true
+}
+
+variable "dns_api_email" {
+  type        = string
+  description = "Email for DNS providers that use Global API Key auth (e.g. Cloudflare)"
+  default     = ""
+}
+
 variable "dns_fix_method" {
   type        = string
   description = "DNS fix method applied: 'daemon-json' or 'host-prepull'"
@@ -164,6 +236,42 @@ variable "storage_driver" {
   default     = "overlay2"
 }
 
+variable "subdomain_prefix" {
+  type        = string
+  description = "Flat subdomain prefix for kombify.me tunnel mode (e.g. 'sh-mylab-abc'). When set, domains use flat naming: {prefix}-{service}.{domain} instead of {service}.{domain}"
+  default     = ""
+}
+
+variable "enable_dnsmasq" {
+  type        = bool
+  description = "Enable dnsmasq local DNS server for *.homelab resolution (local mode)"
+  default     = false
+}
+
+variable "enable_coolify" {
+  type        = bool
+  description = "Enable Coolify PAAS (alternative to Dokploy, standard+ tier)"
+  default     = false
+}
+
+variable "reverse_proxy_backend" {
+  type        = string
+  description = "Which Traefik instance routes platform services: 'standalone' (own Traefik), 'dokploy' (Dokploy's Traefik), 'coolify' (Coolify's Traefik)"
+  default     = "standalone"
+}
+
+variable "paas" {
+  type        = string
+  description = "PAAS platform selection: 'dokploy', 'coolify', 'dockge', 'none'"
+  default     = "dokploy"
+}
+
+variable "server_lan_ip" {
+  type        = string
+  description = "Server LAN IP address for dnsmasq DNS resolution"
+  default     = ""
+}
+
 # =============================================================================
 # LOCALS
 # =============================================================================
@@ -172,17 +280,52 @@ locals {
   # Networking mode
   is_host = var.network_mode == "host"
 
+  # Reverse proxy backend: determines which Traefik routes platform services
+  # - "standalone": StackKit deploys its own Traefik (default)
+  # - "dokploy": platform services attach to Dokploy's Traefik network
+  # - "coolify": platform services attach to Coolify's Traefik network
+  rp_standalone = var.reverse_proxy_backend == "standalone"
+  rp_dokploy    = var.reverse_proxy_backend == "dokploy"
+  rp_coolify    = var.reverse_proxy_backend == "coolify"
+
+  # The Docker network that platform services connect to for Traefik routing.
+  # Standalone: base_net (our own). Dokploy: dokploy-network. Coolify: coolify.
+  traefik_network_name = (
+    local.rp_dokploy ? "dokploy-network" :
+    local.rp_coolify ? "coolify" :
+    var.network_name
+  )
+
+  # Resolved network name for services that need Traefik routing.
+  # Standalone: use our own base_net. PAAS-managed: use their network.
+  routing_network = (
+    local.is_host ? "" :
+    local.rp_standalone ? docker_network.base_net[0].name :
+    data.docker_network.paas_traefik[0].name
+  )
+
+  # Protocol and entrypoint: HTTPS when enabled, HTTP otherwise
+  proto      = var.enable_https ? "https" : "http"
+  entrypoint = var.enable_https ? "websecure" : "web"
+
   # In host mode, all containers share the host network. Services that would
   # conflict on the same port need unique port assignments.
   host_ports = {
     tinyauth  = 3000  # TinyAuth native port
     pocketid  = 1411  # Pocket ID (set via PORT env)
     dokploy   = 3002  # Dokploy (moved from 3000 — avoids TinyAuth & Kuma conflict)
+    dockge    = 5001  # Dockge native port (low compute tier)
     kuma      = 3001  # Kuma native port
     postgres  = 5432  # PostgreSQL standard
     redis     = 6379  # Redis standard
-    dashboard = 8090  # nginx (moved from 80 to avoid Traefik conflict)
-    whoami    = 8091  # whoami (moved from 80 to avoid Traefik conflict)
+    dashboard    = 8090  # nginx (moved from 80 to avoid Traefik conflict)
+    whoami       = 8091  # whoami (moved from 80 to avoid Traefik conflict)
+    vaultwarden  = 8092  # Vaultwarden (native 80, remapped)
+    jellyfin     = 8096  # Jellyfin native port
+    immich       = 2283  # Immich server native port
+    immich_ml    = 3003  # Immich ML worker (avoid 3000/3001)
+    immich_pg    = 5433  # Immich PostgreSQL (5432 taken by Dokploy)
+    immich_redis = 6380  # Immich Redis (6379 taken by Dokploy)
   }
 
   # Host-mode hint for dashboard
@@ -206,8 +349,11 @@ locals {
           - kuma-data:/app/data
         labels:
           - "traefik.enable=true"
-          - "traefik.http.routers.kuma.rule=Host(`kuma.${var.domain}`)"
-          - "traefik.http.routers.kuma.entrypoints=web"
+          - "traefik.http.routers.kuma.rule=Host(`${local.domains.kuma}`)"
+          - "traefik.http.routers.kuma.entrypoints=${local.entrypoint}"
+%{if var.enable_https~}
+          - "traefik.http.routers.kuma.tls.certresolver=letsencrypt"
+%{endif~}
           - "traefik.http.services.kuma.loadbalancer.server.port=${local.host_ports.kuma}"
           - "traefik.http.routers.kuma.middlewares=tinyauth@docker"
         healthcheck:
@@ -224,7 +370,7 @@ locals {
         environment:
           KUMA_URL: "http://127.0.0.1:${local.host_ports.kuma}"
           KUMA_USER: "${var.admin_email}"
-          KUMA_PASS: "${var.enable_dokploy_apps ? random_password.kuma_admin[0].result : "admin"}"
+          KUMA_PASS: "${random_password.kuma_admin[0].result}"
           DOMAIN: "${var.domain}"
         command:
           - sh
@@ -252,10 +398,10 @@ locals {
                 api.disconnect()
                 sys.exit(1)
             monitors = [
-                ("Traefik Dashboard", f"http://traefik.{domain}"),
-                ("TinyAuth",          f"http://auth.{domain}"),
-                ("Dokploy",           f"http://dokploy.{domain}"),
-                ("Dashboard",         f"http://base.{domain}"),
+                ("Traefik Dashboard", f"${local.proto}://traefik.{domain}"),
+                ("TinyAuth",          f"${local.proto}://auth.{domain}"),
+                ("${var.enable_dokploy ? "Dokploy" : "Dockge"}",  f"${local.proto}://${var.enable_dokploy ? "dokploy" : "dockge"}.{domain}"),
+                ("Dashboard",         f"${local.proto}://base.{domain}"),
             ]
             for name, murl in monitors:
                 try:
@@ -285,11 +431,14 @@ locals {
         volumes:
           - kuma-data:/app/data
         networks:
-          - dokploy-network
+          - traefik-network
         labels:
           - "traefik.enable=true"
-          - "traefik.http.routers.kuma.rule=Host(`kuma.${var.domain}`)"
-          - "traefik.http.routers.kuma.entrypoints=web"
+          - "traefik.http.routers.kuma.rule=Host(`${local.domains.kuma}`)"
+          - "traefik.http.routers.kuma.entrypoints=${local.entrypoint}"
+%{if var.enable_https~}
+          - "traefik.http.routers.kuma.tls.certresolver=letsencrypt"
+%{endif~}
           - "traefik.http.services.kuma.loadbalancer.server.port=3001"
           - "traefik.http.routers.kuma.middlewares=tinyauth@docker"
         healthcheck:
@@ -305,7 +454,7 @@ locals {
         environment:
           KUMA_URL: "http://uptime-kuma:3001"
           KUMA_USER: "${var.admin_email}"
-          KUMA_PASS: "${var.enable_dokploy_apps ? random_password.kuma_admin[0].result : "admin"}"
+          KUMA_PASS: "${random_password.kuma_admin[0].result}"
           DOMAIN: "${var.domain}"
         command:
           - sh
@@ -333,10 +482,10 @@ locals {
                 api.disconnect()
                 sys.exit(1)
             monitors = [
-                ("Traefik Dashboard", f"http://traefik.{domain}"),
-                ("TinyAuth",          f"http://auth.{domain}"),
-                ("Dokploy",           f"http://dokploy.{domain}"),
-                ("Dashboard",         f"http://base.{domain}"),
+                ("Traefik Dashboard", f"${local.proto}://traefik.{domain}"),
+                ("TinyAuth",          f"${local.proto}://auth.{domain}"),
+                ("${var.enable_dokploy ? "Dokploy" : "Dockge"}",  f"${local.proto}://${var.enable_dokploy ? "dokploy" : "dockge"}.{domain}"),
+                ("Dashboard",         f"${local.proto}://base.{domain}"),
             ]
             for name, murl in monitors:
                 try:
@@ -353,15 +502,15 @@ locals {
           uptime-kuma:
             condition: service_healthy
         networks:
-          - dokploy-network
+          - traefik-network
 
     volumes:
       kuma-data:
 
     networks:
-      dokploy-network:
+      traefik-network:
         external: true
-        name: ${var.network_name}
+        name: ${local.traefik_network_name}
   EOT
 
   kuma_compose_content = local.is_host ? local.kuma_compose_host : local.kuma_compose_bridge
@@ -376,8 +525,11 @@ locals {
         command: ["--port=${local.host_ports.whoami}"]
         labels:
           - "traefik.enable=true"
-          - "traefik.http.routers.whoami.rule=Host(`whoami.${var.domain}`)"
-          - "traefik.http.routers.whoami.entrypoints=web"
+          - "traefik.http.routers.whoami.rule=Host(`${local.domains.whoami}`)"
+          - "traefik.http.routers.whoami.entrypoints=${local.entrypoint}"
+%{if var.enable_https~}
+          - "traefik.http.routers.whoami.tls.certresolver=letsencrypt"
+%{endif~}
           - "traefik.http.services.whoami.loadbalancer.server.port=${local.host_ports.whoami}"
           - "traefik.http.routers.whoami.middlewares=tinyauth@docker"
   EOT
@@ -389,30 +541,381 @@ locals {
         container_name: whoami
         restart: unless-stopped
         networks:
-          - dokploy-network
+          - traefik-network
         labels:
           - "traefik.enable=true"
-          - "traefik.http.routers.whoami.rule=Host(`whoami.${var.domain}`)"
-          - "traefik.http.routers.whoami.entrypoints=web"
+          - "traefik.http.routers.whoami.rule=Host(`${local.domains.whoami}`)"
+          - "traefik.http.routers.whoami.entrypoints=${local.entrypoint}"
+%{if var.enable_https~}
+          - "traefik.http.routers.whoami.tls.certresolver=letsencrypt"
+%{endif~}
           - "traefik.http.services.whoami.loadbalancer.server.port=80"
           - "traefik.http.routers.whoami.middlewares=tinyauth@docker"
 
     networks:
-      dokploy-network:
+      traefik-network:
         external: true
-        name: ${var.network_name}
+        name: ${local.traefik_network_name}
   EOT
 
   whoami_compose_content = local.is_host ? local.whoami_compose_host : local.whoami_compose_bridge
 
+  # =============================================================================
+  # VAULTWARDEN (Layer 3 — Password Vault)
+  # =============================================================================
+  vaultwarden_compose_host = <<-EOT
+    services:
+      vaultwarden:
+        image: vaultwarden/server:latest
+        container_name: vaultwarden
+        restart: unless-stopped
+        network_mode: host
+        environment:
+          - DOMAIN=${local.proto}://${local.domains.vault}
+          - SIGNUPS_ALLOWED=false
+          - ADMIN_TOKEN=${random_password.vaultwarden_admin[0].result}
+          - ROCKET_PORT=${local.host_ports.vaultwarden}
+        volumes:
+          - vaultwarden-data:/data
+        labels:
+          - "traefik.enable=true"
+          - "traefik.http.routers.vaultwarden.rule=Host(`${local.domains.vault}`)"
+          - "traefik.http.routers.vaultwarden.entrypoints=${local.entrypoint}"
+%{if var.enable_https~}
+          - "traefik.http.routers.vaultwarden.tls.certresolver=letsencrypt"
+%{endif~}
+          - "traefik.http.services.vaultwarden.loadbalancer.server.port=${local.host_ports.vaultwarden}"
+        healthcheck:
+          test: ["CMD-SHELL", "curl -sf http://localhost:${local.host_ports.vaultwarden}/alive || exit 1"]
+          interval: 30s
+          timeout: 5s
+          retries: 3
+          start_period: 10s
+    volumes:
+      vaultwarden-data:
+  EOT
+
+  vaultwarden_compose_bridge = <<-EOT
+    services:
+      vaultwarden:
+        image: vaultwarden/server:latest
+        container_name: vaultwarden
+        restart: unless-stopped
+        networks:
+          - traefik-network
+        environment:
+          - DOMAIN=${local.proto}://${local.domains.vault}
+          - SIGNUPS_ALLOWED=false
+          - ADMIN_TOKEN=${random_password.vaultwarden_admin[0].result}
+        volumes:
+          - vaultwarden-data:/data
+        labels:
+          - "traefik.enable=true"
+          - "traefik.http.routers.vaultwarden.rule=Host(`${local.domains.vault}`)"
+          - "traefik.http.routers.vaultwarden.entrypoints=${local.entrypoint}"
+%{if var.enable_https~}
+          - "traefik.http.routers.vaultwarden.tls.certresolver=letsencrypt"
+%{endif~}
+          - "traefik.http.services.vaultwarden.loadbalancer.server.port=80"
+        healthcheck:
+          test: ["CMD-SHELL", "curl -sf http://localhost:80/alive || exit 1"]
+          interval: 30s
+          timeout: 5s
+          retries: 3
+          start_period: 10s
+
+    volumes:
+      vaultwarden-data:
+
+    networks:
+      traefik-network:
+        external: true
+        name: ${local.traefik_network_name}
+  EOT
+
+  vaultwarden_compose_content = local.is_host ? local.vaultwarden_compose_host : local.vaultwarden_compose_bridge
+
+  # =============================================================================
+  # JELLYFIN (Layer 3 — Media Streaming)
+  # =============================================================================
+  jellyfin_compose_host = <<-EOT
+    services:
+      jellyfin:
+        image: jellyfin/jellyfin:latest
+        container_name: jellyfin
+        restart: unless-stopped
+        network_mode: host
+        environment:
+          - JELLYFIN_PublishedServerUrl=${local.proto}://${local.domains.media}
+        volumes:
+          - jellyfin-config:/config
+          - jellyfin-cache:/cache
+          - ${var.media_path}:/media:ro
+        labels:
+          - "traefik.enable=true"
+          - "traefik.http.routers.jellyfin.rule=Host(`${local.domains.media}`)"
+          - "traefik.http.routers.jellyfin.entrypoints=${local.entrypoint}"
+%{if var.enable_https~}
+          - "traefik.http.routers.jellyfin.tls.certresolver=letsencrypt"
+%{endif~}
+          - "traefik.http.services.jellyfin.loadbalancer.server.port=${local.host_ports.jellyfin}"
+        healthcheck:
+          test: ["CMD-SHELL", "curl -sf http://localhost:${local.host_ports.jellyfin}/health || exit 1"]
+          interval: 30s
+          timeout: 5s
+          retries: 3
+          start_period: 30s
+    volumes:
+      jellyfin-config:
+      jellyfin-cache:
+  EOT
+
+  jellyfin_compose_bridge = <<-EOT
+    services:
+      jellyfin:
+        image: jellyfin/jellyfin:latest
+        container_name: jellyfin
+        restart: unless-stopped
+        networks:
+          - traefik-network
+        environment:
+          - JELLYFIN_PublishedServerUrl=${local.proto}://${local.domains.media}
+        volumes:
+          - jellyfin-config:/config
+          - jellyfin-cache:/cache
+          - ${var.media_path}:/media:ro
+        labels:
+          - "traefik.enable=true"
+          - "traefik.http.routers.jellyfin.rule=Host(`${local.domains.media}`)"
+          - "traefik.http.routers.jellyfin.entrypoints=${local.entrypoint}"
+%{if var.enable_https~}
+          - "traefik.http.routers.jellyfin.tls.certresolver=letsencrypt"
+%{endif~}
+          - "traefik.http.services.jellyfin.loadbalancer.server.port=8096"
+        healthcheck:
+          test: ["CMD-SHELL", "curl -sf http://localhost:8096/health || exit 1"]
+          interval: 30s
+          timeout: 5s
+          retries: 3
+          start_period: 30s
+
+    volumes:
+      jellyfin-config:
+      jellyfin-cache:
+
+    networks:
+      traefik-network:
+        external: true
+        name: ${local.traefik_network_name}
+  EOT
+
+  jellyfin_compose_content = local.is_host ? local.jellyfin_compose_host : local.jellyfin_compose_bridge
+
+  # =============================================================================
+  # IMMICH (Layer 3 — Photo Management)
+  # =============================================================================
+  immich_compose_host = <<-EOT
+    services:
+      immich-server:
+        image: ghcr.io/immich-app/immich-server:release
+        container_name: immich
+        restart: unless-stopped
+        network_mode: host
+        environment:
+          - DB_HOSTNAME=127.0.0.1
+          - DB_PORT=${local.host_ports.immich_pg}
+          - DB_USERNAME=immich
+          - DB_PASSWORD=${random_password.immich_db[0].result}
+          - DB_DATABASE_NAME=immich
+          - REDIS_HOSTNAME=127.0.0.1
+          - REDIS_PORT=${local.host_ports.immich_redis}
+          - IMMICH_MACHINE_LEARNING_URL=http://127.0.0.1:${local.host_ports.immich_ml}:3003
+          - IMMICH_SERVER_PORT=${local.host_ports.immich}
+        volumes:
+          - immich-upload:/usr/src/app/upload
+          - /etc/localtime:/etc/localtime:ro
+        labels:
+          - "traefik.enable=true"
+          - "traefik.http.routers.immich.rule=Host(`${local.domains.photos}`)"
+          - "traefik.http.routers.immich.entrypoints=${local.entrypoint}"
+%{if var.enable_https~}
+          - "traefik.http.routers.immich.tls.certresolver=letsencrypt"
+%{endif~}
+          - "traefik.http.services.immich.loadbalancer.server.port=${local.host_ports.immich}"
+        depends_on:
+          immich-postgres:
+            condition: service_healthy
+          immich-redis:
+            condition: service_healthy
+        healthcheck:
+          test: ["CMD-SHELL", "curl -sf http://localhost:${local.host_ports.immich}/api/server/ping || exit 1"]
+          interval: 30s
+          timeout: 5s
+          retries: 3
+          start_period: 30s
+
+      immich-machine-learning:
+        image: ghcr.io/immich-app/immich-machine-learning:release
+        container_name: immich-ml
+        restart: unless-stopped
+        network_mode: host
+        environment:
+          - MACHINE_LEARNING_PORT=${local.host_ports.immich_ml}
+        volumes:
+          - immich-model-cache:/cache
+
+      immich-postgres:
+        image: tensorchord/pgvecto-rs:pg16-v0.3.0
+        container_name: immich-postgres
+        restart: unless-stopped
+        network_mode: host
+        environment:
+          - POSTGRES_USER=immich
+          - POSTGRES_PASSWORD=${random_password.immich_db[0].result}
+          - POSTGRES_DB=immich
+          - PGPORT=${local.host_ports.immich_pg}
+        volumes:
+          - immich-postgres-data:/var/lib/postgresql/data
+        healthcheck:
+          test: ["CMD-SHELL", "pg_isready -U immich -d immich -p ${local.host_ports.immich_pg}"]
+          interval: 10s
+          timeout: 5s
+          retries: 5
+          start_period: 10s
+
+      immich-redis:
+        image: redis:7-alpine
+        container_name: immich-redis
+        restart: unless-stopped
+        network_mode: host
+        command: ["redis-server", "--port", "${local.host_ports.immich_redis}"]
+        healthcheck:
+          test: ["CMD", "redis-cli", "-p", "${local.host_ports.immich_redis}", "ping"]
+          interval: 10s
+          timeout: 5s
+          retries: 5
+
+    volumes:
+      immich-upload:
+      immich-model-cache:
+      immich-postgres-data:
+  EOT
+
+  immich_compose_bridge = <<-EOT
+    services:
+      immich-server:
+        image: ghcr.io/immich-app/immich-server:release
+        container_name: immich
+        restart: unless-stopped
+        networks:
+          - traefik-network
+          - immich-internal
+        environment:
+          - DB_HOSTNAME=immich-postgres
+          - DB_PORT=5432
+          - DB_USERNAME=immich
+          - DB_PASSWORD=${random_password.immich_db[0].result}
+          - DB_DATABASE_NAME=immich
+          - REDIS_HOSTNAME=immich-redis
+          - REDIS_PORT=6379
+          - IMMICH_MACHINE_LEARNING_URL=http://immich-ml:3003
+        volumes:
+          - immich-upload:/usr/src/app/upload
+          - /etc/localtime:/etc/localtime:ro
+        labels:
+          - "traefik.enable=true"
+          - "traefik.http.routers.immich.rule=Host(`${local.domains.photos}`)"
+          - "traefik.http.routers.immich.entrypoints=${local.entrypoint}"
+%{if var.enable_https~}
+          - "traefik.http.routers.immich.tls.certresolver=letsencrypt"
+%{endif~}
+          - "traefik.http.services.immich.loadbalancer.server.port=2283"
+        depends_on:
+          immich-postgres:
+            condition: service_healthy
+          immich-redis:
+            condition: service_healthy
+        healthcheck:
+          test: ["CMD-SHELL", "curl -sf http://localhost:2283/api/server/ping || exit 1"]
+          interval: 30s
+          timeout: 5s
+          retries: 3
+          start_period: 30s
+
+      immich-machine-learning:
+        image: ghcr.io/immich-app/immich-machine-learning:release
+        container_name: immich-ml
+        restart: unless-stopped
+        networks:
+          - immich-internal
+        volumes:
+          - immich-model-cache:/cache
+
+      immich-postgres:
+        image: tensorchord/pgvecto-rs:pg16-v0.3.0
+        container_name: immich-postgres
+        restart: unless-stopped
+        networks:
+          - immich-internal
+        environment:
+          - POSTGRES_USER=immich
+          - POSTGRES_PASSWORD=${random_password.immich_db[0].result}
+          - POSTGRES_DB=immich
+        volumes:
+          - immich-postgres-data:/var/lib/postgresql/data
+        healthcheck:
+          test: ["CMD-SHELL", "pg_isready -U immich -d immich"]
+          interval: 10s
+          timeout: 5s
+          retries: 5
+          start_period: 10s
+
+      immich-redis:
+        image: redis:7-alpine
+        container_name: immich-redis
+        restart: unless-stopped
+        networks:
+          - immich-internal
+        healthcheck:
+          test: ["CMD", "redis-cli", "ping"]
+          interval: 10s
+          timeout: 5s
+          retries: 5
+
+    volumes:
+      immich-upload:
+      immich-model-cache:
+      immich-postgres-data:
+
+    networks:
+      traefik-network:
+        external: true
+        name: ${local.traefik_network_name}
+      immich-internal:
+        driver: bridge
+  EOT
+
+  immich_compose_content = local.is_host ? local.immich_compose_host : local.immich_compose_bridge
+
+  # When subdomain_prefix is set (kombify.me tunnel mode), domains use flat naming:
+  #   {prefix}-{service}.{domain}  e.g. sh-mylab-abc-dash.kombify.me
+  # When empty (own domain or LAN), domains use nested naming:
+  #   {service}.{domain}           e.g. dash.kmbchr.de
+  _p = var.subdomain_prefix
+
   domains = {
-    dokploy   = "dokploy.${var.domain}"
-    traefik   = "traefik.${var.domain}"
-    kuma      = "kuma.${var.domain}"
-    whoami    = "whoami.${var.domain}"
-    auth      = "auth.${var.domain}"
-    dashboard = "base.${var.domain}"
-    pocketid  = "id.${var.domain}"
+    dokploy   = local._p != "" ? "${local._p}-dokploy.${var.domain}" : "dokploy.${var.domain}"
+    coolify   = local._p != "" ? "${local._p}-coolify.${var.domain}" : "coolify.${var.domain}"
+    dockge    = local._p != "" ? "${local._p}-dockge.${var.domain}" : "dockge.${var.domain}"
+    traefik   = local._p != "" ? "${local._p}-traefik.${var.domain}" : "traefik.${var.domain}"
+    kuma      = local._p != "" ? "${local._p}-kuma.${var.domain}" : "kuma.${var.domain}"
+    whoami    = local._p != "" ? "${local._p}-whoami.${var.domain}" : "whoami.${var.domain}"
+    auth      = local._p != "" ? "${local._p}-tinyauth.${var.domain}" : "auth.${var.domain}"
+    dashboard = local._p != "" ? "${local._p}-dash.${var.domain}" : "base.${var.domain}"
+    pocketid  = local._p != "" ? "${local._p}-id.${var.domain}" : "id.${var.domain}"
+    vault     = local._p != "" ? "${local._p}-vault.${var.domain}" : "vault.${var.domain}"
+    media     = local._p != "" ? "${local._p}-media.${var.domain}" : "media.${var.domain}"
+    photos    = local._p != "" ? "${local._p}-photos.${var.domain}" : "photos.${var.domain}"
   }
 
   # =============================================================================
@@ -481,7 +984,7 @@ locals {
         <div class="dot"></div>
         <span class="nav-title">${var.dashboard_title}</span>
         <span class="nav-domain">${var.domain}</span>
-        <a class="nav-kuma" href="http://kuma.${var.domain}" target="_blank">&#9650; Status</a>
+        <a class="nav-kuma" href="${local.proto}://kuma.${var.domain}" target="_blank">&#9650; Status</a>
       </nav>
       <main>
         ${local.host_mode_hint}${local.dns_fix_hint}${local.storage_hint}
@@ -492,46 +995,50 @@ locals {
         <section class="section">
           <div class="slabel">Platform</div>
           <div class="grid">
-            <a class="card" href="http://id.${var.domain}" target="_blank">
+            <a class="card" href="${local.proto}://id.${var.domain}" target="_blank">
               <div class="chead"><div class="cicon">&#128100;</div><div class="cmeta"><div class="cname">Pocket ID</div><span class="cbadge">L1 &middot; IdP</span></div><div class="cstatus"></div></div>
               <p class="cdesc">OIDC identity provider with passkey authentication. Manage users and SSO clients.</p>
               <div class="curl">id.${var.domain}</div>
             </a>
-            <a class="card" href="http://auth.${var.domain}" target="_blank">
+            <a class="card" href="${local.proto}://auth.${var.domain}" target="_blank">
               <div class="chead"><div class="cicon">&#128274;</div><div class="cmeta"><div class="cname">TinyAuth</div><span class="cbadge">L1 &middot; ForwardAuth</span></div><div class="cstatus"></div></div>
               <p class="cdesc">ForwardAuth gateway. Protects all services via TinyAuth middleware backed by Pocket ID.</p>
               <div class="curl">auth.${var.domain}</div>
             </a>
-            <a class="card" href="http://traefik.${var.domain}" target="_blank">
+            <a class="card" href="${local.proto}://traefik.${var.domain}" target="_blank">
               <div class="chead"><div class="cicon">&#9889;</div><div class="cmeta"><div class="cname">Traefik</div><span class="cbadge">L2 &middot; Reverse Proxy</span></div><div class="cstatus"></div></div>
               <p class="cdesc">Routes all traffic across services. View active routes, middlewares, and upstreams.</p>
               <div class="curl">traefik.${var.domain}</div>
             </a>
-            <a class="card" href="http://dokploy.${var.domain}" target="_blank">
-              <div class="chead"><div class="cicon">&#128640;</div><div class="cmeta"><div class="cname">Dokploy</div><span class="cbadge">L2 &middot; PaaS</span></div><div class="cstatus"></div></div>
-              <p class="cdesc">Deploy and manage applications. Your self-hosted Heroku for services and compose stacks.</p>
-              <div class="curl">dokploy.${var.domain}</div>
-            </a>
+            ${var.enable_dokploy ? "<a class=\"card\" href=\"${local.proto}://dokploy.${var.domain}\" target=\"_blank\"><div class=\"chead\"><div class=\"cicon\">&#128640;</div><div class=\"cmeta\"><div class=\"cname\">Dokploy</div><span class=\"cbadge\">L2 &middot; PaaS</span></div><div class=\"cstatus\"></div></div><p class=\"cdesc\">Deploy and manage applications. Your self-hosted Heroku for services and compose stacks.</p><div class=\"curl\">dokploy.${var.domain}</div></a>" : ""}${var.enable_dockge ? "<a class=\"card\" href=\"${local.proto}://dockge.${var.domain}\" target=\"_blank\"><div class=\"chead\"><div class=\"cicon\">&#128230;</div><div class=\"cmeta\"><div class=\"cname\">Dockge</div><span class=\"cbadge\">L2 &middot; Compose Manager</span></div><div class=\"cstatus\"></div></div><p class=\"cdesc\">Lightweight Docker Compose manager. Create and manage compose stacks with a simple UI.</p><div class=\"curl\">dockge.${var.domain}</div></a>" : ""}
           </div>
         </section>
         <section class="section">
           <div class="slabel">Applications</div>
           <div class="grid">
-            <a class="card" href="http://kuma.${var.domain}" target="_blank">
+            <a class="card" href="${local.proto}://kuma.${var.domain}" target="_blank">
               <div class="chead"><div class="cicon">&#128202;</div><div class="cmeta"><div class="cname">Uptime Kuma</div><span class="cbadge">L3 &middot; Monitoring</span></div><div class="cstatus"></div></div>
               <p class="cdesc">Service uptime monitoring and status pages for all homelab services.</p>
               <div class="curl">kuma.${var.domain}</div>
             </a>
+            <a class="card" href="${local.proto}://whoami.${var.domain}" target="_blank">
+              <div class="chead"><div class="cicon">&#129302;</div><div class="cmeta"><div class="cname">Whoami</div><span class="cbadge">L3 &middot; Test</span></div><div class="cstatus"></div></div>
+              <p class="cdesc">HTTP echo service for verifying Traefik routing, TinyAuth middleware, and headers.</p>
+              <div class="curl">whoami.${var.domain}</div>
+            </a>
+            ${var.enable_vaultwarden ? "<a class=\"card\" href=\"${local.proto}://${local.domains.vault}\" target=\"_blank\"><div class=\"chead\"><div class=\"cicon\">&#128272;</div><div class=\"cmeta\"><div class=\"cname\">Vaultwarden</div><span class=\"cbadge\">L3 &middot; Vault</span></div><div class=\"cstatus\"></div></div><p class=\"cdesc\">Self-hosted password manager. Bitwarden-compatible vault for passwords, TOTP, and secure notes.</p><div class=\"curl\">${local.domains.vault}</div></a>" : ""}
+            ${var.enable_jellyfin ? "<a class=\"card\" href=\"${local.proto}://${local.domains.media}\" target=\"_blank\"><div class=\"chead\"><div class=\"cicon\">&#127916;</div><div class=\"cmeta\"><div class=\"cname\">Jellyfin</div><span class=\"cbadge\">L3 &middot; Media</span></div><div class=\"cstatus\"></div></div><p class=\"cdesc\">Free media server for movies, TV, music, and photos. Stream to any device on your network.</p><div class=\"curl\">${local.domains.media}</div></a>" : ""}
+            ${var.enable_immich ? "<a class=\"card\" href=\"${local.proto}://${local.domains.photos}\" target=\"_blank\"><div class=\"chead\"><div class=\"cicon\">&#128247;</div><div class=\"cmeta\"><div class=\"cname\">Immich</div><span class=\"cbadge\">L3 &middot; Photos</span></div><div class=\"cstatus\"></div></div><p class=\"cdesc\">Self-hosted photo and video management with AI-powered search, facial recognition, and mobile backup.</p><div class=\"curl\">${local.domains.photos}</div></a>" : ""}
           </div>
         </section>
         <section class="section">
           <div class="slabel">Getting Started</div>
           <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:24px 28px;">
             <ol style="margin:0;padding-left:20px;font-size:13px;color:var(--dim);line-height:2.2;">
-              <li>Login to <a href="http://auth.${var.domain}" style="color:var(--brand);text-decoration:none;">TinyAuth</a> with your admin email + generated password</li>
-              <li>Register a passkey at <a href="http://id.${var.domain}/login/setup" style="color:var(--brand);text-decoration:none;font-family:monospace;">id.${var.domain}/login/setup</a> for passwordless login</li>
-              <li>Access <a href="http://dokploy.${var.domain}" style="color:var(--brand);text-decoration:none;">Dokploy</a> to deploy and manage applications (protected by TinyAuth)</li>
-              <li>Check <a href="http://kuma.${var.domain}" style="color:var(--brand);text-decoration:none;">Uptime Kuma</a> for service monitoring</li>
+              <li>Login to <a href="${local.proto}://auth.${var.domain}" style="color:var(--brand);text-decoration:none;">TinyAuth</a> with your admin email + generated password</li>
+              <li>Register a passkey at <a href="${local.proto}://id.${var.domain}/login/setup" style="color:var(--brand);text-decoration:none;font-family:monospace;">id.${var.domain}/login/setup</a> for passwordless login</li>
+              ${var.enable_dokploy ? "<li>Access <a href=\"${local.proto}://dokploy.${var.domain}\" style=\"color:var(--brand);text-decoration:none;\">Dokploy</a> to deploy and manage applications (protected by TinyAuth)</li>" : ""}${var.enable_dockge ? "<li>Access <a href=\"${local.proto}://dockge.${var.domain}\" style=\"color:var(--brand);text-decoration:none;\">Dockge</a> to manage Docker Compose stacks (protected by TinyAuth)</li>" : ""}
+              <li>Check <a href="${local.proto}://kuma.${var.domain}" style="color:var(--brand);text-decoration:none;">Uptime Kuma</a> for service monitoring</li>
               <li>Change your auto-generated password in TinyAuth settings</li>
             </ol>
           </div>
@@ -575,6 +1082,13 @@ resource "docker_network" "base_net" {
   }
 }
 
+# When using Dokploy/Coolify's Traefik, reference their existing Docker network.
+# Platform services connect to this network so their Traefik labels are discovered.
+data "docker_network" "paas_traefik" {
+  count = (!local.is_host && !local.rp_standalone) ? 1 : 0
+  name  = local.traefik_network_name
+}
+
 resource "docker_network" "internal_db" {
   count    = local.is_host ? 0 : 1
   name     = "${var.network_name}_db"
@@ -593,6 +1107,76 @@ resource "docker_network" "internal_db" {
   lifecycle {
     ignore_changes = [ipam_config]
   }
+}
+
+# =============================================================================
+# LOCAL DNS - dnsmasq (local mode only)
+# =============================================================================
+# Resolves *.homelab → server LAN IP so all LAN devices can reach services
+# by name without /etc/hosts. User configures router DHCP DNS to point here.
+
+# Stop system DNS services that occupy port 53 before starting our dnsmasq
+resource "null_resource" "stop_system_dns" {
+  count = var.enable_dnsmasq ? 1 : 0
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      systemctl stop dnsmasq 2>/dev/null || true
+      systemctl disable dnsmasq 2>/dev/null || true
+      systemctl stop systemd-resolved 2>/dev/null || true
+      systemctl disable systemd-resolved 2>/dev/null || true
+      # Ensure /etc/resolv.conf points to a real DNS (not 127.0.0.53)
+      if [ -L /etc/resolv.conf ]; then
+        rm /etc/resolv.conf
+        echo "nameserver 8.8.8.8" > /etc/resolv.conf
+        echo "nameserver 8.8.4.4" >> /etc/resolv.conf
+      fi
+    EOT
+  }
+}
+
+resource "docker_image" "dnsmasq" {
+  count = var.enable_dnsmasq ? 1 : 0
+  name  = "jpillora/dnsmasq:latest"
+}
+
+resource "docker_container" "dnsmasq" {
+  count      = var.enable_dnsmasq ? 1 : 0
+  depends_on = [docker_network.base_net, null_resource.stop_system_dns]
+  name       = "dnsmasq"
+  image      = docker_image.dnsmasq[0].image_id
+  restart    = "unless-stopped"
+
+  ports {
+    internal = 53
+    external = 53
+    protocol = "tcp"
+  }
+  ports {
+    internal = 53
+    external = 53
+    protocol = "udp"
+  }
+
+  upload {
+    content = <<-EOT
+      address=/.${var.domain}/${var.server_lan_ip}
+      server=8.8.8.8
+      server=8.8.4.4
+    EOT
+    file    = "/etc/dnsmasq.conf"
+  }
+
+  labels {
+    label = "stackkit.layer"
+    value = "1-foundation"
+  }
+  labels {
+    label = "stackkit.service"
+    value = "dnsmasq"
+  }
+
+  security_opts = ["no-new-privileges:true"]
 }
 
 # =============================================================================
@@ -675,18 +1259,27 @@ resource "docker_volume" "dokploy_postgres_data" {
   }
 }
 
-# Layer 3: Applications (managed by Dokploy)
-# These volumes are created by OpenTofu but managed by Dokploy
+# Layer 2: Platform (Dockge - low compute tier)
+resource "docker_volume" "dockge_data" {
+  count = var.enable_dockge ? 1 : 0
+  name  = "dockge-data"
+  labels {
+    label = "stackkit.layer"
+    value = "2-platform"
+  }
+  labels {
+    label = "stackkit.backup"
+    value = "required"
+  }
+}
+
+# Layer 3: Applications
 resource "docker_volume" "kuma_data" {
-  count = var.enable_dokploy_apps ? 1 : 0
+  count = var.enable_uptime_kuma ? 1 : 0
   name  = "kuma-data"
   labels {
     label = "stackkit.layer"
     value = "3-application"
-  }
-  labels {
-    label = "stackkit.managed-by"
-    value = "dokploy"
   }
   labels {
     label = "stackkit.backup"
@@ -772,19 +1365,60 @@ resource "docker_container" "traefik" {
     "--providers.docker.exposedbydefault=false",
     "--entrypoints.web.address=:80",
     "--entrypoints.websecure.address=:443",
-    "--certificatesresolvers.local.acme.tlschallenge=true",
-    "--certificatesresolvers.local.acme.email=admin@stack.local",
-    "--certificatesresolvers.local.acme.storage=/letsencrypt/acme.json",
     "--log.level=INFO",
     "--accesslog=true",
-  ], local.is_host ? [] : [
+  ],
+  # HTTP → HTTPS redirect when HTTPS is enabled
+  var.enable_https ? [
+    "--entrypoints.web.http.redirections.entrypoint.to=websecure",
+    "--entrypoints.web.http.redirections.entrypoint.scheme=https",
+  ] : [],
+  # ACME certificate resolver (only when HTTPS enabled)
+  var.enable_https ? [
+    "--certificatesresolvers.letsencrypt.acme.email=${var.acme_email}",
+    "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json",
+  ] : [],
+  # TLS-ALPN-01 challenge (default, needs port 443 reachable)
+  var.enable_https && var.acme_challenge == "tls" ? [
+    "--certificatesresolvers.letsencrypt.acme.tlschallenge=true",
+  ] : [],
+  # DNS-01 challenge (for wildcard certs, works behind NAT)
+  var.enable_https && var.acme_challenge == "dns" ? [
+    "--certificatesresolvers.letsencrypt.acme.dnschallenge=true",
+    "--certificatesresolvers.letsencrypt.acme.dnschallenge.provider=${var.dns_provider}",
+    "--certificatesresolvers.letsencrypt.acme.dnschallenge.resolvers=1.1.1.1:53,8.8.8.8:53",
+  ] : [],
+  # Docker network provider (bridge mode only)
+  local.is_host ? [] : [
     "--providers.docker.network=${docker_network.base_net[0].name}",
   ])
 
-  env = [
+  env = concat([
     "TZ=Europe/Berlin",
     "DOCKER_API_VERSION=1.44",
-  ]
+  ],
+  # DNS provider API token for DNS-01 challenge (provider-specific env var names)
+  # Cloudflare: supports scoped API Token (CF_DNS_API_TOKEN) or Global API Key (CF_API_EMAIL + CF_API_KEY)
+  var.enable_https && var.acme_challenge == "dns" && var.dns_provider == "cloudflare" && var.dns_api_email != "" ? [
+    "CF_API_EMAIL=${var.dns_api_email}",
+    "CF_API_KEY=${var.dns_api_token}",
+  ] : [],
+  var.enable_https && var.acme_challenge == "dns" && var.dns_provider == "cloudflare" && var.dns_api_email == "" ? [
+    "CF_DNS_API_TOKEN=${var.dns_api_token}",
+  ] : [],
+  var.enable_https && var.acme_challenge == "dns" && var.dns_provider == "hetzner" ? [
+    "HETZNER_API_KEY=${var.dns_api_token}",
+  ] : [],
+  var.enable_https && var.acme_challenge == "dns" && var.dns_provider == "digitalocean" ? [
+    "DO_AUTH_TOKEN=${var.dns_api_token}",
+  ] : [],
+  var.enable_https && var.acme_challenge == "dns" && var.dns_provider == "duckdns" ? [
+    "DUCKDNS_TOKEN=${var.dns_api_token}",
+  ] : [],
+  var.enable_https && var.acme_challenge == "dns" && var.dns_provider == "namecheap" ? [
+    "NAMECHEAP_API_KEY=${var.dns_api_token}",
+    "NAMECHEAP_API_USER=${var.acme_email}",
+  ] : [])
 
   labels {
     label = "stackkit.layer"
@@ -813,7 +1447,15 @@ resource "docker_container" "traefik" {
 
   labels {
     label = "traefik.http.routers.traefik.entrypoints"
-    value = "web"
+    value = local.entrypoint
+  }
+
+  dynamic "labels" {
+    for_each = var.enable_https ? [1] : []
+    content {
+      label = "traefik.http.routers.traefik.tls.certresolver"
+      value = "letsencrypt"
+    }
   }
 
   labels {
@@ -827,6 +1469,27 @@ resource "docker_container" "traefik" {
     timeout      = "5s"
     retries      = 3
     start_period = "10s"
+  }
+}
+
+# Gate resource: ensures the reverse proxy (whichever backend) is ready before
+# platform services start. Services depend on this instead of docker_container.traefik.
+resource "null_resource" "reverse_proxy_ready" {
+  provisioner "local-exec" {
+    command = <<-EOT
+      echo "Waiting for reverse proxy (${var.reverse_proxy_backend})..."
+      for i in $(seq 1 60); do
+        if [ "${var.reverse_proxy_backend}" = "standalone" ]; then
+          docker ps --filter "name=traefik" --filter "status=running" -q | grep -q . && echo "Traefik ready" && exit 0
+        elif [ "${var.reverse_proxy_backend}" = "dokploy" ]; then
+          docker ps --filter "name=dokploy" --filter "status=running" -q | grep -q . && echo "Dokploy Traefik ready" && exit 0
+        elif [ "${var.reverse_proxy_backend}" = "coolify" ]; then
+          docker ps --filter "name=coolify-proxy" --filter "status=running" -q | grep -q . && echo "Coolify Traefik ready" && exit 0
+        fi
+        sleep 3
+      done
+      echo "WARNING: reverse proxy not detected after 3 minutes, continuing anyway"
+    EOT
   }
 }
 
@@ -858,6 +1521,14 @@ resource "docker_container" "tinyauth" {
     for_each = local.is_host ? [] : [1]
     content {
       name = docker_network.base_net[0].name
+    }
+  }
+
+  # Connect to PAAS Traefik network for label discovery (Dokploy/Coolify backend)
+  dynamic "networks_advanced" {
+    for_each = (!local.is_host && !local.rp_standalone) ? [1] : []
+    content {
+      name = data.docker_network.paas_traefik[0].name
     }
   }
 
@@ -903,7 +1574,15 @@ resource "docker_container" "tinyauth" {
 
   labels {
     label = "traefik.http.routers.tinyauth.entrypoints"
-    value = "web"
+    value = local.entrypoint
+  }
+
+  dynamic "labels" {
+    for_each = var.enable_https ? [1] : []
+    content {
+      label = "traefik.http.routers.tinyauth.tls.certresolver"
+      value = "letsencrypt"
+    }
   }
 
   labels {
@@ -935,7 +1614,7 @@ resource "docker_container" "tinyauth" {
     start_period = "10s"
   }
 
-  depends_on = [docker_container.traefik]
+  depends_on = [null_resource.reverse_proxy_ready]
 }
 
 # =============================================================================
@@ -971,6 +1650,14 @@ resource "docker_container" "pocketid" {
     }
   }
 
+  # Connect to PAAS Traefik network for label discovery (Dokploy/Coolify backend)
+  dynamic "networks_advanced" {
+    for_each = (!local.is_host && !local.rp_standalone) ? [1] : []
+    content {
+      name = data.docker_network.paas_traefik[0].name
+    }
+  }
+
   volumes {
     volume_name    = docker_volume.pocketid_data[0].name
     container_path = "/app/data"
@@ -978,7 +1665,7 @@ resource "docker_container" "pocketid" {
 
   env = [
     "TZ=Europe/Berlin",
-    "APP_URL=http://${local.domains.pocketid}",
+    "APP_URL=${local.proto}://${local.domains.pocketid}",
     "TRUST_PROXY=true",
     "ENCRYPTION_KEY=${random_password.pocketid_encryption_key[0].result}",
     "PORT=1411",
@@ -1006,7 +1693,15 @@ resource "docker_container" "pocketid" {
 
   labels {
     label = "traefik.http.routers.pocketid.entrypoints"
-    value = "web"
+    value = local.entrypoint
+  }
+
+  dynamic "labels" {
+    for_each = var.enable_https ? [1] : []
+    content {
+      label = "traefik.http.routers.pocketid.tls.certresolver"
+      value = "letsencrypt"
+    }
   }
 
   labels {
@@ -1022,7 +1717,7 @@ resource "docker_container" "pocketid" {
     start_period = "10s"
   }
 
-  depends_on = [docker_container.traefik]
+  depends_on = [null_resource.reverse_proxy_ready]
 }
 
 # =============================================================================
@@ -1036,8 +1731,20 @@ resource "random_password" "dokploy_db_password" {
 }
 
 resource "random_password" "kuma_admin" {
-  count   = var.enable_dokploy_apps ? 1 : 0
+  count   = var.enable_uptime_kuma ? 1 : 0
   length  = 16
+  special = false
+}
+
+resource "random_password" "vaultwarden_admin" {
+  count   = var.enable_vaultwarden ? 1 : 0
+  length  = 32
+  special = false
+}
+
+resource "random_password" "immich_db" {
+  count   = var.enable_immich ? 1 : 0
+  length  = 32
   special = false
 }
 
@@ -1223,9 +1930,9 @@ resource "docker_container" "dokploy" {
     "NODE_ENV=production",
     "PORT=${local.is_host ? tostring(local.host_ports.dokploy) : "3000"}",
     "TRPC_PLAYGROUND=false",
-    "LETSENCRYPT_EMAIL=admin@stack.local",
+    "LETSENCRYPT_EMAIL=${var.acme_email != "" ? var.acme_email : var.admin_email}",
     "TRAEFIK_ENABLED=true",
-    "TRAEFIK_NETWORK=${local.is_host ? "" : docker_network.base_net[0].name}",
+    "TRAEFIK_NETWORK=${local.is_host ? "" : local.routing_network}",
   ]
 
   labels {
@@ -1250,7 +1957,15 @@ resource "docker_container" "dokploy" {
 
   labels {
     label = "traefik.http.routers.dokploy.entrypoints"
-    value = "web"
+    value = local.entrypoint
+  }
+
+  dynamic "labels" {
+    for_each = var.enable_https ? [1] : []
+    content {
+      label = "traefik.http.routers.dokploy.tls.certresolver"
+      value = "letsencrypt"
+    }
   }
 
   labels {
@@ -1279,7 +1994,7 @@ resource "docker_container" "dokploy" {
   depends_on = [
     docker_container.dokploy_postgres,
     docker_container.dokploy_redis,
-    docker_container.traefik
+    null_resource.reverse_proxy_ready
   ]
 }
 
@@ -1347,6 +2062,174 @@ resource "docker_container" "init_dokploy" {
 }
 
 # =============================================================================
+# LAYER 2: PLATFORM - DOCKGE (LOW COMPUTE TIER)
+# =============================================================================
+# Lightweight Docker Compose manager — replaces Dokploy when compute tier is low.
+# No database required, minimal memory footprint.
+
+resource "null_resource" "dockge_stacks_dir" {
+  count = var.enable_dockge ? 1 : 0
+
+  provisioner "local-exec" {
+    command = "mkdir -p /opt/stacks"
+  }
+}
+
+resource "docker_image" "dockge" {
+  count = var.enable_dockge ? 1 : 0
+  name  = "louislam/dockge:1"
+}
+
+resource "docker_container" "dockge" {
+  count      = var.enable_dockge ? 1 : 0
+  depends_on = [null_resource.dockge_stacks_dir, null_resource.reverse_proxy_ready]
+  name       = "dockge"
+  image      = docker_image.dockge[0].image_id
+
+  restart = "unless-stopped"
+
+  security_opts = ["no-new-privileges:true"]
+
+  network_mode = local.is_host ? "host" : null
+
+  dynamic "networks_advanced" {
+    for_each = local.is_host ? [] : [1]
+    content {
+      name = docker_network.base_net[0].name
+    }
+  }
+
+  # Connect to PAAS Traefik network for label discovery (Dokploy/Coolify backend)
+  dynamic "networks_advanced" {
+    for_each = (!local.is_host && !local.rp_standalone) ? [1] : []
+    content {
+      name = data.docker_network.paas_traefik[0].name
+    }
+  }
+
+  volumes {
+    volume_name    = docker_volume.dockge_data[0].name
+    container_path = "/app/data"
+  }
+
+  mounts {
+    type      = "bind"
+    target    = "/var/run/docker.sock"
+    source    = "/var/run/docker.sock"
+    read_only = true
+  }
+
+  mounts {
+    type   = "bind"
+    target = "/opt/stacks"
+    source = "/opt/stacks"
+  }
+
+  env = [
+    "DOCKGE_STACKS_DIR=/opt/stacks",
+  ]
+
+  labels {
+    label = "stackkit.layer"
+    value = "2-platform"
+  }
+
+  labels {
+    label = "stackkit.service"
+    value = "dockge"
+  }
+
+  labels {
+    label = "traefik.enable"
+    value = "true"
+  }
+
+  labels {
+    label = "traefik.http.routers.dockge.rule"
+    value = "Host(`${local.domains.dockge}`)"
+  }
+
+  labels {
+    label = "traefik.http.routers.dockge.entrypoints"
+    value = local.entrypoint
+  }
+
+  dynamic "labels" {
+    for_each = var.enable_https ? [1] : []
+    content {
+      label = "traefik.http.routers.dockge.tls.certresolver"
+      value = "letsencrypt"
+    }
+  }
+
+  labels {
+    label = "traefik.http.services.dockge.loadbalancer.server.port"
+    value = "5001"
+  }
+
+  labels {
+    label = "traefik.http.routers.dockge.middlewares"
+    value = var.enable_tinyauth ? "tinyauth@docker" : ""
+  }
+
+  memory = 512
+
+  healthcheck {
+    test         = ["CMD-SHELL", "curl -sf http://localhost:5001/ > /dev/null || exit 1"]
+    interval     = "30s"
+    timeout      = "5s"
+    retries      = 3
+    start_period = "15s"
+  }
+}
+
+# =============================================================================
+# LAYER 2: PLATFORM - COOLIFY (ALTERNATIVE PAAS)
+# =============================================================================
+# Full-featured PAAS with built-in Traefik management. When Coolify is the PAAS,
+# it manages its own Traefik instance — platform services attach to Coolify's
+# network for routing (ADR-0006: Service URL Matrix).
+#
+# Note: Coolify is installed via its own installer script, not as a single container.
+# This resource runs the Coolify install script and ensures it's ready.
+
+resource "null_resource" "coolify_install" {
+  count = var.enable_coolify ? 1 : 0
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      if ! command -v coolify &> /dev/null && ! docker ps --format '{{"{{"}}.Names{{"}}"}}' | grep -q coolify; then
+        echo "Installing Coolify..."
+        curl -fsSL https://cdn.coollabs.io/coolify/install.sh | bash
+      else
+        echo "Coolify already installed"
+      fi
+    EOT
+  }
+}
+
+# Wait for Coolify's Traefik to be ready before deploying platform services
+resource "null_resource" "coolify_traefik_ready" {
+  count = var.enable_coolify ? 1 : 0
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      echo "Waiting for Coolify Traefik..."
+      for i in $(seq 1 60); do
+        if docker ps --filter "name=coolify-proxy" --filter "status=running" -q | grep -q .; then
+          echo "Coolify Traefik is ready"
+          exit 0
+        fi
+        sleep 5
+      done
+      echo "WARNING: Coolify Traefik not detected after 5 minutes"
+    EOT
+  }
+
+  depends_on = [null_resource.coolify_install]
+}
+
+# =============================================================================
 # LAYER 2: LINKS DASHBOARD
 # =============================================================================
 
@@ -1370,6 +2253,14 @@ resource "docker_container" "dashboard" {
     for_each = local.is_host ? [] : [1]
     content {
       name = docker_network.base_net[0].name
+    }
+  }
+
+  # Connect to PAAS Traefik network for label discovery (Dokploy/Coolify backend)
+  dynamic "networks_advanced" {
+    for_each = (!local.is_host && !local.rp_standalone) ? [1] : []
+    content {
+      name = data.docker_network.paas_traefik[0].name
     }
   }
 
@@ -1400,7 +2291,15 @@ resource "docker_container" "dashboard" {
 
   labels {
     label = "traefik.http.routers.dashboard.entrypoints"
-    value = "web"
+    value = local.entrypoint
+  }
+
+  dynamic "labels" {
+    for_each = var.enable_https ? [1] : []
+    content {
+      label = "traefik.http.routers.dashboard.tls.certresolver"
+      value = "letsencrypt"
+    }
   }
 
   labels {
@@ -1422,29 +2321,49 @@ resource "docker_container" "dashboard" {
   }
 
   depends_on = [
-    docker_container.traefik,
+    null_resource.reverse_proxy_ready,
     docker_container.tinyauth,
   ]
 }
 
 # =============================================================================
-# LAYER 3: APPLICATIONS - DOKPLOY COMPOSE CONFIGS
+# LAYER 3: APPLICATIONS - COMPOSE CONFIGS
 # =============================================================================
-# These are Docker Compose templates that Dokploy will use to deploy
-# Layer 3 applications. They are NOT deployed by OpenTofu directly.
+# Docker Compose templates for L3 applications. Deployed independently of PaaS.
 
 resource "local_file" "kuma_compose" {
-  count = var.enable_dokploy && var.enable_dokploy_apps ? 1 : 0
+  count = var.enable_uptime_kuma ? 1 : 0
 
   filename = "${path.module}/.kuma-compose.yaml"
   content  = local.kuma_compose_content
 }
 
 resource "local_file" "whoami_compose" {
-  count = var.enable_dokploy && var.enable_dokploy_apps ? 1 : 0
+  count = 1
 
   filename = "${path.module}/.whoami-compose.yaml"
   content  = local.whoami_compose_content
+}
+
+resource "local_file" "vaultwarden_compose" {
+  count = var.enable_vaultwarden ? 1 : 0
+
+  filename = "${path.module}/.vaultwarden-compose.yaml"
+  content  = local.vaultwarden_compose_content
+}
+
+resource "local_file" "jellyfin_compose" {
+  count = var.enable_jellyfin ? 1 : 0
+
+  filename = "${path.module}/.jellyfin-compose.yaml"
+  content  = local.jellyfin_compose_content
+}
+
+resource "local_file" "immich_compose" {
+  count = var.enable_immich ? 1 : 0
+
+  filename = "${path.module}/.immich-compose.yaml"
+  content  = local.immich_compose_content
 }
 
 # =============================================================================
@@ -1453,7 +2372,7 @@ resource "local_file" "whoami_compose" {
 # Deploy L3 compose files automatically. Re-triggers when compose content changes.
 
 resource "null_resource" "deploy_kuma" {
-  count = var.enable_dokploy && var.enable_dokploy_apps ? 1 : 0
+  count = var.enable_uptime_kuma ? 1 : 0
 
   triggers = {
     compose_hash = sha256(local_file.kuma_compose[0].content)
@@ -1465,15 +2384,14 @@ resource "null_resource" "deploy_kuma" {
   }
 
   depends_on = [
-    docker_container.dokploy,
-    docker_container.traefik,
+    null_resource.reverse_proxy_ready,
     docker_container.tinyauth,
     local_file.kuma_compose,
   ]
 }
 
 resource "null_resource" "deploy_whoami" {
-  count = var.enable_dokploy && var.enable_dokploy_apps ? 1 : 0
+  count = 1
 
   triggers = {
     compose_hash = sha256(local_file.whoami_compose[0].content)
@@ -1485,9 +2403,73 @@ resource "null_resource" "deploy_whoami" {
   }
 
   depends_on = [
-    docker_container.traefik,
+    null_resource.reverse_proxy_ready,
     docker_container.tinyauth,
     local_file.whoami_compose,
+  ]
+}
+
+resource "null_resource" "deploy_vaultwarden" {
+  count = var.enable_vaultwarden ? 1 : 0
+
+  triggers = {
+    compose_hash = sha256(local_file.vaultwarden_compose[0].content)
+  }
+
+  provisioner "local-exec" {
+    command     = "docker compose -f ${local_file.vaultwarden_compose[0].filename} up -d --wait"
+    working_dir = path.module
+  }
+
+  depends_on = [
+    null_resource.reverse_proxy_ready,
+    local_file.vaultwarden_compose,
+  ]
+}
+
+# Jellyfin needs the media directory to exist before compose up
+resource "null_resource" "jellyfin_media_dir" {
+  count = var.enable_jellyfin ? 1 : 0
+
+  provisioner "local-exec" {
+    command = "mkdir -p ${var.media_path}"
+  }
+}
+
+resource "null_resource" "deploy_jellyfin" {
+  count = var.enable_jellyfin ? 1 : 0
+
+  triggers = {
+    compose_hash = sha256(local_file.jellyfin_compose[0].content)
+  }
+
+  provisioner "local-exec" {
+    command     = "docker compose -f ${local_file.jellyfin_compose[0].filename} up -d --wait"
+    working_dir = path.module
+  }
+
+  depends_on = [
+    null_resource.reverse_proxy_ready,
+    null_resource.jellyfin_media_dir,
+    local_file.jellyfin_compose,
+  ]
+}
+
+resource "null_resource" "deploy_immich" {
+  count = var.enable_immich ? 1 : 0
+
+  triggers = {
+    compose_hash = sha256(local_file.immich_compose[0].content)
+  }
+
+  provisioner "local-exec" {
+    command     = "docker compose -f ${local_file.immich_compose[0].filename} up -d --wait"
+    working_dir = path.module
+  }
+
+  depends_on = [
+    null_resource.reverse_proxy_ready,
+    local_file.immich_compose,
   ]
 }
 
@@ -1497,7 +2479,7 @@ resource "null_resource" "deploy_whoami" {
 
 output "network_name" {
   description = "Docker network name (empty in host mode)"
-  value       = local.is_host ? "host" : docker_network.base_net[0].name
+  value       = local.is_host ? "host" : local.routing_network
 }
 
 output "domains" {
@@ -1507,43 +2489,89 @@ output "domains" {
 
 output "traefik_url" {
   description = "Traefik dashboard URL (Layer 2 Platform)"
-  value       = var.enable_traefik ? "http://${local.domains.traefik}" : null
+  value       = var.enable_traefik ? "${local.proto}://${local.domains.traefik}" : null
 }
 
 output "auth_url" {
   description = "TinyAuth login URL (Layer 1 Foundation)"
-  value       = var.enable_tinyauth ? "http://${local.domains.auth}" : null
+  value       = var.enable_tinyauth ? "${local.proto}://${local.domains.auth}" : null
 }
 
 output "pocketid_url" {
   description = "Pocket ID OIDC provider URL (Layer 1 Foundation)"
-  value       = var.enable_pocketid ? "http://${local.domains.pocketid}" : null
+  value       = var.enable_pocketid ? "${local.proto}://${local.domains.pocketid}" : null
 }
 
 output "dokploy_url" {
   description = "Dokploy UI URL (Layer 2 Platform)"
-  value       = var.enable_dokploy ? "http://${local.domains.dokploy}" : null
+  value       = var.enable_dokploy ? "${local.proto}://${local.domains.dokploy}" : null
+}
+
+output "dockge_url" {
+  description = "Dockge UI URL (Layer 2 Platform, low compute tier)"
+  value       = var.enable_dockge ? "${local.proto}://${local.domains.dockge}" : null
+}
+
+output "coolify_url" {
+  description = "Coolify UI URL (Layer 2 Platform)"
+  value       = var.enable_coolify ? "${local.proto}://${local.domains.coolify}" : null
+}
+
+output "paas_url" {
+  description = "PaaS manager URL (Dokploy, Coolify, or Dockge depending on selection)"
+  value       = (
+    var.enable_dokploy ? "${local.proto}://${local.domains.dokploy}" :
+    var.enable_coolify ? "${local.proto}://${local.domains.coolify}" :
+    var.enable_dockge ? "${local.proto}://${local.domains.dockge}" :
+    null
+  )
+}
+
+output "reverse_proxy_backend" {
+  description = "Which Traefik instance routes platform services"
+  value       = var.reverse_proxy_backend
 }
 
 output "kuma_url" {
   description = "Uptime Kuma URL (Layer 3 Application)"
-  value       = var.enable_dokploy_apps ? "http://${local.domains.kuma}" : null
+  value       = "${local.proto}://${local.domains.kuma}"
 }
 
 output "dashboard_url" {
   description = "Homelab links dashboard URL (Layer 2 Platform)"
-  value       = var.enable_dashboard ? "http://${local.domains.dashboard}" : null
+  value       = var.enable_dashboard ? "${local.proto}://${local.domains.dashboard}" : null
 }
 
 output "kuma_admin_password" {
   description = "Uptime Kuma admin password (set by init-kuma on first deploy)"
-  value       = var.enable_dokploy_apps ? random_password.kuma_admin[0].result : null
+  value       = random_password.kuma_admin[0].result
   sensitive   = true
 }
 
 output "whoami_url" {
   description = "Whoami test URL (Layer 3 Application)"
-  value       = var.enable_dokploy_apps ? "http://${local.domains.whoami}" : null
+  value       = "${local.proto}://${local.domains.whoami}"
+}
+
+output "vaultwarden_url" {
+  description = "Vaultwarden password vault URL (Layer 3 Application)"
+  value       = var.enable_vaultwarden ? "${local.proto}://${local.domains.vault}" : null
+}
+
+output "vaultwarden_admin_token" {
+  description = "Vaultwarden admin panel token"
+  value       = var.enable_vaultwarden ? random_password.vaultwarden_admin[0].result : null
+  sensitive   = true
+}
+
+output "jellyfin_url" {
+  description = "Jellyfin media server URL (Layer 3 Application)"
+  value       = var.enable_jellyfin ? "${local.proto}://${local.domains.media}" : null
+}
+
+output "immich_url" {
+  description = "Immich photo management URL (Layer 3 Application)"
+  value       = var.enable_immich ? "${local.proto}://${local.domains.photos}" : null
 }
 
 output "credentials" {
@@ -1560,12 +2588,12 @@ output "admin_password" {
 
 output "tinyauth_login_url" {
   description = "TinyAuth login URL"
-  value       = var.enable_tinyauth ? "http://${local.domains.auth}" : null
+  value       = var.enable_tinyauth ? "${local.proto}://${local.domains.auth}" : null
 }
 
 output "dokploy_login_url" {
   description = "Dokploy login URL"
-  value       = var.enable_dokploy ? "http://${local.domains.dokploy}" : null
+  value       = var.enable_dokploy ? "${local.proto}://${local.domains.dokploy}" : null
 }
 
 output "architecture_summary" {
@@ -1573,80 +2601,42 @@ output "architecture_summary" {
   value       = <<-EOT
     ╔═══════════════════════════════════════════════════════════════════╗
     ║              BASE KIT - SINGLE SERVER DEPLOYMENT                 ║
+    ║  Compute: ${var.enable_dockge ? "LOW (Pi-Mode)" : "STANDARD"}${var.enable_dockge ? "                                              " : "                                                   "}║
     ╠═══════════════════════════════════════════════════════════════════╣
     ║                                                                   ║
     ║  Network: ${local.is_host ? "HOST MODE (bridge unavailable)" : "Bridge (isolated Docker networks)"}${local.is_host ? "                       " : "         "}║
-    ║  ALL SERVICES RUN ON THE TARGET SERVER                            ║
     ║                                                                   ║
-    ║  LAYER 1 (Foundation) - Managed by OpenTofu:                      ║
-    ║    ${var.enable_pocketid ? "✓" : "✗"} Pocket ID   → http://${local.domains.pocketid}       ║
-    ║        Purpose: OIDC Identity Provider (passkey auth)            ║
-    ║                                                                   ║
-    ║    ${var.enable_tinyauth ? "✓" : "✗"} TinyAuth    → http://${local.domains.auth}           ║
-    ║        Purpose: ForwardAuth proxy (backed by Pocket ID)          ║
+    ║  LAYER 1 (Foundation):                                             ║
+    ║    ${var.enable_pocketid ? "✓" : "✗"} Pocket ID   → ${local.proto}://${local.domains.pocketid}       ║
+    ║    ${var.enable_tinyauth ? "✓" : "✗"} TinyAuth    → ${local.proto}://${local.domains.auth}           ║
     ║        Credentials: ${var.admin_email} / <auto-generated>        ║
     ║                                                                   ║
-    ║  LAYER 2 (Platform) - Managed by OpenTofu:                        ║
-    ║    ${var.enable_traefik ? "✓" : "✗"} Traefik     → http://${local.domains.traefik}        ║
-    ║        Purpose: Reverse Proxy & Routing                          ║
+    ║  LAYER 2 (Platform):                                               ║
+    ║    Reverse Proxy: ${var.reverse_proxy_backend}                      ║
+    ║    ${var.enable_traefik ? "✓" : "✗"} Traefik     → ${local.proto}://${local.domains.traefik}        ║
+    ║    ${var.enable_dokploy ? "✓" : "✗"} Dokploy     → ${local.proto}://${local.domains.dokploy}        ║
+    ║    ${var.enable_coolify ? "✓" : "✗"} Coolify     → ${local.proto}://${local.domains.coolify}        ║
+    ║    ${var.enable_dockge ? "✓" : "✗"} Dockge      → ${local.proto}://${local.domains.dockge}         ║
+    ║    ${var.enable_dashboard ? "✓" : "✗"} Dashboard  → ${local.proto}://${local.domains.dashboard}      ║
     ║                                                                   ║
-    ║    ${var.enable_dokploy ? "✓" : "✗"} Dokploy     → http://${local.domains.dokploy}        ║
-    ║        Purpose: PAAS Controller for Layer 3                      ║
-    ║        Protected by: TinyAuth SSO                                ║
-    ║                                                                   ║
-    ║    ${var.enable_dokploy ? "✓" : "✗"} PostgreSQL  → Internal only                     ║
-    ║        Purpose: Database for Dokploy                             ║
-    ║                                                                   ║
-    ║    ${var.enable_dashboard ? "✓" : "✗"} Dashboard  → http://${local.domains.dashboard}      ║
-    ║        Purpose: Service links & navigation                       ║
-    ║                                                                   ║
-    ║  LAYER 3 (Applications) - Auto-deployed via Compose:              ║
-    ║    ${var.enable_dokploy_apps ? "✓" : "✗"} Kuma     → http://${local.domains.kuma}          ║
-    ║        Uptime monitoring with pre-configured monitors           ║
-    ║                                                                   ║
-    ║    ${var.enable_dokploy_apps ? "✓" : "✗"} Whoami   → http://${local.domains.whoami}        ║
-    ║        Network diagnostic endpoint                              ║
+    ║  LAYER 3 (Applications):                                           ║
+    ║    ✓ Kuma     → ${local.proto}://${local.domains.kuma}          ║
+    ║    ✓ Whoami   → ${local.proto}://${local.domains.whoami}        ║
+    ║    ${var.enable_vaultwarden ? "✓" : "✗"} Vault    → ${local.proto}://${local.domains.vault}         ║
+    ║    ${var.enable_jellyfin ? "✓" : "✗"} Jellyfin → ${local.proto}://${local.domains.media}         ║
+    ║    ${var.enable_immich ? "✓" : "✗"} Immich   → ${local.proto}://${local.domains.photos}        ║
     ║                                                                   ║
     ╠═══════════════════════════════════════════════════════════════════╣
-    ║  FIRST LOGIN FLOW                                                 ║
+    ║  FIRST LOGIN                                                       ║
     ╠═══════════════════════════════════════════════════════════════════╣
+    ║  1. Login: ${local.proto}://${local.domains.auth}                          ║
+    ║     Email: ${var.admin_email} / Password: <see output>           ║
+    ║  2. Passkey: ${local.proto}://${local.domains.pocketid}/login/setup         ║
+    ║  3. PaaS: ${local.proto}://${var.enable_dokploy ? local.domains.dokploy : (var.enable_coolify ? local.domains.coolify : local.domains.dockge)}                          ║
     ║                                                                   ║
-    ║  Step 1: Login to TinyAuth                                        ║
-    ║    URL: http://${local.domains.auth}                             ║
-    ║    Email: ${var.admin_email}                                     ║
-    ║    Password: <auto-generated, see terraform output>              ║
-    ║                                                                   ║
-    ║  Step 1b: Register passkey at Pocket ID                           ║
-    ║    URL: http://${local.domains.pocketid}/login/setup              ║
-    ║    Enables passwordless login via WebAuthn                        ║
-    ║                                                                   ║
-    ║  Step 2: Access Dokploy (via TinyAuth SSO)                        ║
-    ║    URL: http://${local.domains.dokploy}                          ║
-    ║    You'll be redirected to TinyAuth for authentication            ║
-    ║                                                                   ║
-    ║  Step 3: Layer 3 Applications (auto-deployed)                     ║
-    ║    Kuma and Whoami are deployed automatically                    ║
-    ║                                                                   ║
-    ╠═══════════════════════════════════════════════════════════════════╣
-    ║  DNS SETUP (add to /etc/hosts on your client or use dnsmasq)      ║
-    ╠═══════════════════════════════════════════════════════════════════╣
-    ║                                                                   ║
-    ║  <server-ip>  id.stack.local       (Pocket ID)                     ║
-    ║  <server-ip>  auth.stack.local    (TinyAuth)                      ║
-    ║  <server-ip>  traefik.stack.local                                 ║
-    ║  <server-ip>  dokploy.stack.local                                 ║
-    ║  <server-ip>  base.stack.local    (dashboard)                     ║
-    ║  <server-ip>  kuma.stack.local                                    ║
-    ║                                                                   ║
-    ║  Or wildcard:  *.stack.local -> <server-ip>                       ║
-    ║                                                                   ║
-    ╠═══════════════════════════════════════════════════════════════════╣
-    ║  VERIFICATION                                                     ║
-    ╠═══════════════════════════════════════════════════════════════════╣
-    ║                                                                   ║
-    ║  ssh user@server docker ps    # Should show all services          ║
-    ║  curl http://auth.stack.local # Should return TinyAuth login      ║
-    ║                                                                   ║
+    ${var.subdomain_prefix != "" ? "║  DNS: Managed by kombify.me (Cloudflare wildcard)                   ║" : "║  DNS: *.${var.domain} -> ${var.enable_dnsmasq ? var.server_lan_ip : "<server-ip>"}${var.enable_dnsmasq ? "                       " : "                              "}║"}
+    ${var.enable_dnsmasq ? "║  Local DNS: dnsmasq running on port 53                              ║" : "║                                                                   ║"}
+    ${var.enable_dnsmasq ? "║  Set router DHCP DNS to ${var.server_lan_ip} for auto-resolve       ║" : "║                                                                   ║"}
     ╚═══════════════════════════════════════════════════════════════════╝
   EOT
 }

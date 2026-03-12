@@ -61,7 +61,6 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	// Print header
 	fmt.Println()
 	fmt.Printf("  %s: %s\n", bold("StackKit"), spec.StackKit)
-	fmt.Printf("  %s: %s\n", bold("Variant"), spec.Variant)
 	fmt.Printf("  %s: %s\n", bold("Mode"), spec.Mode)
 	fmt.Printf("  %s: %s\n", bold("Last Applied"), state.LastApplied.Format("2006-01-02 15:04:05"))
 	fmt.Println()
@@ -102,7 +101,6 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	if statusJson {
 		output := map[string]interface{}{
 			"stackkit":    spec.StackKit,
-			"variant":     spec.Variant,
 			"mode":        spec.Mode,
 			"lastApplied": state.LastApplied.Format("2006-01-02T15:04:05Z"),
 			"status":      string(overallStatus),

@@ -47,7 +47,7 @@ func runPlan(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load spec: %w", err)
 	}
 
-	printInfo("Planning deployment: %s (%s variant)", spec.StackKit, spec.Variant)
+	printInfo("Planning deployment: %s (mode: %s)", spec.StackKit, spec.Mode)
 
 	// Determine deploy directory
 	deployDir := filepath.Join(wd, config.GetDeployDir())

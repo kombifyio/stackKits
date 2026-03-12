@@ -33,7 +33,6 @@ func TestValidateSpec(t *testing.T) {
 		spec := &models.StackSpec{
 			Name:     "test-deployment",
 			StackKit: "base-kit",
-			Variant:  "default",
 			Mode:     "simple",
 			Network: models.NetworkSpec{
 				Mode:   "local",

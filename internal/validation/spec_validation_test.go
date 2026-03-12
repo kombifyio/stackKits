@@ -272,7 +272,6 @@ func TestSpecDefaults(t *testing.T) {
 	// Apply defaults (these should match applySpecDefaults in config/loader.go)
 	applyDefaults(spec)
 
-	assert.Equal(t, "default", spec.Variant)
 	assert.Equal(t, "simple", spec.Mode)
 	assert.Equal(t, "local", spec.Network.Mode)
 	assert.Equal(t, "172.20.0.0/16", spec.Network.Subnet)
@@ -282,9 +281,6 @@ func TestSpecDefaults(t *testing.T) {
 }
 
 func applyDefaults(spec *models.StackSpec) {
-	if spec.Variant == "" {
-		spec.Variant = "default"
-	}
 	if spec.Mode == "" {
 		spec.Mode = "simple"
 	}

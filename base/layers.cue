@@ -391,6 +391,11 @@ package base
 			enabled: true // Zero-Trust: Step-CA MUST be enabled for mTLS
 		}
 	}
+
+	// Virtualization environment MUST be declared
+	// Defines the minimum kernel features and supported VPS environments.
+	// Detected at runtime by `stackkit prepare` and enforced before deployment.
+	virtualization: #VirtualizationConfig
 }
 
 // =============================================================================
@@ -532,8 +537,8 @@ package base
 	layer1: #LayerMetadata & {
 		name:        "foundation"
 		version:     "1.0.0"
-		description: "System configuration, packages, security, and Layer 1 identity (LLDAP, Step-CA)"
-		required: ["system", "packages", "security.ssh", "security.firewall", "identity.lldap", "identity.stepCA"]
+		description: "System configuration, packages, security, Layer 1 identity (LLDAP, Step-CA), and virtualization requirements"
+		required: ["system", "packages", "security.ssh", "security.firewall", "identity.lldap", "identity.stepCA", "virtualization"]
 		optional: ["security.container", "security.secrets", "security.tls", "security.audit", "identity.provider", "identity.pki", "identity.rbac"]
 	}
 

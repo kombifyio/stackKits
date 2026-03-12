@@ -207,14 +207,14 @@ stackkit apply plan.tfplan        # apply a previously saved plan
 
 ---
 
-### `stackkit destroy`
+### `stackkit remove`
 
 Tear down all infrastructure managed by the deployment. Runs `tofu destroy` inside the deploy directory. Requires typing `yes` to confirm unless `--auto-approve` is passed.
 
 ```bash
-stackkit destroy                          # destroy with confirmation
-stackkit destroy --auto-approve           # no confirmation
-stackkit destroy --auto-approve --force   # ignore errors, keep going
+stackkit remove                          # remove with confirmation
+stackkit remove --auto-approve           # no confirmation
+stackkit remove --auto-approve --force   # ignore errors, keep going
 ```
 
 **Flags:**
@@ -394,7 +394,7 @@ stackkit apply
 ### Tearing down
 
 ```bash
-stackkit destroy --auto-approve
+stackkit remove --auto-approve
 ```
 
 ---

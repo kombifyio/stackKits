@@ -69,7 +69,7 @@ func TestCLI_Init(t *testing.T) {
 	specOut, err := execInCli(t, "cat", "/workspace/stack-spec.yaml")
 	require.NoError(t, err, "reading spec failed: %s", specOut)
 	assert.Contains(t, specOut, "base-kit", "spec should reference base-kit stackkit")
-	assert.Contains(t, specOut, "variant", "spec should contain variant field")
+	assert.Contains(t, specOut, "mode", "spec should contain mode field")
 }
 
 func TestCLI_Init_SpecStructure(t *testing.T) {
@@ -82,8 +82,8 @@ func TestCLI_Init_SpecStructure(t *testing.T) {
 		strings.Contains(lowerSpec, "stackkit") || strings.Contains(lowerSpec, "kind"),
 		"spec should have stackkit/kind field: %s", specOut)
 	assert.True(t,
-		strings.Contains(lowerSpec, "variant") || strings.Contains(lowerSpec, "compute"),
-		"spec should have variant or compute field: %s", specOut)
+		strings.Contains(lowerSpec, "mode") || strings.Contains(lowerSpec, "compute"),
+		"spec should have mode or compute field: %s", specOut)
 }
 
 func TestCLI_Validate(t *testing.T) {
@@ -94,7 +94,7 @@ func TestCLI_Validate(t *testing.T) {
 
 func TestCLI_Validate_InvalidSpec(t *testing.T) {
 	_, err := execInCli(t, "sh", "-c",
-		"echo 'variant: default' > /tmp/bad-spec.yaml")
+		"echo 'mode: simple' > /tmp/bad-spec.yaml")
 	require.NoError(t, err)
 
 	out, err := execInCli(t, "stackkit", "validate", "-s", "/tmp/bad-spec.yaml")
@@ -496,35 +496,35 @@ func TestVM_DockerDaemonInfo(t *testing.T) {
 	assert.Contains(t, out, "Server Version:", "should show Docker version")
 }
 
-// ─── Destroy & Cleanup Tests ─────────────────────────────────────
+// ─── Remove & Cleanup Tests ──────────────────────────────────────
 
-func TestCLI_Destroy(t *testing.T) {
-	out, err := execInCli(t, "stackkit", "destroy",
+func TestCLI_Remove(t *testing.T) {
+	out, err := execInCli(t, "stackkit", "remove",
 		"-C", "/workspace", "--auto-approve")
-	require.NoError(t, err, "destroy failed: %s", out)
+	require.NoError(t, err, "remove failed: %s", out)
 	lowerOut := strings.ToLower(out)
 	assert.True(t,
-		strings.Contains(lowerOut, "destroy") || strings.Contains(lowerOut, "complete") || strings.Contains(lowerOut, "success"),
-		"destroy should indicate success: %s", out)
+		strings.Contains(lowerOut, "remove") || strings.Contains(lowerOut, "complete") || strings.Contains(lowerOut, "success"),
+		"remove should indicate success: %s", out)
 }
 
-func TestCLI_Destroy_VerifyCleanup(t *testing.T) {
+func TestCLI_Remove_VerifyCleanup(t *testing.T) {
 	time.Sleep(5 * time.Second)
 
 	names, err := execInVM(t, "docker", "ps", "--format", "{{.Names}}")
 	require.NoError(t, err)
 	assert.NotContains(t, names, "traefik",
-		"traefik should be removed after destroy")
+		"traefik should be removed after remove")
 	assert.NotContains(t, names, "dokploy",
-		"dokploy should be removed after destroy")
+		"dokploy should be removed after remove")
 }
 
-func TestCLI_Destroy_VerifyNoContainers(t *testing.T) {
+func TestCLI_Remove_VerifyNoContainers(t *testing.T) {
 	out, err := execInVM(t, "sh", "-c", "docker ps -q | wc -l")
 	require.NoError(t, err)
 	count, err := strconv.Atoi(strings.TrimSpace(out))
 	require.NoError(t, err, "should parse container count: %s", out)
-	assert.Equal(t, 0, count, "no containers should be running after destroy")
+	assert.Equal(t, 0, count, "no containers should be running after remove")
 }
 
 func TestCLI_Destroy_VerifyNetworkCleanup(t *testing.T) {

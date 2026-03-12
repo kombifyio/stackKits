@@ -23,6 +23,7 @@ type ServerConfig struct {
 	APIKey      string   // If set, all non-health endpoints require X-API-Key header
 	CORSOrigins []string // Allowed CORS origins; empty = "*"
 	RateLimit   int      // Max requests per IP per minute; 0 = no limit
+	LogDir      string   // Directory containing deploy log files (.stackkit/logs/)
 }
 
 // Server is the StackKits HTTP API server.
@@ -82,7 +83,6 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/v1/stackkits/{name}", s.handleGetStackKit)
 	s.mux.HandleFunc("GET /api/v1/stackkits/{name}/schema", s.handleGetStackKitSchema)
 	s.mux.HandleFunc("GET /api/v1/stackkits/{name}/defaults", s.handleGetStackKitDefaults)
-	s.mux.HandleFunc("GET /api/v1/stackkits/{name}/variants", s.handleGetStackKitVariants)
 
 	// Validation
 	s.mux.HandleFunc("POST /api/v1/validate", s.handleValidateSpec)
@@ -91,6 +91,12 @@ func (s *Server) routes() {
 	// Generation
 	s.mux.HandleFunc("POST /api/v1/generate/tfvars", s.handleGenerateTFVars)
 	s.mux.HandleFunc("POST /api/v1/generate/preview", s.handleGeneratePreview)
+
+	// Logs
+	s.mux.HandleFunc("GET /api/v1/logs", s.handleListLogs)
+	s.mux.HandleFunc("GET /api/v1/logs/latest", s.handleGetLatestLog)
+	s.mux.HandleFunc("GET /api/v1/logs/{runID}", s.handleGetLog)
+	s.mux.HandleFunc("GET /api/v1/logs/{runID}/stream", s.handleStreamLog)
 }
 
 // ── Response helpers ──────────────────────────────────────────────
@@ -194,6 +200,8 @@ func corsMiddleware(origins []string) func(http.Handler) http.Handler {
 	allowOrigin := "*"
 	if len(origins) > 0 {
 		allowOrigin = strings.Join(origins, ", ")
+	} else {
+		slog.Warn("CORS configured with wildcard origin (*). Set CORSOrigins for production use.")
 	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

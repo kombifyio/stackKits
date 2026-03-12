@@ -19,8 +19,8 @@ All services are accessed via domain routing (`service.stack.local`) through Tra
 | | Minimum | Recommended |
 |--|---------|-------------|
 | CPU | 2 cores | 4+ cores |
-| RAM | 4 GB | 8+ GB |
-| Disk | 50 GB SSD | 100+ GB SSD |
+| RAM | 2 GB | 4+ GB |
+| Disk | 10 GB | 20+ GB |
 | OS | Ubuntu 22.04+ | Ubuntu 24.04 LTS |
 | Domain | Not required | Optional (use `stack.local`) |
 

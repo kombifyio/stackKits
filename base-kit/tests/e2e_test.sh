@@ -112,8 +112,8 @@ ssh_exec() {
 }
 
 cleanup() {
-    echo -e "\n${YELLOW}[CLEANUP]${NC} Running destroy..."
-    $STACKKIT_BIN destroy --auto-approve 2>/dev/null || true
+    echo -e "\n${YELLOW}[CLEANUP]${NC} Running remove..."
+    $STACKKIT_BIN remove --auto-approve 2>/dev/null || true
 }
 
 trap cleanup EXIT
@@ -445,27 +445,27 @@ fi
 # ---- Phase 7: Destroy & Cleanup ----
 
 echo ""
-echo "--- Phase 7: Destroy & Cleanup ---"
+echo "--- Phase 7: Remove & Cleanup ---"
 
-log_test "22: stackkit destroy removes all containers"
+log_test "22: stackkit remove removes all containers"
 trap - EXIT
-if $STACKKIT_BIN destroy --auto-approve; then
-    log_pass "Destroy succeeded"
+if $STACKKIT_BIN remove --auto-approve; then
+    log_pass "Remove succeeded"
 else
-    log_fail "Destroy failed"
+    log_fail "Remove failed"
 fi
 
 sleep 5
 
-log_test "23: No managed containers remain after destroy"
+log_test "23: No managed containers remain after remove"
 REMAINING=$(ssh_docker ps -a --format "{{.Names}}" 2>/dev/null | grep -E "^(traefik|tinyauth|dokploy|dokploy-postgres)$" || true)
 if [ -z "$REMAINING" ]; then
     log_pass "All Layer 1+2 containers cleaned up"
 else
-    log_fail "Containers still exist after destroy: $REMAINING"
+    log_fail "Containers still exist after remove: $REMAINING"
 fi
 
-log_test "24: Persistent volumes preserved after destroy"
+log_test "24: Persistent volumes preserved after remove"
 if ssh_docker volume ls 2>/dev/null | grep -q "dokploy-data"; then
     log_pass "Persistent volumes preserved (data safe)"
 else

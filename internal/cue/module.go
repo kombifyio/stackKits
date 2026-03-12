@@ -2,8 +2,6 @@ package cue
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"cuelang.org/go/cue"
@@ -104,26 +102,16 @@ func NewModuleReader() *ModuleReader {
 
 // ReadAllModules scans the modules directory and extracts all ModuleContracts.
 func (r *ModuleReader) ReadAllModules(modulesDir string) ([]ModuleContract, error) {
-	entries, err := os.ReadDir(modulesDir)
+	modulePaths, err := discoverModulePaths(modulesDir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read modules directory: %w", err)
+		return nil, err
 	}
 
 	var contracts []ModuleContract
-	for _, entry := range entries {
-		if !entry.IsDir() || strings.HasPrefix(entry.Name(), "_") {
-			continue
-		}
-
-		modulePath := filepath.Join(modulesDir, entry.Name())
-		moduleCue := filepath.Join(modulePath, "module.cue")
-		if _, statErr := os.Stat(moduleCue); os.IsNotExist(statErr) {
-			continue
-		}
-
-		contract, err := r.readModule(modulePath)
+	for _, mp := range modulePaths {
+		contract, err := r.readModule(mp.Path)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read module %s: %w", entry.Name(), err)
+			return nil, fmt.Errorf("failed to read module %s: %w", mp.Name, err)
 		}
 		contracts = append(contracts, contract)
 	}

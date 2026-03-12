@@ -227,11 +227,14 @@ status. Supports `--json` output for machine consumption.
 
 ## Ecosystem Integration
 
-### kombify Stack (Control Plane)
+### kombify Techstack (Control Plane)
 The API server (`internal/api/server.go`) exposes REST endpoints consumed by
-kombify Stack. CORS is configured to allow `https://app.kombify.io` origins.
-Stack loads StackKit definitions, provides a UI wizard, and calls the API for
-validation and generation.
+kombify Techstack (`techstack.kombify.io`). CORS is configured to allow
+`https://kombify.io` origins. Techstack loads StackKit definitions, provides
+a UI wizard, and calls the API for validation and generation.
+
+> **Note:** `stack.kombify.io` is the marketing website (website-v2).
+> `techstack.kombify.io` is the actual tool.
 
 ### kombify Sphere (SaaS)
 Level 4 in the progressive capability model. StackKits provides the
