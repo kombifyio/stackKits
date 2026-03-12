@@ -184,13 +184,13 @@ func TestFormatEnvironment(t *testing.T) {
 func TestSuggestDomain(t *testing.T) {
 	t.Run("cloud always returns kombify.me", func(t *testing.T) {
 		domain, reason := SuggestDomain(models.NetEnvCloud, "stack.local")
-		assert.Equal(t, "kombify.me", domain)
+		assert.Equal(t, models.DomainKombifyMe, domain)
 		assert.Contains(t, reason, "kombify Cloud")
 	})
 
-	t.Run("cloud overrides custom domain too", func(t *testing.T) {
+	t.Run("cloud overrides custom domain", func(t *testing.T) {
 		domain, reason := SuggestDomain(models.NetEnvCloud, "mydomain.com")
-		assert.Equal(t, "kombify.me", domain)
+		assert.Equal(t, models.DomainKombifyMe, domain)
 		assert.NotEmpty(t, reason)
 	})
 
@@ -201,7 +201,7 @@ func TestSuggestDomain(t *testing.T) {
 		}
 		for _, d := range localDomains {
 			domain, reason := SuggestDomain(models.NetEnvVPS, d)
-			assert.Equal(t, "kombify.me", domain, "domain=%q should be corrected", d)
+			assert.Equal(t, models.DomainKombifyMe, domain, "domain=%q should be corrected", d)
 			assert.NotEmpty(t, reason, "domain=%q should have a reason", d)
 		}
 	})
@@ -214,7 +214,7 @@ func TestSuggestDomain(t *testing.T) {
 
 	t.Run("home with empty domain defaults to home.lab", func(t *testing.T) {
 		domain, reason := SuggestDomain(models.NetEnvHome, "")
-		assert.Equal(t, "home.lab", domain)
+		assert.Equal(t, models.DomainHomeLab, domain)
 		assert.Contains(t, reason, "home network")
 	})
 
@@ -256,7 +256,7 @@ func TestInterfaceHasIP(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Result marshalling (roundtrip via capabilities.json)
+// Result marshaling (roundtrip via capabilities.json)
 // ---------------------------------------------------------------------------
 
 func TestResultJSON(t *testing.T) {

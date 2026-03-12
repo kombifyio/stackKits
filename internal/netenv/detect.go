@@ -206,17 +206,17 @@ func FormatEnvironment(env models.NetworkEnvironment) string {
 func SuggestDomain(env models.NetworkEnvironment, currentDomain string) (domain string, reason string) {
 	switch env {
 	case models.NetEnvCloud:
-		return "kombify.me", "deployed via kombify Cloud — using kombify.me for public access"
+		return models.DomainKombifyMe, "deployed via kombify Cloud — using kombify.me for public access"
 	case models.NetEnvVPS:
-		if currentDomain == "" || currentDomain == "homelab" || currentDomain == "stack.local" ||
+		if currentDomain == "" || currentDomain == models.DomainHomelab || currentDomain == "stack.local" ||
 			strings.HasSuffix(currentDomain, ".local") || strings.HasSuffix(currentDomain, ".lab") ||
 			strings.HasSuffix(currentDomain, ".lan") || strings.HasSuffix(currentDomain, ".home") {
-			return "kombify.me", fmt.Sprintf("running on a VPS (public server) — local domain '%s' won't be reachable from outside", currentDomain)
+			return models.DomainKombifyMe, fmt.Sprintf("running on a VPS (public server) — local domain '%s' won't be reachable from outside", currentDomain)
 		}
 		return currentDomain, ""
 	case models.NetEnvHome:
 		if currentDomain == "" {
-			return "home.lab", "home network detected — using local domain"
+			return models.DomainHomeLab, "home network detected — using local domain"
 		}
 		return currentDomain, ""
 	default:

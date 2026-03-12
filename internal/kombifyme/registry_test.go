@@ -26,7 +26,7 @@ func TestRegisterInstance(t *testing.T) {
 		assert.Len(t, reg.Services, 1)
 
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(RegistryResponse{
+		_ = json.NewEncoder(w).Encode(RegistryResponse{
 			InstanceID: "test-instance",
 			Status:     "registered",
 		})

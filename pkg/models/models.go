@@ -84,6 +84,11 @@ const (
 	ReverseProxyStandalone = "standalone" // StackKit deploys its own Traefik
 	ReverseProxyDokploy    = "dokploy"    // Platform services use Dokploy's Traefik
 	ReverseProxyCoolify    = "coolify"    // Platform services use Coolify's Traefik
+
+	// Domain constants
+	DomainKombifyMe = "kombify.me"
+	DomainHomelab   = "homelab"
+	DomainHomeLab   = "home.lab"
 )
 
 // ToolRole represents the role of a tool within a StackKit (v5).

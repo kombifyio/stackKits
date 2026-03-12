@@ -259,11 +259,11 @@ func bcryptHash(password string) (string, error) {
 //   - Monitoring = tier-dependent
 //
 // Per-service overrides can be applied via spec.Services[name]["enabled"].
-func generateTfvarsJSON(spec *models.StackSpec) ([]byte, error) {
+func generateTfvarsJSON(spec *models.StackSpec) ([]byte, error) { //nolint:gocyclo
 	vars := make(map[string]interface{})
 
 	// Domain
-	domain := "homelab"
+	domain := models.DomainHomelab
 	if spec.Domain != "" {
 		domain = spec.Domain
 	}
@@ -277,7 +277,7 @@ func generateTfvarsJSON(spec *models.StackSpec) ([]byte, error) {
 	// Network environment: check capabilities written by `stackkit prepare`
 	// or detect on-the-fly if prepare wasn't run
 	caps := loadDockerCapabilities()
-	netEnv := models.NetEnvUnknown
+	var netEnv models.NetworkEnvironment
 	if caps != nil && caps.NetworkEnv != "" {
 		netEnv = caps.NetworkEnv
 	} else {
@@ -309,7 +309,7 @@ func generateTfvarsJSON(spec *models.StackSpec) ([]byte, error) {
 	}
 
 	// Access mode detection
-	isLocalMode := domain == "" || domain == "homelab" || domain == "home.lab" || domain == "stack.local" ||
+	isLocalMode := domain == "" || domain == models.DomainHomelab || domain == models.DomainHomeLab || domain == "stack.local" ||
 		strings.HasSuffix(domain, ".local") || strings.HasSuffix(domain, ".lan") ||
 		strings.HasSuffix(domain, ".home") || strings.HasSuffix(domain, ".internal") ||
 		strings.HasSuffix(domain, ".test") || strings.HasSuffix(domain, ".lab")
@@ -318,7 +318,7 @@ func generateTfvarsJSON(spec *models.StackSpec) ([]byte, error) {
 	// Local mode: deploy dnsmasq for *.home.lab resolution
 	// Two-level domain required by TinyAuth (rejects single-level TLDs)
 	if isLocalMode {
-		domain = "home.lab"
+		domain = models.DomainHomeLab
 		vars["domain"] = domain
 		vars["enable_dnsmasq"] = true
 		if len(spec.Nodes) > 0 && spec.Nodes[0].IP != "" {

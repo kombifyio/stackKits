@@ -696,7 +696,7 @@ func verifyServiceURLs(ctx context.Context, spec *models.StackSpec) {
 
 	domain := spec.Domain
 	if domain == "" {
-		domain = "home.lab"
+		domain = models.DomainHomeLab
 	}
 
 	// Build the primary test URL (dashboard)
@@ -741,7 +741,7 @@ func verifyServiceURLs(ctx context.Context, spec *models.StackSpec) {
 	if caps != nil && (caps.NetworkEnv == models.NetEnvVPS || caps.NetworkEnv == models.NetEnvCloud) {
 		// On a VPS/cloud with local domains — this is the root cause
 		if strings.HasSuffix(domain, ".local") || strings.HasSuffix(domain, ".lab") ||
-			strings.HasSuffix(domain, ".lan") || strings.HasSuffix(domain, ".home") || domain == "homelab" {
+			strings.HasSuffix(domain, ".lan") || strings.HasSuffix(domain, ".home") || domain == models.DomainHomelab {
 			printError("Local domain '%s' is not accessible on a public server", domain)
 			fmt.Println()
 			printInfo("Your server is a VPS/cloud instance but is configured with a local domain.")
