@@ -75,6 +75,20 @@ func isKombifyCloud() bool {
 	return false
 }
 
+// GetCloudUserEmail returns the authenticated user's email when running in
+// kombify Cloud context. The email is injected by the Cloud platform via the
+// KOMBIFY_USER_EMAIL environment variable before executing the CLI.
+//
+// Returns an empty string when:
+//   - Not running in kombify Cloud context
+//   - KOMBIFY_USER_EMAIL is not set
+func GetCloudUserEmail() string {
+	if !isKombifyCloud() {
+		return ""
+	}
+	return strings.TrimSpace(os.Getenv("KOMBIFY_USER_EMAIL"))
+}
+
 // getPublicIP fetches the external IP using a public API.
 func getPublicIP(ctx context.Context) string {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)

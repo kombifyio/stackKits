@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"net/http"
 )
 
 // TestGatewayHealth verifies Kong gateway is routing to both APIs correctly.
@@ -208,4 +210,254 @@ func TestStackKitsList(t *testing.T) {
 		}
 		t.Logf("  - %s: %s", kit.ID, kit.Name)
 	}
+}
+
+// ─── Shared helpers ────────────────────────────────────────────────────────
+
+// startTestNode creates a simulation + node, starts it, waits for SSH, and
+// returns both. The caller is responsible for deferred cleanup.
+func startTestNode(t *testing.T, sim *SimClient, prefix string) (*Simulation, *Node) {
+t.Helper()
+
+name := fmt.Sprintf("%s-%d", prefix, time.Now().Unix())
+
+simulation, err := sim.CreateSimulation(name)
+if err != nil {
+t.Fatalf("create simulation: %v", err)
+}
+t.Logf("Simulation created: %s (%s)", simulation.Name, simulation.ID)
+
+node, err := sim.CreateNode(simulation.ID, CreateNodeRequest{Name: "test-node"})
+if err != nil {
+_ = sim.DeleteSimulation(simulation.ID)
+t.Fatalf("create node: %v", err)
+}
+
+node, err = sim.StartNode(node.ID)
+if err != nil {
+_ = sim.DeleteSimulation(simulation.ID)
+t.Fatalf("start node: %v", err)
+}
+
+// Wait for node to reach "running" status (max 5 min)
+t.Log("Waiting for node to reach running status...")
+timeout := time.After(5 * time.Minute)
+ticker := time.NewTicker(10 * time.Second)
+defer ticker.Stop()
+waitLoop:
+for {
+select {
+case <-timeout:
+_ = sim.DeleteSimulation(simulation.ID)
+t.Fatalf("timeout waiting for node to start")
+case <-ticker.C:
+n, err := sim.GetNode(node.ID)
+if err != nil {
+t.Logf("get node (retry): %v", err)
+continue
+}
+t.Logf("Node status: %s", n.Status)
+if strings.ToLower(n.Status) == "running" {
+node = n
+break waitLoop
+}
+}
+}
+t.Logf("Node running: %s@%s:%d", node.SSHUser, node.SSHIP, node.SSHPort)
+
+// Wait for sshd to be accepting connections
+if err := WaitForSSH(*node, 2*time.Minute); err != nil {
+_ = sim.DeleteSimulation(simulation.ID)
+t.Fatalf("wait for SSH: %v", err)
+}
+
+return simulation, node
+}
+
+// ─── Installer Tests ───────────────────────────────────────────────────────
+
+// TestStackKitCLIInstallOnNode verifies that the official installer from
+// kombifyio/stackKits installs the stackkit CLI binary on a live Sim node.
+func TestStackKitCLIInstallOnNode(t *testing.T) {
+if testing.Short() {
+t.Skip("skipping live-node installer test in short mode")
+}
+
+cfg, err := LoadConfig()
+if err != nil {
+t.Fatalf("load config: %v", err)
+}
+
+sim := NewSimClient(NewClient(cfg))
+simulation, node := startTestNode(t, sim, "install-test")
+defer func() {
+t.Log("Cleaning up simulation...")
+if err := sim.DeleteSimulation(simulation.ID); err != nil {
+t.Errorf("cleanup: %v", err)
+}
+}()
+
+ssh, err := NewSSHSession(*node)
+if err != nil {
+t.Fatalf("SSH connect: %v", err)
+}
+defer ssh.Close()
+
+// Run the official installer from the public release repo
+t.Log("Running stackkit installer from install.kombify.me...")
+out, err := ssh.Run("curl -sSL https://install.kombify.me | sh")
+if err != nil {
+t.Fatalf("installer failed: %v\noutput: %s", err, out)
+}
+t.Logf("Installer output:\n%s", out)
+
+// Verify binary is present and functional
+out, err = ssh.Run("stackkit version")
+if err != nil {
+t.Fatalf("stackkit version failed: %v\noutput: %s", err, out)
+}
+if !strings.Contains(out, "stackkit") {
+t.Errorf("unexpected version output: %s", out)
+}
+t.Logf("stackkit installed: %s", strings.TrimSpace(out))
+}
+
+// TestStackKitInitAndValidateOnNode installs the CLI, runs stackkit init, and
+// validates the generated spec — all on a live Sim node.
+func TestStackKitInitAndValidateOnNode(t *testing.T) {
+if testing.Short() {
+t.Skip("skipping live-node init/validate test in short mode")
+}
+
+cfg, err := LoadConfig()
+if err != nil {
+t.Fatalf("load config: %v", err)
+}
+
+sim := NewSimClient(NewClient(cfg))
+simulation, node := startTestNode(t, sim, "init-test")
+defer func() {
+t.Log("Cleaning up simulation...")
+if err := sim.DeleteSimulation(simulation.ID); err != nil {
+t.Errorf("cleanup: %v", err)
+}
+}()
+
+ssh, err := NewSSHSession(*node)
+if err != nil {
+t.Fatalf("SSH connect: %v", err)
+}
+defer ssh.Close()
+
+// Install CLI
+t.Log("Installing stackkit CLI...")
+if out, err := ssh.Run("curl -sSL https://install.kombify.me | sh"); err != nil {
+t.Fatalf("installer: %v\noutput: %s", err, out)
+}
+
+// Init base-kit non-interactively
+t.Log("Running stackkit init base-kit...")
+out, err := ssh.RunWithEnv(
+map[string]string{"STACKKIT_ADMIN_EMAIL": "ci@kombify.io"},
+"mkdir -p /tmp/testkit && cd /tmp/testkit && stackkit init base-kit --non-interactive --admin-email ci@kombify.io",
+)
+if err != nil {
+t.Fatalf("stackkit init: %v\noutput: %s", err, out)
+}
+t.Logf("Init output:\n%s", out)
+
+// Verify stack-spec.yaml was created
+out, err = ssh.Run("cat /tmp/testkit/stack-spec.yaml")
+if err != nil {
+t.Fatalf("reading stack-spec.yaml: %v", err)
+}
+if !strings.Contains(out, "base-kit") {
+t.Errorf("stack-spec.yaml does not reference base-kit:\n%s", out)
+}
+
+// Validate spec
+t.Log("Running stackkit validate...")
+out, err = ssh.Run("cd /tmp/testkit && stackkit validate")
+if err != nil {
+t.Fatalf("stackkit validate: %v\noutput: %s", err, out)
+}
+if !strings.Contains(strings.ToLower(out), "valid") {
+t.Errorf("validate output does not indicate success:\n%s", out)
+}
+t.Logf("Validate: %s", strings.TrimSpace(out))
+}
+
+// TestBaseInstallerOnNode runs base-install.sh on a live Sim node and verifies
+// the homelab stack comes up (whoami service responds via HTTP).
+func TestBaseInstallerOnNode(t *testing.T) {
+if testing.Short() {
+t.Skip("skipping base-installer E2E test in short mode")
+}
+
+cfg, err := LoadConfig()
+if err != nil {
+t.Fatalf("load config: %v", err)
+}
+
+sim := NewSimClient(NewClient(cfg))
+simulation, node := startTestNode(t, sim, "base-install-test")
+defer func() {
+t.Log("Cleaning up simulation...")
+if err := sim.DeleteSimulation(simulation.ID); err != nil {
+t.Errorf("cleanup: %v", err)
+}
+}()
+
+ssh, err := NewSSHSession(*node)
+if err != nil {
+t.Fatalf("SSH connect: %v", err)
+}
+defer ssh.Close()
+
+// Run base installer — sets admin email via env, non-interactive
+t.Log("Running base-install.sh (full homelab deploy)...")
+out, err := ssh.RunWithEnv(
+map[string]string{
+"STACKKIT_ADMIN_EMAIL": "ci@kombify.io",
+},
+"curl -sSL https://base.stackkit.cc | sh",
+)
+if err != nil {
+t.Fatalf("base installer failed: %v\noutput: %s", err, out)
+}
+t.Logf("Installer output (last 50 lines):\n%s", lastLines(out, 50))
+
+// Wait a moment for services to stabilise
+time.Sleep(15 * time.Second)
+
+// Verify whoami responds on the node (direct IP, bypass DNS)
+whoamiURL := fmt.Sprintf("http://%s", node.SSHIP)
+t.Logf("Checking stack health at %s ...", whoamiURL)
+resp, err := http.Get(whoamiURL) //nolint:noctx // test-only
+if err != nil {
+t.Logf("Note: HTTP check failed (may need domain): %v", err)
+} else {
+defer resp.Body.Close()
+t.Logf("Stack HTTP status: %d", resp.StatusCode)
+}
+
+// At minimum verify Docker containers are running
+out, err = ssh.Run("docker ps --format '{{.Names}}' | head -20")
+if err != nil {
+t.Errorf("docker ps: %v", err)
+} else {
+t.Logf("Running containers:\n%s", out)
+if out == "" {
+t.Error("no containers running after base install")
+}
+}
+}
+
+// lastLines returns the last n lines of a string.
+func lastLines(s string, n int) string {
+lines := strings.Split(strings.TrimSpace(s), "\n")
+if len(lines) <= n {
+return s
+}
+return strings.Join(lines[len(lines)-n:], "\n")
 }

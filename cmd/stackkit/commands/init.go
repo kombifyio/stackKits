@@ -8,6 +8,7 @@ import (
 	"sort"
 
 	"github.com/kombifyio/stackkits/internal/config"
+	"github.com/kombifyio/stackkits/internal/netenv"
 	"github.com/kombifyio/stackkits/pkg/models"
 	"github.com/spf13/cobra"
 )
@@ -135,19 +136,33 @@ func selectComputeTier(p *prompter, stackkit *models.StackKit) (string, error) {
 }
 
 // promptOptionalConfig asks for domain, email, and admin email when running interactively.
+// When running in kombify Cloud context with KOMBIFY_USER_EMAIL set, emails are
+// auto-filled and the user is not prompted for them.
 func promptOptionalConfig(p *prompter) (domain, email, adminEmail string) {
+	// Priority 1: explicit --admin-email flag
+	if initAdminEmail != "" {
+		adminEmail = initAdminEmail
+	}
+
+	// Priority 2: kombify Cloud injects KOMBIFY_USER_EMAIL
+	if adminEmail == "" {
+		if cloudEmail := netenv.GetCloudUserEmail(); cloudEmail != "" {
+			adminEmail = cloudEmail
+			printInfo("Using Zitadel account email: %s", adminEmail)
+		}
+	}
+
+	// Non-interactive or no TTY: return what we have (flag/env), no prompts
 	if p == nil || initNonInteractive {
-		return "", "", initAdminEmail
+		return "", adminEmail, adminEmail
 	}
 
 	fmt.Println()
 	printInfo("Optional configuration (press Enter to skip):")
 	fmt.Println()
 
-	// Admin email first — other defaults can derive from it
-	if initAdminEmail != "" {
-		adminEmail = initAdminEmail
-	} else {
+	// Only prompt for admin email if not already set via flag or Cloud env
+	if adminEmail == "" {
 		a, err := p.inputString("Admin email (for login accounts)", "")
 		if err == nil {
 			adminEmail = a
@@ -159,12 +174,18 @@ func promptOptionalConfig(p *prompter) (domain, email, adminEmail string) {
 		domain = d
 	}
 
-	// Let's Encrypt email defaults to admin email
-	defaultEmail := adminEmail
-	e, err := p.inputString("Email (for Let's Encrypt certificates)", defaultEmail)
-	if err == nil {
-		email = e
+	// Let's Encrypt email defaults to admin email; skip prompt if already set via Cloud
+	if adminEmail != "" && netenv.GetCloudUserEmail() != "" {
+		// Cloud context: LE email = Zitadel email, no prompt needed
+		email = adminEmail
+	} else {
+		defaultEmail := adminEmail
+		e, err := p.inputString("Email (for Let's Encrypt certificates)", defaultEmail)
+		if err == nil {
+			email = e
+		}
 	}
+
 	return domain, email, adminEmail
 }
 

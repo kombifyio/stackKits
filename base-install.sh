@@ -32,7 +32,7 @@ HOMELAB_DIR="$HOME/my-homelab"
 
 # --- Admin email prompt (supports env var override) -------------------------
 
-ADMIN_EMAIL="${STACKKIT_ADMIN_EMAIL:-}"
+ADMIN_EMAIL="${STACKKIT_ADMIN_EMAIL:-${KOMBIFY_USER_EMAIL:-}}"
 if [ -z "$ADMIN_EMAIL" ]; then
   echo ""
   printf '  Admin email (for login accounts): '
