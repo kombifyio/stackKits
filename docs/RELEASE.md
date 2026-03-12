@@ -75,6 +75,13 @@ Currently synced:
 
 ### Manual Sync
 
+The sync script handles authentication automatically with multiple fallbacks:
+1. `PUBLIC_REPO_TOKEN` env var (used in CI)
+2. `gh auth token` / `gh.exe auth token` (local dev)
+3. Doppler `GITHUB_PAT` (fallback)
+
+The script also syncs `v*` tags from the private repo to the public repo.
+
 ```bash
 # Preview what would change (no push)
 ./scripts/sync-public.sh --dry-run
@@ -88,7 +95,17 @@ PUBLIC_REPO_TOKEN=ghp_... ./scripts/sync-public.sh
 
 ### CI Requirements
 
-The sync workflow requires a `PUBLIC_REPO_TOKEN` secret on the private repo — a GitHub PAT with write access to `kombifyio/stackKits`.
+The sync workflow requires a `PUBLIC_REPO_TOKEN` secret on the private repo — a GitHub PAT with write access to `kombifyio/stackKits`. The PAT is stored in Doppler (`kombination-meta` project, key `GITHUB_PAT`).
+
+To set or refresh the secret:
+
+```bash
+# Get PAT from Doppler
+GITHUB_PAT=$(doppler secrets get GITHUB_PAT --plain --project kombination-meta --config prd --no-read-env)
+
+# Set as GitHub Actions secret on the private repo
+gh secret set PUBLIC_REPO_TOKEN --body "$GITHUB_PAT" --repo KombiverseLabs/kombify-StackKits
+```
 
 ## Creating a Release
 
@@ -168,3 +185,31 @@ git remote -v
 # Add public remote if missing:
 git remote add public https://github.com/kombifyio/stackKits.git
 ```
+
+## Troubleshooting
+
+### Sync script fails with auth error
+
+The script tries multiple auth sources. If all fail:
+1. Check `gh auth status` — you may need to re-authenticate
+2. Verify the Doppler PAT is valid: `doppler secrets get GITHUB_PAT --plain --project kombination-meta --config prd --no-read-env | head -c 10`
+3. On Windows/Git Bash, `gh auth token` may not work (can't access Windows keyring). The script falls back to `gh.exe auth token` and Doppler automatically.
+
+### Sync script hangs (pager issue)
+
+The script uses `export GIT_PAGER=cat` and `--no-pager` flags to prevent git commands from opening `less`. If it still hangs, ensure you're running in a non-interactive terminal.
+
+### CI lint fails after adding new code
+
+Run `golangci-lint run` locally before pushing. The config is at [.golangci.yml](../.golangci.yml). Common issues:
+- `goconst`: Strings used 3+ times need constants (add to `pkg/models/models.go`)
+- `errcheck`: Check all error returns (except those in `.golangci.yml` exclusions)
+- `misspell`: US English spelling only (`marshaling` not `marshalling`)
+
+### CUE validation fails in CI
+
+The `base-kit` has its own `cue.mod/module.cue` which can shadow the root module definition. This is a known issue. CUE validation and module test failures are pre-existing and tracked separately from the release process.
+
+### Release worked but CI shows failure
+
+The Release workflow (`release.yml`) is triggered by tag pushes and runs independently from CI (`ci.yml`). A release can succeed even if CI fails. Check `gh release view <tag> --repo kombifyio/stackKits` to confirm the release exists.
