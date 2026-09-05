@@ -31,6 +31,7 @@ var (
 	initOutputDir                 string
 	initForce                     bool
 	initExpectedSpecHash          string
+	initCandidateSpec             string
 	initNonInteractive            bool
 	// Native v2 authoring overrides (validated by the CUE authority).
 	initPlatform           string
@@ -109,6 +110,7 @@ func init() {
 	initCmd.Flags().StringVarP(&initOutputDir, "output", "o", "deploy", "v0.6 compatibility only: output directory for generated files")
 	initCmd.Flags().BoolVarP(&initForce, "force", "f", false, "v0.6 compatibility only: overwrite existing files")
 	initCmd.Flags().StringVar(&initExpectedSpecHash, "expected-spec-hash", "", "Native v2 only: exact current CUE-normalized spec hash required for replacement")
+	initCmd.Flags().StringVar(&initCandidateSpec, "candidate-spec", "", "Native v2 only: preserve a complete CUE-valid StackSpec from a file or - for stdin; excludes authoring overrides")
 	initCmd.Flags().StringVar(&initPlatform, "platform", "", "Native v2 only: selected-provider platform adapter (install.platform.providerRef, e.g. coolify or komodo)")
 	initCmd.Flags().StringSliceVar(&initUseCases, "use-case", nil, "Optional kit workloads to enable (e.g. photos,files,vault); v2alpha2 requires explicit alternatives")
 	initCmd.Flags().StringSliceVar(&initEnableCapabilities, "enable", nil, "Native v2 only: optional kit capabilities to enable (capabilities.enable, e.g. lan-dns,internal-pki)")
@@ -516,6 +518,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 	if strings.TrimSpace(initExpectedSpecHash) != "" {
 		return fmt.Errorf("--expected-spec-hash is a native Architecture v2 authoring contract and is unavailable on the exact-v0.6 compatibility line")
+	}
+	if strings.TrimSpace(initCandidateSpec) != "" {
+		return fmt.Errorf("--candidate-spec requires native Architecture v2")
 	}
 	if commandFlagChanged(cmd, "api-version") || len(initModuleComputeProfiles)+len(initModuleStorageProfiles)+len(initModuleAcceleratorProfiles)+len(initUseCaseAlternatives) > 0 {
 		return fmt.Errorf("module profile authoring is unavailable on the exact-v0.6 compatibility line")

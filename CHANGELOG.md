@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Native `init --candidate-spec <file|->` preserves a complete approved v2
+  StackSpec through the existing CUE validation, compare-and-swap persistence
+  and local owner custody. It refuses competing authoring overrides instead
+  of reconstructing and losing workload, profile or placement decisions.
+
 - Cloud public-edge executor contracts preserve the canonical `ingressAuth`
   route policy through strict decoding and the runtime policy digest. Native
   application authentication no longer blocks Cloud Kit generation; unknown
