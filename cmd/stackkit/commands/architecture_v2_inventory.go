@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/kombifyio/stackkits/internal/generationartifact"
 	"github.com/kombifyio/stackkits/internal/hostconformance"
 	"github.com/kombifyio/stackkits/internal/localevidence"
 	"github.com/kombifyio/stackkits/internal/resolvedplan"
@@ -91,6 +92,48 @@ func locateArchitectureV2Inventory(wd, explicit string) (data []byte, path strin
 func readArchitectureV2Inventory(wd, explicit string) ([]byte, error) {
 	data, _, err := locateArchitectureV2Inventory(wd, explicit)
 	return data, err
+}
+
+// inventoryForGeneratedPlan retains only the generated local free-space sample
+// for identity verification. Every other current fact remains an input to CUE;
+// the independently observed resolution still governs current Apply readiness.
+func inventoryForGeneratedPlan(wd string, rawSpec, inventory []byte, options architectureV2ExecutionCLIOptions, plan generationartifact.VerifiedPlan) ([]byte, bool, error) {
+	if options.inventoryPath != "" {
+		return inventory, false, nil
+	}
+	nodeRef, _, err := localInventoryNode(wd, rawSpec, options)
+	if err != nil {
+		return nil, false, err
+	}
+	var snapshot struct {
+		Source struct {
+			Inventory struct {
+				Document struct {
+					Nodes map[string]struct {
+						StorageCapacity map[string]any `json:"storageCapacity"`
+					} `json:"nodes"`
+				} `json:"document"`
+			} `json:"inventory"`
+		} `json:"source"`
+	}
+	if err := json.Unmarshal(plan.Canonical(), &snapshot); err != nil {
+		return nil, false, err
+	}
+	document, err := decodeInventoryDocument(inventory)
+	if err != nil {
+		return nil, false, err
+	}
+	nodes, _ := document["nodes"].(map[string]any)
+	node, _ := nodes[nodeRef].(map[string]any)
+	capacity, _ := node["storageCapacity"].(map[string]any)
+	previous := snapshot.Source.Inventory.Document.Nodes[nodeRef].StorageCapacity
+	previousFree, exists := previous["freeGiB"]
+	if !exists || capacity == nil || capacity["sourceRef"] != previous["sourceRef"] || capacity["path"] != previous["path"] || capacity["freeGiB"] == previousFree {
+		return inventory, false, nil
+	}
+	capacity["freeGiB"] = previousFree
+	encoded, err := json.Marshal(document)
+	return encoded, err == nil, err
 }
 
 func attestLocalInventoryFacts(

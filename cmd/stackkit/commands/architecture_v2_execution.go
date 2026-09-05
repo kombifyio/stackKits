@@ -447,6 +447,24 @@ func (g architectureV2ExecutionGate) preflightV2(wd string, rawSpec []byte, mode
 		if err != nil {
 			return err
 		}
+		if mode != architectureV2Generate {
+			// Disk usage can change merely from writing generated artifacts. Keep
+			// fresh admission separate from the exact generated input identity.
+			stableInventory, changed, err := inventoryForGeneratedPlan(wd, rawSpec, inventory, options, persisted)
+			if err != nil {
+				return err
+			}
+			if changed {
+				currentResolution, err = authority.ResolveCurrent(architecturev2.ResolveInput{StackSpec: rawSpec, Inventory: stableInventory})
+				if err != nil {
+					return err
+				}
+				resolved, err = currentResolution.Result()
+				if err != nil {
+					return err
+				}
+			}
+		}
 		if err := persisted.VerifyCurrentResolution(resolved.CanonicalPlan); err != nil {
 			return err
 		}
@@ -458,6 +476,9 @@ func (g architectureV2ExecutionGate) preflightV2(wd string, rawSpec []byte, mode
 		// at this boundary so PLAN -> APPLY cannot mutate a newly resolved plan
 		// after an orchestrator approved an older one.
 		if mode == architectureV2Apply {
+			if err := current.RequireReady(generationartifact.ExecutionPhaseApply); err != nil {
+				return err
+			}
 			if err := persisted.RequireExpectedPlanHash(options.expectedPlanHash); err != nil {
 				return err
 			}

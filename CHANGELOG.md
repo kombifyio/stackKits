@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Plan inspection preserves the generated local storage-capacity sample for
+  exact input identity while checking every other current input. Ordinary disk
+  usage changes no longer invalidate generated artifacts; Apply still requires
+  readiness from fresh host observations before execution.
+
 - Native `init --candidate-spec <file|->` preserves a complete approved v2
   StackSpec through the existing CUE validation, compare-and-swap persistence
   and local owner custody. It refuses competing authoring overrides instead
