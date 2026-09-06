@@ -114,7 +114,13 @@ func (c *OwnerCollector) ProducerTrust() (applyevidence.Producer, []byte, error)
 // CollectApplyEvidence implements applyevidence.Collector. It answers every
 // expectation in the request from locally gathered facts, signs each receipt
 // with the owner key, and returns one canonical sealed bundle.
-func (c *OwnerCollector) CollectApplyEvidence(ctx context.Context, collection applyevidence.CollectionRequest) ([]byte, error) {
+func (c *OwnerCollector) CollectApplyEvidence(ctx context.Context, collection applyevidence.CollectionRequest) (data []byte, returnErr error) {
+	stage := "validate collection request"
+	defer func() {
+		if returnErr != nil {
+			returnErr = &DiagnosticError{stage: stage, cause: returnErr}
+		}
+	}()
 	if c == nil {
 		return nil, errors.New("localevidence: collector is nil")
 	}
@@ -123,6 +129,7 @@ func (c *OwnerCollector) CollectApplyEvidence(ctx context.Context, collection ap
 	}
 
 	producer := applyevidence.Producer{ID: producerID, Version: c.version, KeyID: c.key.KeyID}
+	stage = "validate collection clock window"
 	producerNow := c.now().UTC()
 	if collection.EvaluatedAt.Before(producerNow.Add(-collectionClockSkew)) ||
 		collection.EvaluatedAt.After(producerNow.Add(collectionClockSkew)) {
@@ -133,12 +140,20 @@ func (c *OwnerCollector) CollectApplyEvidence(ctx context.Context, collection ap
 
 	receipts := make([]applyevidence.Receipt, 0, len(collection.Request.Expectations))
 	for _, expectation := range collection.Request.Expectations {
+		stage = "select requirement observer"
 		observer, known := c.observers[expectation.RequirementKind]
 		if !known {
 			return nil, fmt.Errorf(
 				"localevidence: requirement kind %q cannot be observed on this host; refusing to sign unobserved evidence for %q",
 				expectation.RequirementKind, expectation.RequirementID,
 			)
+		}
+		stage = "observe requirement"
+		switch expectation.RequirementKind {
+		case "host":
+			stage = "observe host"
+		case "secret":
+			stage = "observe local secret custody"
 		}
 		facts, err := observer.Observe(ctx, expectation)
 		if err != nil {
@@ -147,10 +162,12 @@ func (c *OwnerCollector) CollectApplyEvidence(ctx context.Context, collection ap
 				expectation.RequirementKind, expectation.RequirementID, err,
 			)
 		}
+		stage = "bind observation facts"
 		observationRef, err := observationReference(expectation, facts)
 		if err != nil {
 			return nil, err
 		}
+		stage = "sign observation receipt"
 		receipt, err := applyevidence.SignReceipt(applyevidence.ReceiptInput{
 			Request:        collection.Request,
 			Expectation:    expectation,
@@ -167,12 +184,14 @@ func (c *OwnerCollector) CollectApplyEvidence(ctx context.Context, collection ap
 		receipts = append(receipts, receipt)
 	}
 
+	stage = "seal evidence bundle"
 	bundle, err := applyevidence.SealBundle(
 		collection.Request, collection.ManifestHash, collection.Executor, receipts,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("localevidence: seal evidence bundle: %w", err)
 	}
+	stage = "encode evidence bundle"
 	canonical, err := applyevidence.MarshalCanonical(bundle)
 	if err != nil {
 		return nil, fmt.Errorf("localevidence: marshal evidence bundle: %w", err)

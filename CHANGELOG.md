@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Failed local Apply evidence collection reports fixed probe/collection stages
+  on stderr through joined errors, without exposing arbitrary wrapped causes or
+  secret material. Apply refusal and exit classification remain unchanged.
+
 - Plan inspection preserves the generated local storage-capacity sample for
   exact input identity while checking every other current input. Ordinary disk
   usage changes no longer invalidate generated artifacts; Apply still requires

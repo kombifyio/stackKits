@@ -57,27 +57,27 @@ func (p LocalProbe) Observe(ctx context.Context) (Observation, error) {
 	}
 	osRelease, err := source.ReadFile("/etc/os-release")
 	if err != nil {
-		return Observation{}, fmt.Errorf("read /etc/os-release: %w", err)
+		return Observation{}, &ProbeError{stage: "read /etc/os-release", cause: err}
 	}
 	osFacts, err := parseOSRelease(osRelease)
 	if err != nil {
-		return Observation{}, err
+		return Observation{}, &ProbeError{stage: "parse /etc/os-release", cause: err}
 	}
 	architecture := normalizeArchitecture(p.Architecture)
 	if architecture == "" {
 		architecture = normalizeArchitecture(runtime.GOARCH)
 	}
 	if architecture != "amd64" && architecture != "arm64" {
-		return Observation{}, fmt.Errorf("unsupported host architecture %q", architecture)
+		return Observation{}, &ProbeError{stage: "validate host architecture", cause: fmt.Errorf("unsupported host architecture %q", architecture)}
 	}
 	microarchitectureLevel := observeAMD64MicroarchitectureLevel(source, architecture)
 	kernelOutput, err := source.Run(ctx, "uname", "-r")
 	if err != nil {
-		return Observation{}, fmt.Errorf("read kernel release: %w", err)
+		return Observation{}, &ProbeError{stage: "read kernel release", cause: err}
 	}
 	kernel := strings.TrimSpace(string(kernelOutput))
 	if kernel == "" || strings.ContainsAny(kernel, " \t\r\n") {
-		return Observation{}, errors.New("kernel release probe returned no canonical token")
+		return Observation{}, &ProbeError{stage: "validate kernel release", cause: errors.New("kernel release probe returned no canonical token")}
 	}
 	runtimeFacts := detectRuntime(ctx, source)
 	virtualization := detectVirtualization(ctx, source)

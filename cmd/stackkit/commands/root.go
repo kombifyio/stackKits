@@ -161,7 +161,11 @@ func Execute() error {
 		rolloutPhaseSpans = nil
 		machineOutputCommandActive = false
 	}()
-	return rootCmd.Execute()
+	err := rootCmd.Execute()
+	if diagnostic := localApplyDiagnostic(err); diagnostic != "" {
+		rootCmd.PrintErrln("Apply evidence diagnostic: " + diagnostic)
+	}
+	return err
 }
 
 func init() {

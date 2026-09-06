@@ -58,11 +58,18 @@ func (o *HostObserver) Observe(ctx context.Context, expectation applyevidence.Ex
 	}
 	for _, check := range observation.Checks {
 		if check.Status != "pass" {
-			return nil, fmt.Errorf(
+			stage := "host conformance check not verified"
+			switch check.ID {
+			case "container-runtime":
+				stage = "container runtime not verified"
+			case "host-facts-complete":
+				stage = "required host facts not verified"
+			}
+			return nil, &DiagnosticError{stage: stage, cause: fmt.Errorf(
 				"host check %q is not verified (status %q); refusing satisfied Apply evidence",
 				check.ID,
 				check.Status,
-			)
+			)}
 		}
 		facts["check."+check.ID+".status"] = check.Status
 	}
