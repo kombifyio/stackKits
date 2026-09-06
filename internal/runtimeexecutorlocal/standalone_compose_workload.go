@@ -95,15 +95,52 @@ func (o *osStandaloneComposeWorkloadOperations) ApplyWorkload(
 	if err != nil {
 		return SelectedPaaSApplyReceipt{}, err
 	}
+	// Container startup and application readiness share the existing Compose
+	// wait budget. A running container without a healthcheck is not HTTP-ready.
+	ctx, cancel := context.WithTimeout(ctx, 600*time.Second)
+	defer cancel()
 	if err := o.persist(project); err != nil {
 		return SelectedPaaSApplyReceipt{}, err
 	}
 	if _, err := o.runner.Run(ctx, standaloneComposeArgs(project, "up"), project.directory); err != nil {
 		return SelectedPaaSApplyReceipt{}, fmt.Errorf("standalone Docker Compose Apply did not complete: %w", err)
 	}
+	if err := o.waitForApplicationHTTP(ctx, project); err != nil {
+		return SelectedPaaSApplyReceipt{}, err
+	}
 	return SelectedPaaSApplyReceipt{
 		InstanceRef: deployment.InstanceRef, ArtifactDigest: deployment.ArtifactDigest, Status: "applied",
 	}, nil
+}
+
+func (o *osStandaloneComposeWorkloadOperations) waitForApplicationHTTP(ctx context.Context, project standaloneComposeProject) error {
+	portRaw, err := o.runner.Run(ctx, standaloneComposeArgs(project, "port"), project.directory)
+	if err != nil {
+		return fmt.Errorf("standalone Docker Compose readiness port observation failed: %w", err)
+	}
+	address, err := standaloneComposeLoopbackAddress(portRaw)
+	if err != nil {
+		return err
+	}
+	for {
+		status, probeErr := o.prober.Probe(ctx, "http://"+address+project.entry.HealthPath)
+		if err := ctx.Err(); err != nil {
+			return fmt.Errorf("standalone application readiness interrupted: %w", errors.Join(err, probeErr))
+		}
+		if probeErr == nil && (status == http.StatusOK || status == http.StatusFound) {
+			return nil
+		}
+		if probeErr == nil {
+			probeErr = fmt.Errorf("application returned HTTP status %d", status)
+		}
+		timer := time.NewTimer(time.Second)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return fmt.Errorf("standalone application readiness did not complete: %w", errors.Join(ctx.Err(), probeErr))
+		case <-timer.C:
+		}
+	}
 }
 
 func (o *osStandaloneComposeWorkloadOperations) ObserveWorkload(
