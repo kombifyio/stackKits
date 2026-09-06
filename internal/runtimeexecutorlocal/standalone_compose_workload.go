@@ -23,9 +23,8 @@ import (
 )
 
 const (
-	standaloneComposeAdapterRef     = "standalone-compose"
-	standaloneComposeModuleRef      = "stackkits-standalone-compose-runtime"
-	standaloneComposeRoutingNetwork = "stackkit-basement-core"
+	standaloneComposeAdapterRef = "standalone-compose"
+	standaloneComposeModuleRef  = "stackkits-standalone-compose-runtime"
 	// standaloneComposeHealthNetwork carries only the entry component of an
 	// unrouted workload so its loopback health port can bind.
 	standaloneComposeHealthNetwork = "stackkit-workload-health"
@@ -391,6 +390,14 @@ type standaloneComposeHealthcheck struct {
 func (o *osStandaloneComposeWorkloadOperations) render(
 	bundle architecturev2renderer.ApplicationDeliveryBundleDescriptor,
 ) ([]byte, []byte, map[string][]byte, error) {
+	routingNetwork := ""
+	if bundle.Route.ID != "" {
+		var err error
+		routingNetwork, err = standaloneComposeCoreNetwork(bundle.Route.CoreModuleRef)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+	}
 	document := standaloneComposeDocument{
 		Name:     "stackkit-" + bundle.WorkloadRef + "-" + bundle.NodeRef,
 		Services: map[string]standaloneComposeService{},
@@ -466,7 +473,7 @@ func (o *osStandaloneComposeWorkloadOperations) render(
 		if component.ID == bundle.EntryComponent {
 			service.Ports = []string{fmt.Sprintf("127.0.0.1::%d", component.HealthPort)}
 			if bundle.Route.ID != "" {
-				document.Networks["stackkit-routing"] = standaloneComposeNetwork{Name: standaloneComposeRoutingNetwork, External: true}
+				document.Networks["stackkit-routing"] = standaloneComposeNetwork{Name: routingNetwork, External: true}
 				service.Networks = append(service.Networks, "stackkit-routing")
 				service.Labels = standaloneComposeRouteLabels(bundle.Route)
 			} else {
@@ -516,6 +523,7 @@ func standaloneComposeVolumeOwnsPath(volumes []architecturev2renderer.Applicatio
 }
 
 func standaloneComposeRouteLabels(route architecturev2renderer.ApplicationDeliveryRouteDescriptor) map[string]string {
+	routingNetwork, _ := standaloneComposeCoreNetwork(route.CoreModuleRef) // validated before render or readback
 	router := "stackkit-" + route.ServiceRef
 	rule := "PathPrefix(`" + route.Path + "`)"
 	if route.Host != "" {
@@ -530,12 +538,13 @@ func standaloneComposeRouteLabels(route architecturev2renderer.ApplicationDelive
 	}
 	labels := map[string]string{
 		"traefik.enable":         "true",
-		"traefik.docker.network": standaloneComposeRoutingNetwork,
+		"traefik.docker.network": routingNetwork,
 		"traefik.http.routers." + router + ".entrypoints":                 entrypoint,
 		"traefik.http.routers." + router + ".rule":                        rule,
 		"traefik.http.services." + router + ".loadbalancer.server.port":   strconv.Itoa(route.TargetPort),
 		"traefik.http.services." + router + ".loadbalancer.server.scheme": route.UpstreamProtocol,
 		"io.stackkit.route.id":                                            route.ID,
+		"io.stackkit.route.core-module-ref":                               route.CoreModuleRef,
 		"io.stackkit.route.exposure":                                      route.Exposure,
 		"io.stackkit.route.protocol":                                      route.Protocol,
 		"io.stackkit.route.upstream-protocol":                             route.UpstreamProtocol,
@@ -771,17 +780,23 @@ func validateStandaloneComposeRouteReadback(
 				return errors.New("unrouted standalone workload gained route labels")
 			}
 		}
-		if _, exists := networks[standaloneComposeRoutingNetwork]; exists {
-			return errors.New("unrouted standalone workload joined the routing network")
+		for _, network := range []string{"stackkit-basement-core", "stackkit-cloud-core", "stackkit-cloud-core-standalone"} {
+			if _, exists := networks[network]; exists {
+				return errors.New("unrouted standalone workload joined a routing network")
+			}
 		}
 		return nil
+	}
+	routingNetwork, err := standaloneComposeCoreNetwork(route.CoreModuleRef)
+	if err != nil {
+		return err
 	}
 	for key, expected := range standaloneComposeRouteLabels(route) {
 		if labels[key] != expected {
 			return fmt.Errorf("standalone Compose route readback differs at label %q", key)
 		}
 	}
-	if _, exists := networks[standaloneComposeRoutingNetwork]; !exists {
+	if _, exists := networks[routingNetwork]; !exists {
 		return errors.New("standalone Compose route readback lacks the routing network")
 	}
 	return nil

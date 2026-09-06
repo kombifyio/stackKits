@@ -218,7 +218,13 @@ func verifyArchitectureV2LocalCloudState(
 	if offline {
 		return ownerSummary, nil, nil
 	}
-	operations, err := runtimeexecutorlocal.NewOSCloudCoreOperations(workspaceRoot)
+	newOperations := runtimeexecutorlocal.NewOSCloudCoreOperations
+	for _, target := range appliedRequest.RuntimeTargets {
+		if target.OwnerKind == "module" && target.ModuleRef == "stackkits-cloud-core-standalone-runtime" {
+			newOperations = runtimeexecutorlocal.NewOSCloudStandaloneCoreOperations
+		}
+	}
+	operations, err := newOperations(workspaceRoot)
 	if err != nil {
 		return ownerSummary, nil, err
 	}

@@ -19,6 +19,7 @@ import (
 
 var (
 	initAPIVersion                string
+	initCatalogDefaults           bool
 	initComputeTier               string
 	initModuleComputeProfiles     []string
 	initModuleStorageProfiles     []string
@@ -86,10 +87,10 @@ output switches remain available only to an explicitly versioned v0.6
 compatibility binary and are rejected by development and v0.7+ builds.
 
 Examples:
-  stackkit init basement-kit --use-case-alternative basement-core=standalone-lite --module-compute-profile stackkits-basement-core-lite-runtime=low
+  stackkit init basement-kit --use-case-alternative basement-core=standalone-compose --module-compute-profile stackkits-basement-core-lite-runtime=standard
   stackkit init basement-kit --api-version stackkit/v2alpha1 --compute-tier standard
   stackkit init ./basement-kit          v0.6 compatibility only: local definition path
-  stackkit init basement-kit --use-case-alternative basement-core=standalone --module-compute-profile stackkits-basement-core-runtime=standard --owner-source=local --non-interactive`,
+  stackkit init basement-kit --use-case-alternative basement-core=standalone-compose --module-compute-profile stackkits-basement-core-lite-runtime=standard --owner-source=local --non-interactive`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runInit,
 }
@@ -102,6 +103,7 @@ func init() {
 	initCmd.Flags().StringArrayVar(&initModuleStorageProfiles, "module-storage-profile", nil, "Native v2alpha2: module-id=storage-profile for a declared storage dimension")
 	initCmd.Flags().StringArrayVar(&initModuleAcceleratorProfiles, "module-accelerator-profile", nil, "Native v2alpha2: module-id=accelerator-profile for a declared accelerator dimension")
 	initCmd.Flags().StringArrayVar(&initUseCaseAlternatives, "use-case-alternative", nil, "Native v2alpha2: use-case-id=alternative; include required core workloads")
+	initCmd.Flags().BoolVar(&initCatalogDefaults, "catalog-defaults", false, "Accept CUE catalog defaults for omitted native alternatives and compute profiles; persist explicit intent")
 	initCmd.Flags().StringVar(&initHardwareProfile, "hardware-profile", "", "Device class for nodes[0].hardware.profile (standard, pi, gpu, storage). pi is a constrained homelab device, not Raspberry-only. Not auto-detected from inventory")
 	initCmd.Flags().StringVar(&initDomain, "domain", "", "Domain override for the generated stack spec")
 	initCmd.Flags().BoolVar(&initLocalDNS, "local-dns", false, "v0.6 compatibility only: use Kombify Point local DNS names")
@@ -522,7 +524,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	if strings.TrimSpace(initCandidateSpec) != "" {
 		return fmt.Errorf("--candidate-spec requires native Architecture v2")
 	}
-	if commandFlagChanged(cmd, "api-version") || len(initModuleComputeProfiles)+len(initModuleStorageProfiles)+len(initModuleAcceleratorProfiles)+len(initUseCaseAlternatives) > 0 {
+	if initCatalogDefaults || commandFlagChanged(cmd, "api-version") || len(initModuleComputeProfiles)+len(initModuleStorageProfiles)+len(initModuleAcceleratorProfiles)+len(initUseCaseAlternatives) > 0 {
 		return fmt.Errorf("module profile authoring is unavailable on the exact-v0.6 compatibility line")
 	}
 	if err := validateInitLocalDNSFlags(); err != nil {

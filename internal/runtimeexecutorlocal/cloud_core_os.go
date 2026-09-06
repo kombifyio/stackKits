@@ -19,11 +19,22 @@ import (
 
 type osCloudCoreOperations struct {
 	workspaceRoot string
+	runtimeName   string
 	runner        basementCoreProcessRunner
 	prober        basementCoreProber
 }
 
 func NewOSCloudCoreOperations(workspaceRoot string) (CloudCoreOperations, error) {
+	return newOSCloudCoreOperations(workspaceRoot, "cloud-core")
+}
+
+// NewOSCloudStandaloneCoreOperations uses the same lifecycle with separate
+// project and artifact custody; it never adopts an existing PaaS core.
+func NewOSCloudStandaloneCoreOperations(workspaceRoot string) (CloudCoreOperations, error) {
+	return newOSCloudCoreOperations(workspaceRoot, "cloud-core-standalone")
+}
+
+func newOSCloudCoreOperations(workspaceRoot, runtimeName string) (CloudCoreOperations, error) {
 	absolute, err := filepath.Abs(workspaceRoot)
 	if err != nil || strings.TrimSpace(workspaceRoot) == "" {
 		return nil, errors.New("Cloud core operations require an absolute workspace root")
@@ -32,11 +43,14 @@ func NewOSCloudCoreOperations(workspaceRoot string) (CloudCoreOperations, error)
 	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 		return nil, errors.New("Cloud core operations require an existing plain workspace directory")
 	}
-	return &osCloudCoreOperations{workspaceRoot: filepath.Clean(absolute), runner: osCloudCoreProcessRunner{}, prober: osBasementCoreProber{}}, nil
+	return &osCloudCoreOperations{workspaceRoot: filepath.Clean(absolute), runtimeName: runtimeName, runner: osCloudCoreProcessRunner{}, prober: osBasementCoreProber{}}, nil
 }
 
 func (o *osCloudCoreOperations) ApplyProject(ctx context.Context, project CloudCoreProject) (CloudCoreApplyObservation, error) {
 	if err := o.ready(ctx); err != nil {
+		return CloudCoreApplyObservation{}, err
+	}
+	if err := o.validateModule(project); err != nil {
 		return CloudCoreApplyObservation{}, err
 	}
 	if _, err := localevidence.LoadCloudRuntimeCustody(o.workspaceRoot); err != nil {
@@ -46,7 +60,7 @@ func (o *osCloudCoreOperations) ApplyProject(ctx context.Context, project CloudC
 	if err != nil {
 		return CloudCoreApplyObservation{}, err
 	}
-	if _, err := o.runner.Run(ctx, cloudCoreComposeArgs(composePath, "up"), filepath.Dir(composePath), o.environment()); err != nil {
+	if _, err := o.runner.Run(ctx, o.composeArgs(composePath, "up"), filepath.Dir(composePath), o.environment()); err != nil {
 		return CloudCoreApplyObservation{}, fmt.Errorf("Cloud Docker Compose Apply did not complete: %w", err)
 	}
 	if err := o.waitUntilReady(ctx, composePath, project); err != nil {
@@ -86,7 +100,7 @@ func (o *osCloudCoreOperations) waitUntilReady(ctx context.Context, composePath 
 }
 
 func (o *osCloudCoreOperations) pendingReadiness(ctx context.Context, composePath string, project CloudCoreProject) ([]string, error) {
-	raw, err := o.runner.Run(ctx, cloudCoreComposeArgs(composePath, "ps"), filepath.Dir(composePath), o.environment())
+	raw, err := o.runner.Run(ctx, o.composeArgs(composePath, "ps"), filepath.Dir(composePath), o.environment())
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
@@ -120,10 +134,13 @@ func (o *osCloudCoreOperations) VerifyProject(ctx context.Context, project Cloud
 	if err := o.ready(ctx); err != nil {
 		return CloudCoreVerifyObservation{}, err
 	}
+	if err := o.validateModule(project); err != nil {
+		return CloudCoreVerifyObservation{}, err
+	}
 	if _, err := localevidence.LoadCloudRuntimeCustody(o.workspaceRoot); err != nil {
 		return CloudCoreVerifyObservation{}, fmt.Errorf("verify Cloud runtime custody before observation: %w", err)
 	}
-	composePath := filepath.Join(o.workspaceRoot, ".stackkit", "runtime", "cloud-core", "compose.yaml")
+	composePath := filepath.Join(o.workspaceRoot, ".stackkit", "runtime", o.name(), "compose.yaml")
 	content, err := readStablePrivateBasementRuntimeFile(o.workspaceRoot, composePath)
 	if err != nil {
 		return CloudCoreVerifyObservation{}, fmt.Errorf("verify Cloud core Compose authority: %w", err)
@@ -131,7 +148,7 @@ func (o *osCloudCoreOperations) VerifyProject(ctx context.Context, project Cloud
 	if !bytes.Equal(content, project.Definition) {
 		return CloudCoreVerifyObservation{}, errors.New("verified Cloud runtime differs from the authorized Compose project")
 	}
-	raw, err := o.runner.Run(ctx, cloudCoreComposeArgs(composePath, "ps"), filepath.Dir(composePath), o.environment())
+	raw, err := o.runner.Run(ctx, o.composeArgs(composePath, "ps"), filepath.Dir(composePath), o.environment())
 	if err != nil {
 		return CloudCoreVerifyObservation{}, errors.New("verified Cloud runtime status is unavailable")
 	}
@@ -159,11 +176,23 @@ func (o *osCloudCoreOperations) ready(ctx context.Context) error {
 	if o == nil || o.workspaceRoot == "" || o.runner == nil || o.prober == nil {
 		return errors.New("Cloud core operations are not initialized")
 	}
+	if o.name() != "cloud-core" && o.name() != "cloud-core-standalone" {
+		return errors.New("Cloud core operations have an unknown custody profile")
+	}
 	return nil
 }
 
 func (o *osCloudCoreOperations) persistCompose(project CloudCoreProject) (string, error) {
-	runtimeDir := filepath.Join(o.workspaceRoot, ".stackkit", "runtime", "cloud-core")
+	other := "cloud-core"
+	if o.name() == other {
+		other = "cloud-core-standalone"
+	}
+	if _, err := os.Lstat(filepath.Join(o.workspaceRoot, ".stackkit", "runtime", other, "compose.yaml")); err == nil {
+		return "", errors.New("Cloud core transition requires explicit reconciliation of the existing core custody")
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return "", fmt.Errorf("inspect existing Cloud core custody: %w", err)
+	}
+	runtimeDir := filepath.Join(o.workspaceRoot, ".stackkit", "runtime", o.name())
 	if err := os.MkdirAll(runtimeDir, 0o700); err != nil {
 		return "", fmt.Errorf("create private Cloud runtime directory: %w", err)
 	}
@@ -195,7 +224,29 @@ func (o *osCloudCoreOperations) environment() []string {
 }
 
 func cloudCoreComposeArgs(composePath, operation string) []string {
-	prefix := []string{"compose", "--project-name", "stackkit-cloud-core", "-f", composePath}
+	return (&osCloudCoreOperations{}).composeArgs(composePath, operation)
+}
+
+func (o *osCloudCoreOperations) name() string {
+	if o.runtimeName == "" {
+		return "cloud-core"
+	}
+	return o.runtimeName
+}
+
+func (o *osCloudCoreOperations) validateModule(project CloudCoreProject) error {
+	expected := cloudCoreModuleRef
+	if o.name() == "cloud-core-standalone" {
+		expected = cloudStandaloneCoreModuleRef
+	}
+	if project.ModuleRef != expected {
+		return errors.New("Cloud operations profile differs from the authorized module")
+	}
+	return nil
+}
+
+func (o *osCloudCoreOperations) composeArgs(composePath, operation string) []string {
+	prefix := []string{"compose", "--project-name", "stackkit-" + o.name(), "-f", composePath}
 	if operation == "up" {
 		return append(prefix, "up", "-d")
 	}
@@ -205,7 +256,7 @@ func cloudCoreComposeArgs(composePath, operation string) []string {
 type osCloudCoreProcessRunner struct{}
 
 func (osCloudCoreProcessRunner) Run(ctx context.Context, args []string, directory string, environment []string) ([]byte, error) {
-	if len(args) < 6 || args[0] != "compose" || args[1] != "--project-name" || args[2] != "stackkit-cloud-core" ||
+	if len(args) < 6 || args[0] != "compose" || args[1] != "--project-name" || (args[2] != "stackkit-cloud-core" && args[2] != "stackkit-cloud-core-standalone") ||
 		args[3] != "-f" || filepath.Clean(args[4]) != args[4] || filepath.Base(args[4]) != "compose.yaml" || filepath.Dir(args[4]) != directory ||
 		(!slices.Equal(args[5:], []string{"up", "-d"}) && !slices.Equal(args[5:], []string{"ps", "--all", "--format", "json"})) {
 		return nil, errors.New("Cloud core process runner rejected an unbounded command")

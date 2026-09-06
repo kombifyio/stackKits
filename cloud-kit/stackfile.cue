@@ -261,9 +261,9 @@ Definition: foundation.#ProductKitDefinition & {
 				mode:    "bootstrapped"
 				runtime: "docker"
 				platform: {
-					management:      "selected-provider"
+					management:      "standalone"
 					fallbackAllowed: false
-					setupPolicy: {}
+					setupPolicy: {platform: "automatic", applicationDefault: "on-demand"}
 				}
 			}
 			generation: {
@@ -280,7 +280,7 @@ Definition: foundation.#ProductKitDefinition & {
 				dns: {}
 				tls: defaultMode: "public"
 			}
-			// Cloud core declares four default-closed public service routes. They
+			// Cloud standalone core declares three default-closed public service routes. They
 			// are intent, not an implicit allow-all: the resolved plan binds each
 			// route to the exact Cloud core endpoint and the public-edge/TLS owners.
 			access: {
@@ -296,7 +296,7 @@ Definition: foundation.#ProductKitDefinition & {
 			routes: {
 				"cloud-hub-public": {
 					serviceRef:      "base"
-					moduleRef:       "stackkits-cloud-core-runtime"
+					moduleRef:       "stackkits-cloud-core-standalone-runtime"
 					exposure:        "public"
 					protocol:        "https"
 					port:            443
@@ -306,7 +306,7 @@ Definition: foundation.#ProductKitDefinition & {
 				}
 				"cloud-pocketid-public": {
 					serviceRef:      "id"
-					moduleRef:       "stackkits-cloud-core-runtime"
+					moduleRef:       "stackkits-cloud-core-standalone-runtime"
 					exposure:        "public"
 					protocol:        "https"
 					port:            443
@@ -316,21 +316,11 @@ Definition: foundation.#ProductKitDefinition & {
 				}
 				"cloud-tinyauth-public": {
 					serviceRef:      "auth"
-					moduleRef:       "stackkits-cloud-core-runtime"
+					moduleRef:       "stackkits-cloud-core-standalone-runtime"
 					exposure:        "public"
 					protocol:        "https"
 					port:            443
 					host:            "auth.example.invalid"
-					path:            "/"
-					accessPolicyRef: "cloud-public-owner"
-				}
-				"cloud-coolify-public": {
-					serviceRef:      "coolify"
-					moduleRef:       "stackkits-cloud-core-runtime"
-					exposure:        "public"
-					protocol:        "https"
-					port:            443
-					host:            "coolify.example.invalid"
 					path:            "/"
 					accessPolicyRef: "cloud-public-owner"
 				}

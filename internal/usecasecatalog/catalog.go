@@ -118,12 +118,16 @@ type DeliveryCapabilities struct {
 }
 
 type ApplicationDelivery struct {
-	UseCaseRef   string               `json:"useCaseRef"`
-	WorkloadRef  string               `json:"workloadRef"`
-	AdapterRef   string               `json:"adapterRef"`
-	AdapterName  string               `json:"adapterName"`
-	Status       string               `json:"status"`
-	Capabilities DeliveryCapabilities `json:"capabilities"`
+	// Native authoring binds the catalog's default implementation to the
+	// module whose explicit profiles must accompany a selected workload.
+	DefaultAlternativeRef string               `json:"defaultAlternativeRef,omitempty"`
+	DefaultModuleRef      string               `json:"defaultModuleRef,omitempty"`
+	UseCaseRef            string               `json:"useCaseRef"`
+	WorkloadRef           string               `json:"workloadRef"`
+	AdapterRef            string               `json:"adapterRef"`
+	AdapterName           string               `json:"adapterName"`
+	Status                string               `json:"status"`
+	Capabilities          DeliveryCapabilities `json:"capabilities"`
 }
 
 type CompatibilityManifest struct {
@@ -611,6 +615,18 @@ func deliveryRows(source sourceCatalog) ([]ApplicationDelivery, error) {
 	for useCaseRef, workload := range source.Workloads {
 		workloadRef := metadataID(workload)
 		alternatives, _ := workload["alternatives"].([]any)
+		defaultAlternative := stringField(workload, "defaultAlternative")
+		defaultModule := ""
+		for _, raw := range alternatives {
+			alternative, _ := raw.(map[string]any)
+			if stringField(alternative, "id") == defaultAlternative {
+				defaultModule = stringField(alternative, "moduleRef")
+				break
+			}
+		}
+		if defaultAlternative != "" && defaultModule == "" {
+			return nil, fmt.Errorf("workload %s has no module for its default alternative", workloadRef)
+		}
 		for _, rawAlternative := range alternatives {
 			alternative, _ := rawAlternative.(map[string]any)
 			runtime, _ := alternative["runtime"].(map[string]any)
@@ -641,7 +657,7 @@ func deliveryRows(source sourceCatalog) ([]ApplicationDelivery, error) {
 					continue
 				}
 				seen[key] = claim
-				rows = append(rows, ApplicationDelivery{UseCaseRef: useCaseRef, WorkloadRef: workloadRef, AdapterRef: adapter, AdapterName: adapterName(adapter), Status: status, Capabilities: DeliveryCapabilities{Deployment: claim.deployment, RouteTLS: claim.routeTLS, StatusEvidence: claim.statusEvidence, BackupRestore: claim.backupRestore}})
+				rows = append(rows, ApplicationDelivery{DefaultAlternativeRef: defaultAlternative, DefaultModuleRef: defaultModule, UseCaseRef: useCaseRef, WorkloadRef: workloadRef, AdapterRef: adapter, AdapterName: adapterName(adapter), Status: status, Capabilities: DeliveryCapabilities{Deployment: claim.deployment, RouteTLS: claim.routeTLS, StatusEvidence: claim.statusEvidence, BackupRestore: claim.backupRestore}})
 			}
 		}
 	}

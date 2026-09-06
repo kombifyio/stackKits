@@ -88,7 +88,7 @@
         "mode": "bootstrapped",
         "platform": {
           "fallbackAllowed": false,
-          "management": "selected-provider",
+          "management": "standalone",
           "setupPolicy": {
             "applicationDefault": "on-demand",
             "platform": "automatic"
@@ -154,21 +154,11 @@
         "onLinkLoss": "not-applicable"
       },
       "routes": {
-        "cloud-coolify-public": {
-          "accessPolicyRef": "cloud-public-owner",
-          "exposure": "public",
-          "host": "coolify.example.invalid",
-          "moduleRef": "stackkits-cloud-core-runtime",
-          "path": "/",
-          "port": 443,
-          "protocol": "https",
-          "serviceRef": "coolify"
-        },
         "cloud-hub-public": {
           "accessPolicyRef": "cloud-public-owner",
           "exposure": "public",
           "host": "base.example.invalid",
-          "moduleRef": "stackkits-cloud-core-runtime",
+          "moduleRef": "stackkits-cloud-core-standalone-runtime",
           "path": "/",
           "port": 443,
           "protocol": "https",
@@ -178,7 +168,7 @@
           "accessPolicyRef": "cloud-public-owner",
           "exposure": "public",
           "host": "id.example.invalid",
-          "moduleRef": "stackkits-cloud-core-runtime",
+          "moduleRef": "stackkits-cloud-core-standalone-runtime",
           "path": "/",
           "port": 443,
           "protocol": "https",
@@ -188,7 +178,7 @@
           "accessPolicyRef": "cloud-public-owner",
           "exposure": "public",
           "host": "auth.example.invalid",
-          "moduleRef": "stackkits-cloud-core-runtime",
+          "moduleRef": "stackkits-cloud-core-standalone-runtime",
           "path": "/",
           "port": 443,
           "protocol": "https",

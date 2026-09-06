@@ -2,6 +2,7 @@ package architecturev2
 
 import (
 	"fmt"
+	"maps"
 	"sort"
 	"strings"
 
@@ -24,6 +25,9 @@ const (
 // matching Definition.authoring.requiredOverrides contract and an explicit
 // materializer implementation; arbitrary paths are never accepted.
 type AuthoringOverrides struct {
+	// CatalogDefaults explicitly accepts CUE-owned defaults during initial
+	// authoring. Persisted intent remains fully explicit.
+	CatalogDefaults bool
 	// APIVersion selects native module-local intent or the explicit legacy
 	// adapter. Empty is retained for existing in-process v2alpha1 callers.
 	APIVersion string
@@ -102,6 +106,10 @@ func (s *Service) MaterializeInitialStackSpec(profile stackspecmigration.KitProf
 	}
 	var workloadSelections map[string]useCaseWorkloadSelection
 	if nativeProfiles {
+		overrides.ModuleProfiles = maps.Clone(overrides.ModuleProfiles)
+		if overrides.ModuleProfiles == nil {
+			overrides.ModuleProfiles = map[string]ModuleProfileOverride{}
+		}
 		workloadSelections, err = resolveNativeWorkloadSelections(profile, definition, s.authority.catalog, overrides)
 	} else {
 		workloadSelections, err = resolveUseCaseWorkloadSelections(profile, definition, s.authority.catalog, overrides.UseCases, overrides.Platform, overrides.ComputeTier)
@@ -208,6 +216,8 @@ func resolveUseCaseWorkloadSelections(
 }
 
 type useCaseWorkloadSelection struct {
+	ModuleRef          string
+	CoreServiceRefs    []string
 	Alternative        string
 	RuntimeAdapterRef  string
 	RequiredSecretRefs []string
@@ -508,6 +518,11 @@ func materializeInitialStackSpec(
 		}
 	}
 
+	if core, selected := workloadSelections["cloud-core"]; selected && core.ModuleRef != "" {
+		if err := projectCloudInitialCoreRoutes(spec, core); err != nil {
+			return StackSpecValidation{}, resolveError(ErrAuthorityLoad, "bind selected Cloud core routes: "+err.Error(), err)
+		}
+	}
 	candidate, err := resolvedplan.CanonicalJSON(spec)
 	if err != nil {
 		return StackSpecValidation{}, resolveError(ErrResolveFailed, "marshal initial StackSpec candidate: "+err.Error(), err)

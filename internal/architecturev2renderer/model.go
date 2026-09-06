@@ -305,6 +305,7 @@ type rawServiceEndpointOriginSelectionV2 struct {
 }
 
 type rawPublicServiceRouteV4 struct {
+	CoreModuleRef         string                                `json:"coreModuleRef,omitempty"`
 	IngressAuth           string                                `json:"ingressAuth"`
 	ID                    string                                `json:"id"`
 	ServiceRef            string                                `json:"serviceRef"`
@@ -1886,6 +1887,9 @@ func validatePublicServiceRouteListV4(raw json.RawMessage, valuePath string) err
 		var route rawPublicServiceRouteV4
 		if err := decodeStrict(value, &route); err != nil {
 			return wrap(ErrInvalidPlan, path, "decode public service route v4", err)
+		}
+		if route.CoreModuleRef != "" && !oneOf(route.CoreModuleRef, "stackkits-basement-core-runtime", "stackkits-basement-core-lite-runtime", "stackkits-cloud-core-runtime", "stackkits-cloud-core-standalone-runtime") {
+			return fail(ErrInvalidPlan, path+".coreModuleRef", "unsupported local routing core")
 		}
 		if route.IngressAuth != "" && !oneOf(route.IngressAuth, "none", "native", "forward-auth") {
 			return fail(ErrInvalidPlan, path+".ingressAuth", "unsupported ingress auth mode %q", route.IngressAuth)

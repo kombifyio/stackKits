@@ -539,6 +539,9 @@ func (source moduleRenderInputSource) resolve(binding moduleRenderInputBinding, 
 		if bestPriority == 0 || len(best) != 1 {
 			return nil, false, fmt.Errorf("module %q has %d equally preferred resolved delivery routes", moduleID, len(best))
 		}
+		if err := bindDeliveryRouteCore(best[0], source.workloads); err != nil {
+			return nil, false, err
+		}
 		return best[0], true, nil
 	case moduleInputSourceCloudHostNetwork:
 		if source.network == nil || source.kit == nil {
@@ -1406,7 +1409,7 @@ func projectPublicRoute(route, pool, probe map[string]any, path string, withAuth
 		ingressAuth = "native"
 	}
 	result["ingressAuth"] = ingressAuth
-	for _, field := range []string{"host", "path"} {
+	for _, field := range []string{"host", "path", "coreModuleRef"} {
 		if value, exists, err := optionalStringField(route, path, field); err != nil {
 			return nil, err
 		} else if exists {

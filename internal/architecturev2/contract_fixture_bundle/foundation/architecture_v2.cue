@@ -4154,6 +4154,7 @@ _servicePublicationShape: {
 	id:             #ContractID
 	serviceRef:     #ContractID
 	moduleRef:      #ContractID
+	coreModuleRef?: "stackkits-basement-core-runtime" | "stackkits-basement-core-lite-runtime" | "stackkits-cloud-core-runtime" | "stackkits-cloud-core-standalone-runtime"
 	originSiteRef?: #SiteID
 	originSiteRefs: [...#SiteID] & list.MinItems(1)
 	originNodeRefs: [...#NodeID] & list.MinItems(1)

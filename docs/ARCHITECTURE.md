@@ -261,7 +261,8 @@ freshness. Arbitrary cron, provider/repository/endpoint/credential selection,
 paths, commands, lifecycle handles, and secret material are outside the
 contract. The policy participates in spec and plan hashing and is available
 only through the finite `backupPolicy` module-plan input. Defaults are resolved
-before modules consume that input. Full Core and CoreLite project the retention
+before modules consume that input. The standalone core and the explicitly
+selected Coolify core project the retention
 counts into the same local Kopia source policy. The native runtime sets and
 reads back all Kopia retention buckets explicitly, including zero hourly/latest
 buckets and the `keepYearly` to `keepAnnual` mapping. Kopia stays manual-only:
@@ -416,9 +417,10 @@ the shared `runtime-paas` capability. An alternative declares its closed
 one of those refs. Resolution then binds the unique adapter-owning provider and
 module plus both versions and canonical contract hashes. Adapter providers use
 the separate `runtimeAdapterRefs` namespace and may expose zero Kit
-capabilities. Coolify is the governed default for the current Immich,
-Cloudreve, and Vaultwarden alternatives; Komodo and `standalone-compose` are
-explicit alternatives. The umbrella delivery class is
+capabilities. Under [ADR-0042](ADR/ADR-0042-standalone-default-and-optional-platforms.md),
+`standalone-compose` is the governed default for new application selections;
+Coolify and Komodo require explicit selection. Existing persisted adapter
+identities retain their authority. The umbrella delivery class is
 `application-adapter`, because the same workload contract may be executed by a
 PaaS or by the StackKits-owned no-PaaS Compose adapter. All three adapters are
 absent from plans without a workload bound to that exact adapter.
@@ -893,7 +895,7 @@ benchmarks or storage reserved for user content:
 | Selected profile | CPU / RAM / host storage | Basis |
 | --- | --- | --- |
 | Core Standard/High | 2 / 4 GiB / 20 GiB | Existing platform policy |
-| Core Lite Low | 2 / 2 GiB / 10 GiB | Existing smaller platform policy |
+| Standalone Core Low | 2 / 2 GiB / 10 GiB | Smaller resource profile of the complete standalone core |
 | Immich Standard/High | 2 / 6 GiB / 20 GiB | Pinned upstream CPU/RAM; platform storage policy |
 | Immich Lite Low | 2 / 4 GiB / 10 GiB | Pinned upstream RAM with ML omitted; smaller platform storage policy |
 | Files, Vault, Smart Home Low | 2 / 2 GiB / 10 GiB | Smaller platform policy |
@@ -1915,7 +1917,15 @@ by StackKits are projected from the exact pinned module during OSS export.
 
 ## Routing Ownership
 
-StackKit does not own a separate router when the selected PaaS already includes one. For Coolify, generated StackKit routes must be served by Coolify's Traefik/proxy. In those environments, the PaaS router is the StackKit router. Dokploy has an integrated-router draft adapter, but it is not part of the production E2E standard until promoted.
+The standalone Compose default uses the StackKits-owned router. Each workload
+has exactly one execution owner and one routing owner. Enabling an optional
+platform does not transfer existing workloads or their routes implicitly.
+
+For a workload explicitly assigned to Coolify, generated routes must be served
+by the selected Coolify Traefik/proxy authority; a second StackKits router must
+not serve the same route. Any transition must reconcile listener and route
+ownership before activation. Dokploy has an integrated-router draft adapter,
+but remains unpromoted.
 
 Komodo is the first explicit exception: the initial `paas: komodo` contract uses exactly one StackKit-owned Traefik while Komodo owns Compose Stack deployment. The generated dashboard/status output and release evidence must label that routing ownership as StackKit-owned, not Komodo-owned.
 

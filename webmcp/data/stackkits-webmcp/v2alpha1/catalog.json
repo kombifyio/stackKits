@@ -1,7 +1,7 @@
 {
   "schema_version": "stackkits-webmcp/v2alpha1",
-  "source_sha": "9f76119ea05a1f1150c1637d5b2a51f3dc9494ec",
-  "authority_bundle_sha256": "184e0dfd5c391e4658373493b271daee3663b140b61d3c23ba9cd10e28acba76",
+  "source_sha": "16fe7bbbf73e3914f19afd60c9cefd973c53c148",
+  "authority_bundle_sha256": "98d1d4f22fa25dffae659902d39e4a9edbeb725652837227b8b3d48108b1c612",
   "kits": [
     {
       "stackkit_id": "basement-kit",
@@ -56,6 +56,74 @@
                 "paas-management-omitted"
               ],
               "profile_sha256": "a3d343f7bbc89c340e9e40bfcb934ab32ca376075a50f8411ad2c753f045ecc1"
+            },
+            {
+              "id": "standard",
+              "capacity_declaration": "declared",
+              "maturity": "supported",
+              "executable": true,
+              "realization": "apply-ready",
+              "description": "Local routing, owner identity, internal certificates, backup agent and the hub using standalone Compose. PaaS management is omitted. Photos, Media and other applications keep their own explicitly selected profiles.",
+              "host_floor": {
+                "cpu_cores": 2,
+                "ram_gb": 2,
+                "storage_gb": 10
+              },
+              "recommended": {
+                "cpu_cores": 2,
+                "ram_gb": 2,
+                "storage_gb": 10
+              },
+              "architectures": [],
+              "virtualization": [],
+              "components": [
+                "hub",
+                "kopia-agent",
+                "pocketid",
+                "router",
+                "socket-proxy",
+                "step-ca",
+                "tinyauth"
+              ],
+              "capabilities": [],
+              "degradations": [
+                "paas-management-omitted"
+              ],
+              "profile_sha256": "ae13b3a47e98e16a9777909d8225eb35cedef35848d90656abbd0373e3128740"
+            },
+            {
+              "id": "high",
+              "capacity_declaration": "declared",
+              "maturity": "supported",
+              "executable": true,
+              "realization": "apply-ready",
+              "description": "Local routing, owner identity, internal certificates, backup agent and the hub using standalone Compose. PaaS management is omitted. Photos, Media and other applications keep their own explicitly selected profiles.",
+              "host_floor": {
+                "cpu_cores": 2,
+                "ram_gb": 2,
+                "storage_gb": 10
+              },
+              "recommended": {
+                "cpu_cores": 2,
+                "ram_gb": 2,
+                "storage_gb": 10
+              },
+              "architectures": [],
+              "virtualization": [],
+              "components": [
+                "hub",
+                "kopia-agent",
+                "pocketid",
+                "router",
+                "socket-proxy",
+                "step-ca",
+                "tinyauth"
+              ],
+              "capabilities": [],
+              "degradations": [
+                "paas-management-omitted"
+              ],
+              "profile_sha256": "4a311020f7f42a8fbf2fba3f93670db9c24178023ffed4aa722d7688d2a01110"
             }
           ],
           "storage_profiles": [],
@@ -661,9 +729,26 @@
           "description": "Required standalone Basement control plane with local routing, owner identity, internal PKI, container management, and operator hub.",
           "required": true,
           "selected_by_default": true,
-          "default_alternative_id": "standalone",
+          "default_alternative_id": "standalone-compose",
           "availability": "available",
           "alternatives": [
+            {
+              "alternative_id": "standalone-compose",
+              "module_id": "stackkits-basement-core-lite-runtime",
+              "functions": [
+                "container-platform",
+                "forward-auth",
+                "internal-ca",
+                "local-routing",
+                "operator-hub",
+                "owner-identity"
+              ],
+              "load": {
+                "residency": "always-on",
+                "baseline": "idle-resident",
+                "burst": "interactive"
+              }
+            },
             {
               "alternative_id": "standalone",
               "module_id": "stackkits-basement-core-runtime",
@@ -957,6 +1042,86 @@
               "capabilities": [],
               "degradations": [],
               "profile_sha256": "dfe59a6ced2383b1cf47956b872c8f6da6b85fb9011ee4f26eb7554735b81b74"
+            }
+          ],
+          "storage_profiles": [],
+          "accelerator_profiles": []
+        },
+        {
+          "module_id": "stackkits-cloud-core-standalone-runtime",
+          "role": "workload",
+          "required": false,
+          "use_case_ids": [
+            "cloud-core"
+          ],
+          "capabilities": [
+            "cloud-core-runtime"
+          ],
+          "default_compute_profile": "standard",
+          "compute_profiles": [
+            {
+              "id": "standard",
+              "capacity_declaration": "declared",
+              "maturity": "supported",
+              "executable": true,
+              "realization": "apply-ready",
+              "description": "Cloud routing, owner identity, public edge and the hub using standalone Compose. Coolify and Komodo are omitted; public TLS, offsite backup and provider lifecycle remain separately owned contracts.",
+              "host_floor": {
+                "cpu_cores": 2,
+                "ram_gb": 4,
+                "storage_gb": 20
+              },
+              "recommended": {
+                "cpu_cores": 4,
+                "ram_gb": 4,
+                "storage_gb": 20
+              },
+              "architectures": [],
+              "virtualization": [],
+              "components": [
+                "hub",
+                "pocketid",
+                "router",
+                "socket-proxy",
+                "tinyauth"
+              ],
+              "capabilities": [],
+              "degradations": [
+                "paas-management-omitted"
+              ],
+              "profile_sha256": "f178520176125888b3de11b97b282c2e017a7a7492d9355d2ed922d45dad6510"
+            },
+            {
+              "id": "high",
+              "capacity_declaration": "declared",
+              "maturity": "supported",
+              "executable": true,
+              "realization": "apply-ready",
+              "description": "Cloud routing, owner identity, public edge and the hub using standalone Compose. Coolify and Komodo are omitted; public TLS, offsite backup and provider lifecycle remain separately owned contracts.",
+              "host_floor": {
+                "cpu_cores": 2,
+                "ram_gb": 4,
+                "storage_gb": 20
+              },
+              "recommended": {
+                "cpu_cores": 4,
+                "ram_gb": 4,
+                "storage_gb": 20
+              },
+              "architectures": [],
+              "virtualization": [],
+              "components": [
+                "hub",
+                "pocketid",
+                "router",
+                "socket-proxy",
+                "tinyauth"
+              ],
+              "capabilities": [],
+              "degradations": [
+                "paas-management-omitted"
+              ],
+              "profile_sha256": "5dfcf8c7ab65680c2b21d58b307fdc8efbbe49667a9df5f6a6780a72505c916a"
             }
           ],
           "storage_profiles": [],
@@ -1499,9 +1664,25 @@
           "description": "Required provider-neutral Cloud control plane installed on an externally supplied host; provider and server lifecycle remain outside StackKits.",
           "required": true,
           "selected_by_default": true,
-          "default_alternative_id": "standalone",
+          "default_alternative_id": "standalone-compose",
           "availability": "available",
           "alternatives": [
+            {
+              "alternative_id": "standalone-compose",
+              "module_id": "stackkits-cloud-core-standalone-runtime",
+              "functions": [
+                "container-platform",
+                "forward-auth",
+                "operator-hub",
+                "owner-identity",
+                "public-routing"
+              ],
+              "load": {
+                "residency": "always-on",
+                "baseline": "idle-resident",
+                "burst": "interactive"
+              }
+            },
             {
               "alternative_id": "standalone",
               "module_id": "stackkits-cloud-core-runtime",
@@ -1728,6 +1909,74 @@
                 "paas-management-omitted"
               ],
               "profile_sha256": "a3d343f7bbc89c340e9e40bfcb934ab32ca376075a50f8411ad2c753f045ecc1"
+            },
+            {
+              "id": "standard",
+              "capacity_declaration": "declared",
+              "maturity": "supported",
+              "executable": true,
+              "realization": "apply-ready",
+              "description": "Local routing, owner identity, internal certificates, backup agent and the hub using standalone Compose. PaaS management is omitted. Photos, Media and other applications keep their own explicitly selected profiles.",
+              "host_floor": {
+                "cpu_cores": 2,
+                "ram_gb": 2,
+                "storage_gb": 10
+              },
+              "recommended": {
+                "cpu_cores": 2,
+                "ram_gb": 2,
+                "storage_gb": 10
+              },
+              "architectures": [],
+              "virtualization": [],
+              "components": [
+                "hub",
+                "kopia-agent",
+                "pocketid",
+                "router",
+                "socket-proxy",
+                "step-ca",
+                "tinyauth"
+              ],
+              "capabilities": [],
+              "degradations": [
+                "paas-management-omitted"
+              ],
+              "profile_sha256": "ae13b3a47e98e16a9777909d8225eb35cedef35848d90656abbd0373e3128740"
+            },
+            {
+              "id": "high",
+              "capacity_declaration": "declared",
+              "maturity": "supported",
+              "executable": true,
+              "realization": "apply-ready",
+              "description": "Local routing, owner identity, internal certificates, backup agent and the hub using standalone Compose. PaaS management is omitted. Photos, Media and other applications keep their own explicitly selected profiles.",
+              "host_floor": {
+                "cpu_cores": 2,
+                "ram_gb": 2,
+                "storage_gb": 10
+              },
+              "recommended": {
+                "cpu_cores": 2,
+                "ram_gb": 2,
+                "storage_gb": 10
+              },
+              "architectures": [],
+              "virtualization": [],
+              "components": [
+                "hub",
+                "kopia-agent",
+                "pocketid",
+                "router",
+                "socket-proxy",
+                "step-ca",
+                "tinyauth"
+              ],
+              "capabilities": [],
+              "degradations": [
+                "paas-management-omitted"
+              ],
+              "profile_sha256": "4a311020f7f42a8fbf2fba3f93670db9c24178023ffed4aa722d7688d2a01110"
             }
           ],
           "storage_profiles": [],
@@ -2333,9 +2582,26 @@
           "description": "Required standalone Basement control plane with local routing, owner identity, internal PKI, container management, and operator hub.",
           "required": true,
           "selected_by_default": true,
-          "default_alternative_id": "standalone",
+          "default_alternative_id": "standalone-compose",
           "availability": "available",
           "alternatives": [
+            {
+              "alternative_id": "standalone-compose",
+              "module_id": "stackkits-basement-core-lite-runtime",
+              "functions": [
+                "container-platform",
+                "forward-auth",
+                "internal-ca",
+                "local-routing",
+                "operator-hub",
+                "owner-identity"
+              ],
+              "load": {
+                "residency": "always-on",
+                "baseline": "idle-resident",
+                "burst": "interactive"
+              }
+            },
             {
               "alternative_id": "standalone",
               "module_id": "stackkits-basement-core-runtime",
@@ -2819,5 +3085,5 @@
       "owner_approval": false
     }
   ],
-  "catalog_sha256": "ef87c149cb3265a6de8696fd609676323d5c42ebf2b94395791fe8f7f17bc9e8"
+  "catalog_sha256": "fd9875fc485d7900961adc6107a034b38cee3351cf56fcf73fa82d50026fa6e0"
 }

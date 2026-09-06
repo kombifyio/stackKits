@@ -1,7 +1,7 @@
 {
   "schema_version": "stackkits-webmcp/v1",
-  "source_sha": "9f76119ea05a1f1150c1637d5b2a51f3dc9494ec",
-  "authority_bundle_sha256": "184e0dfd5c391e4658373493b271daee3663b140b61d3c23ba9cd10e28acba76",
+  "source_sha": "16fe7bbbf73e3914f19afd60c9cefd973c53c148",
+  "authority_bundle_sha256": "98d1d4f22fa25dffae659902d39e4a9edbeb725652837227b8b3d48108b1c612",
   "kits": [
     {
       "stackkit_id": "basement-kit",
@@ -188,12 +188,12 @@
           "module_substitutions": {},
           "module_runtime_requirements": [
             {
-              "module_id": "stackkits-basement-core-runtime",
+              "module_id": "stackkits-basement-core-lite-runtime",
               "declaration": "declared",
               "runtime_requirements": {
                 "min_cpu_cores": 2,
-                "min_ram_gb": 4,
-                "min_storage_gb": 20
+                "min_ram_gb": 2,
+                "min_storage_gb": 10
               }
             },
             {
@@ -357,12 +357,12 @@
           "module_substitutions": {},
           "module_runtime_requirements": [
             {
-              "module_id": "stackkits-basement-core-runtime",
+              "module_id": "stackkits-basement-core-lite-runtime",
               "declaration": "declared",
               "runtime_requirements": {
                 "min_cpu_cores": 2,
-                "min_ram_gb": 4,
-                "min_storage_gb": 20
+                "min_ram_gb": 2,
+                "min_storage_gb": 10
               }
             },
             {
@@ -545,7 +545,7 @@
           "module_substitutions": {},
           "module_runtime_requirements": [
             {
-              "module_id": "stackkits-cloud-core-runtime",
+              "module_id": "stackkits-cloud-core-standalone-runtime",
               "declaration": "declared",
               "runtime_requirements": {
                 "min_cpu_cores": 2,
@@ -714,7 +714,7 @@
           "module_substitutions": {},
           "module_runtime_requirements": [
             {
-              "module_id": "stackkits-cloud-core-runtime",
+              "module_id": "stackkits-cloud-core-standalone-runtime",
               "declaration": "declared",
               "runtime_requirements": {
                 "min_cpu_cores": 2,
@@ -904,12 +904,12 @@
           "module_substitutions": {},
           "module_runtime_requirements": [
             {
-              "module_id": "stackkits-basement-core-runtime",
+              "module_id": "stackkits-basement-core-lite-runtime",
               "declaration": "declared",
               "runtime_requirements": {
                 "min_cpu_cores": 2,
-                "min_ram_gb": 4,
-                "min_storage_gb": 20
+                "min_ram_gb": 2,
+                "min_storage_gb": 10
               }
             },
             {
@@ -1073,12 +1073,12 @@
           "module_substitutions": {},
           "module_runtime_requirements": [
             {
-              "module_id": "stackkits-basement-core-runtime",
+              "module_id": "stackkits-basement-core-lite-runtime",
               "declaration": "declared",
               "runtime_requirements": {
                 "min_cpu_cores": 2,
-                "min_ram_gb": 4,
-                "min_storage_gb": 20
+                "min_ram_gb": 2,
+                "min_storage_gb": 10
               }
             },
             {
@@ -1528,5 +1528,5 @@
       "owner_approval": false
     }
   ],
-  "catalog_sha256": "be0a0b9b151492a02f08eb12cf42a50cc1bb76de270f5d1c9bd470ede7083a75"
+  "catalog_sha256": "d3a4d0afbdd892f411b389d6c15e93c2a0f418cf24ab6807add33ecb7f092a7b"
 }

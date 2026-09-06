@@ -20,6 +20,9 @@ type ModuleProfileOverride struct {
 func nativeModuleProfileAuthoring(overrides AuthoringOverrides) (bool, error) {
 	switch strings.TrimSpace(overrides.APIVersion) {
 	case "", stackspecmigration.APIVersionV2Alpha1:
+		if overrides.CatalogDefaults {
+			return false, resolveError(ErrInvalidStackSpec, "catalog default authoring requires apiVersion stackkit/v2alpha2", nil)
+		}
 		if len(overrides.ModuleProfiles) != 0 || len(overrides.UseCaseAlternatives) != 0 {
 			return false, resolveError(ErrInvalidStackSpec, "module profiles and explicit alternatives require apiVersion stackkit/v2alpha2", nil)
 		}
@@ -77,9 +80,6 @@ func resolveNativeWorkloadSelections(profile stackspecmigration.KitProfile, defi
 	selectedModules := map[string]bool{}
 	for _, id := range ids {
 		alternativeID := strings.TrimSpace(overrides.UseCaseAlternatives[id])
-		if alternativeID == "" {
-			return nil, resolveError(ErrInvalidStackSpec, fmt.Sprintf("native v2alpha2 requires --use-case-alternative %s=<alternative>", id), nil)
-		}
 		var contract, alternative map[string]any
 		for _, candidate := range catalog.Workloads {
 			metadata, _ := candidate["metadata"].(map[string]any)
@@ -87,6 +87,12 @@ func resolveNativeWorkloadSelections(profile stackspecmigration.KitProfile, defi
 				contract = map[string]any(candidate)
 				break
 			}
+		}
+		if alternativeID == "" && overrides.CatalogDefaults {
+			alternativeID, _ = contract["defaultAlternative"].(string)
+		}
+		if alternativeID == "" {
+			return nil, resolveError(ErrInvalidStackSpec, fmt.Sprintf("native v2alpha2 requires --use-case-alternative %s=<alternative>", id), nil)
 		}
 		alternatives, _ := contract["alternatives"].([]any)
 		for _, raw := range alternatives {
@@ -112,6 +118,11 @@ func resolveNativeWorkloadSelections(profile stackspecmigration.KitProfile, defi
 		if module == nil {
 			return nil, resolveError(ErrAuthorityLoad, fmt.Sprintf("use case %q references undeclared module %q", id, moduleID), nil)
 		}
+		_, hasComputeProfiles := module["computeProfiles"].(map[string]any)
+		if overrides.CatalogDefaults && hasComputeProfiles && strings.TrimSpace(moduleOverride.ComputeProfile) == "" {
+			moduleOverride.ComputeProfile, _ = module["defaultComputeProfile"].(string)
+			overrides.ModuleProfiles[moduleID] = moduleOverride
+		}
 		computeProfile, err := resolveNativeModuleProfileOverride(moduleID, module, moduleOverride)
 		if err != nil {
 			return nil, err
@@ -127,9 +138,25 @@ func resolveNativeWorkloadSelections(profile stackspecmigration.KitProfile, defi
 		}
 		selectedModules[moduleID] = true
 		result[id] = useCaseWorkloadSelection{
+			ModuleRef:   moduleID,
 			Alternative: alternativeID, RuntimeAdapterRef: adapter,
 			RequiredSecretRefs: workloadAlternativeRequiredSecretRefs(contract, alternativeID),
 			PlatformManagement: platformManagement,
+		}
+		if id == "cloud-core" {
+			selection := result[id]
+			units, _ := module["renderUnits"].([]any)
+			for _, rawUnit := range units {
+				unit, _ := rawUnit.(map[string]any)
+				endpoints, _ := unit["serviceEndpoints"].([]any)
+				for _, rawEndpoint := range endpoints {
+					endpoint, _ := rawEndpoint.(map[string]any)
+					if service, ok := endpoint["serviceRef"].(string); ok {
+						selection.CoreServiceRefs = append(selection.CoreServiceRefs, service)
+					}
+				}
+			}
+			result[id] = selection
 		}
 	}
 	for moduleID, moduleOverride := range overrides.ModuleProfiles {

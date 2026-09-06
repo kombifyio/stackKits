@@ -24,6 +24,20 @@ _architectureV2CloudCoreComputeProfiles: {
 	high:     _architectureV2CloudCoreComputeProfile
 }
 
+_architectureV2CloudStandaloneCoreComputeProfile: #ModuleComputeProfileV2 & {
+	description: "Cloud routing, owner identity, public edge and the hub using standalone Compose. Coolify and Komodo are omitted; public TLS, offsite backup and provider lifecycle remain separately owned contracts."
+	maturity: "supported", executable: true, realization: "apply-ready"
+	platformManagement: "standalone"
+	hostFloor: _architectureV2CoreComputeProfile.hostFloor
+	recommended: _architectureV2CoreComputeProfile.recommended
+	components: ["router", "socket-proxy", "pocketid", "tinyauth", "hub"]
+	degradations: ["paas-management-omitted"]
+}
+_architectureV2CloudStandaloneCoreComputeProfiles: {
+	standard: _architectureV2CloudStandaloneCoreComputeProfile
+	high:     _architectureV2CloudStandaloneCoreComputeProfile
+}
+
 _architectureV2BasementCoreComputeProfile: _architectureV2CoreComputeProfile & {
 	description: "Local routing, owner identity, internal certificates, application management, backup agent and the hub. Standard and high have the same declared components and resource envelope; high does not claim additional capacity or availability."
 	components: ["router", "socket-proxy", "pocketid", "tinyauth", "step-ca", "coolify", "coolify-postgres", "coolify-redis", "coolify-realtime", "kopia-agent", "hub"]
@@ -33,7 +47,7 @@ _architectureV2BasementCoreComputeProfiles: {
 	high:     _architectureV2BasementCoreComputeProfile
 }
 
-_architectureV2BasementCoreLiteComputeProfiles: low: #ModuleComputeProfileV2 & {
+_architectureV2BasementStandaloneCoreComputeProfile: #ModuleComputeProfileV2 & {
 	description: "Local routing, owner identity, internal certificates, backup agent and the hub using standalone Compose. PaaS management is omitted. Photos, Media and other applications keep their own explicitly selected profiles."
 	maturity: "supported", executable: true, realization: "apply-ready"
 	platformManagement: "standalone"
@@ -41,6 +55,15 @@ _architectureV2BasementCoreLiteComputeProfiles: low: #ModuleComputeProfileV2 & {
 	recommended: {cpuCores: 2, ramGB: 2, storageGB: 10}
 	components: ["router", "socket-proxy", "pocketid", "tinyauth", "step-ca", "kopia-agent", "hub"]
 	degradations: ["paas-management-omitted"]
+}
+
+// All profiles retain the same complete standalone service graph. The module
+// identity is preserved for existing Core Lite installations; resource profile
+// names never turn a platform manager on or select a different application.
+_architectureV2BasementCoreLiteComputeProfiles: {
+	low:      _architectureV2BasementStandaloneCoreComputeProfile
+	standard: _architectureV2BasementStandaloneCoreComputeProfile
+	high:     _architectureV2BasementStandaloneCoreComputeProfile
 }
 
 _architectureV2ImmichStorageFilesystemRequirement: #StorageFilesystemRequirementV2 & {

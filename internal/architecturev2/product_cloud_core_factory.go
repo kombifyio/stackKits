@@ -11,8 +11,19 @@ import (
 const productCloudCoreAdapterID = "stackkits-cloud-core-local"
 
 type productCloudCoreFactory struct {
+	standalone     bool
 	runtimeVersion string
 	operations     runtimeexecutorlocal.CloudCoreOperations
+}
+
+func NewProductCloudStandaloneCoreRegistration(runtimeVersion string, operations runtimeexecutorlocal.CloudCoreOperations) (ProductRuntimeOwnerRegistration, error) {
+	registration, err := NewProductCloudCoreRegistration(runtimeVersion, operations)
+	if err != nil {
+		return registration, err
+	}
+	registration.Selector = productCloudStandaloneCoreSelector()
+	registration.Factory = &productCloudCoreFactory{runtimeVersion: runtimeVersion, operations: operations, standalone: true}
+	return registration, nil
 }
 
 func NewProductCloudCoreRegistration(runtimeVersion string, operations runtimeexecutorlocal.CloudCoreOperations) (ProductRuntimeOwnerRegistration, error) {
@@ -28,7 +39,13 @@ func (f *productCloudCoreFactory) PrepareRuntimeOwner(request ProductRuntimeOwne
 	}
 	target := cloneProductRuntimeTarget(request.Target)
 	health := cloneProductHealthTargets(request.HealthTargets)
-	if productRuntimeOwnerSelectorForTarget(target) != productCloudCoreSelector() || len(target.SiteRefs) != 1 || len(target.NodeRefs) != 1 ||
+	selector := productCloudCoreSelector()
+	adapterID := productCloudCoreAdapterID
+	if f.standalone {
+		selector = productCloudStandaloneCoreSelector()
+		adapterID = "stackkits-cloud-core-standalone-local"
+	}
+	if productRuntimeOwnerSelectorForTarget(target) != selector || len(target.SiteRefs) != 1 || len(target.NodeRefs) != 1 ||
 		strings.TrimSpace(target.ExecutionChannelRef) == "" || len(health) == 0 {
 		return nil, errors.New("Cloud core product factory requires one channel-bound target and at least one postcondition")
 	}
@@ -42,17 +59,28 @@ func (f *productCloudCoreFactory) PrepareRuntimeOwner(request ProductRuntimeOwne
 		}
 		healthHashes[item.SourceRef] = item.ContractHash
 	}
-	identity, err := productRuntimeOwnerAdapterIdentity(productCloudCoreAdapterID, f.runtimeVersion, target, health)
+	identity, err := productRuntimeOwnerAdapterIdentity(adapterID, f.runtimeVersion, target, health)
 	if err != nil {
 		return nil, err
 	}
-	return runtimeexecutorlocal.NewCloudCoreExecutor(identity, runtimeexecutorlocal.LocalTargetBinding{SiteRef: target.SiteRefs[0], NodeRef: target.NodeRefs[0], ExecutionChannelRef: target.ExecutionChannelRef},
+	constructor := runtimeexecutorlocal.NewCloudCoreExecutor
+	if f.standalone {
+		constructor = runtimeexecutorlocal.NewCloudStandaloneCoreExecutor
+	}
+	return constructor(identity, runtimeexecutorlocal.LocalTargetBinding{SiteRef: target.SiteRefs[0], NodeRef: target.NodeRefs[0], ExecutionChannelRef: target.ExecutionChannelRef},
 		runtimeexecutorlocal.CloudCoreAuthority{ProviderContractHash: target.ProviderContractHash, ModuleContractHash: target.ModuleContractHash, HealthContractHashes: healthHashes}, f.operations), nil
 }
 
 func productCloudCoreSelector() ProductRuntimeOwnerSelector {
 	return ProductRuntimeOwnerSelector{OwnerKind: "module", OwnerRef: "stackkits-cloud-core-runtime", ProviderRef: "stackkits-cloud-core",
 		ModuleRef: "stackkits-cloud-core-runtime", UnitRef: "compose", RuntimeKind: "container", RuntimeDelivery: "stackkit", RuntimeEngine: "docker", WorkloadRef: "cloud-core"}
+}
+
+func productCloudStandaloneCoreSelector() ProductRuntimeOwnerSelector {
+	selector := productCloudCoreSelector()
+	selector.OwnerRef = "stackkits-cloud-core-standalone-runtime"
+	selector.ModuleRef = selector.OwnerRef
+	return selector
 }
 
 var _ ProductRuntimeOwnerFactory = (*productCloudCoreFactory)(nil)

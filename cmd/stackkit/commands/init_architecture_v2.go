@@ -83,6 +83,7 @@ func runArchitectureV2Init(cmd *cobra.Command, args []string, wd string) error {
 			return err
 		}
 		validation, err = service.MaterializeInitialStackSpec(profile, architecturev2.AuthoringOverrides{
+			CatalogDefaults:     initCatalogDefaults,
 			APIVersion:          architectureV2InitAPIVersion(),
 			Name:                name,
 			DomainBase:          domain,

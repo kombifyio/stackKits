@@ -238,7 +238,10 @@ volumes:
   public-tls-acme: {}
 `
 
-type cloudCoreRenderer struct{ contract RendererContract }
+type cloudCoreRenderer struct {
+	contract RendererContract
+	profile  cloudCoreRenderProfile
+}
 
 func CloudCoreComposeRendererContract() RendererContract {
 	sum := sha256.Sum256([]byte(cloudCoreComposeSchema))
@@ -307,84 +310,14 @@ func CloudCoreServiceContracts() []BasementCoreServiceContract {
 }
 
 func newCloudCoreComposeRenderer() cloudCoreRenderer {
-	return cloudCoreRenderer{contract: CloudCoreComposeRendererContract()}
+	return cloudCoreRenderer{
+		contract: CloudCoreComposeRendererContract(),
+		profile:  cloudCoreRenderProfileForCloudCore(),
+	}
 }
 
 func (r cloudCoreRenderer) RenderUnit(ctx context.Context, unit RenderUnit) ([]UnitOutput, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	path := "resolvedPlan.modules." + cloudCoreModuleID + ".renderUnits." + cloudCoreComposeUnitID
-	domain, hasDomain := unit.NetworkDomainBase()
-	if !hasDomain || !basementDomainPattern.MatchString(domain) || unit.ModuleID() != cloudCoreModuleID || unit.ID() != cloudCoreComposeUnitID ||
-		unit.Kind() != r.contract.Kind || unit.RendererRef() != r.contract.RendererRef || unit.TemplateRef() != r.contract.TemplateRef ||
-		unit.Version() != r.contract.Version || unit.ContractHash() != r.contract.ContractHash {
-		return nil, fail(ErrInvalidPlan, path, "renderer accepts only the exact Cloud core Compose contract")
-	}
-	if unit.RuntimeKind() != "container" || unit.RuntimeDelivery() != "stackkit" {
-		return nil, fail(ErrInvalidPlan, path+".runtime", "Cloud core requires exact container/stackkit delivery")
-	}
-	engine, hasEngine := unit.RuntimeEngine()
-	imageRef, hasImage := unit.ContainerImageRef()
-	imageDigest, hasDigest := unit.ContainerImageDigest()
-	entry, hasEntry := unit.RuntimeEntryComponentRef()
-	if !hasEngine || engine != "docker" || !hasImage || imageRef != "ghcr.io/coollabsio/coolify:4.1.2" || !hasDigest ||
-		imageDigest != "sha256:3a27ba5f7f98ff7763a0a4d6715ec36e564f9622eea8f492c46f90716ea2525f" || !hasEntry || entry != "coolify" {
-		return nil, fail(ErrInvalidPlan, path+".runtime", "runtime identity differs from the governed Cloud core graph")
-	}
-	siteRef, hasSite := unit.SiteRef()
-	nodeRef, hasNode := unit.NodeRef()
-	if unit.InstanceScope() != "node-local" || !hasSite || !hasNode || unit.InstanceID() != cloudCoreComposeUnitID+"-node-"+nodeRef ||
-		!containsExact(unit.LogicalSiteRefs(), siteRef) || !containsExact(unit.LogicalNodeRefs(), nodeRef) {
-		return nil, fail(ErrInvalidPlan, path+".instances", "Cloud core requires one exact node-local target")
-	}
-	if len(unit.PublicInputRefs()) != 0 || len(unit.SecretInputRefs()) != 0 || len(unit.PlanInputRefs()) != 0 ||
-		!emptyJSONObject(unit.ValuesJSON()) || !emptyJSONObject(unit.SecretRefsJSON()) || !emptyJSONObject(unit.PlanInputsJSON()) || !emptyJSONArray(unit.InputBindingsJSON()) {
-		return nil, fail(ErrInvalidPlan, path+".inputs", "Cloud core consumes no caller, provider, or secret material")
-	}
-	if !emptyJSONArray(unit.ProvidedInterfacesJSON()) || !emptyJSONArray(unit.RequiredInterfacesJSON()) ||
-		!emptyJSONArray(unit.PrivilegedInterfaceApprovalsJSON()) || !emptyJSONArray(unit.RuntimeNetworkBindingsJSON()) ||
-		!exactStringList(unit.DeclaredOutputs(), []string{cloudCoreComposeOutputRef}) {
-		return nil, fail(ErrInvalidPlan, path, "Cloud core receives no provider or privileged host authority and emits one governed artifact")
-	}
-	if err := validateCloudCoreComponents(unit.RuntimeComponentsJSON(), path+".runtime.components"); err != nil {
-		return nil, err
-	}
-	var endpoints []rawModuleServiceEndpoint
-	if err := decodeStrict(unit.ServiceEndpointsJSON(), &endpoints); err != nil || len(endpoints) != 4 {
-		return nil, fail(ErrInvalidPlan, path+".serviceEndpoints", "requires the four exact Cloud service endpoints")
-	}
-	expected := map[string]struct {
-		port   int
-		health string
-	}{
-		"base": {80, "cloud-hub-http"}, "id": {1411, "cloud-pocketid-http"},
-		"auth": {3000, "cloud-tinyauth-http"}, "coolify": {8080, "cloud-coolify-http"},
-	}
-	for _, endpoint := range endpoints {
-		ingressAuth := endpoint.IngressAuth
-		if ingressAuth == "" {
-			ingressAuth = "native"
-		}
-		want, ok := expected[endpoint.ServiceRef]
-		if !ok || endpoint.UpstreamProtocol != "http" || endpoint.TargetPort != want.port || endpoint.RequiredPrivilege != "user" ||
-			ingressAuth != "native" ||
-			endpoint.OriginSelector != "control-authority-site" || endpoint.HealthRef != want.health ||
-			!exactStringList(endpoint.AllowedIngressProtocols, []string{"http", "https"}) ||
-			!exactStringList(endpoint.AllowedExposures, []string{"public", "remote-private"}) {
-			return nil, fail(ErrInvalidPlan, path+".serviceEndpoints", "Cloud service route differs from the closed default-deny contract")
-		}
-		delete(expected, endpoint.ServiceRef)
-	}
-	if len(expected) != 0 {
-		return nil, fail(ErrInvalidPlan, path+".serviceEndpoints", "Cloud service endpoint set is incomplete")
-	}
-	prefix, _ := unit.NetworkSubdomainPrefix()
-	output := RenderCloudCoreComposeForAddress(domain, prefix)
-	if err := validateRuntimeListenerComposeParity(unit.RuntimeListenersJSON(), output, path+".runtimeListeners"); err != nil {
-		return nil, err
-	}
-	return []UnitOutput{{Ref: cloudCoreComposeOutputRef, Bytes: output}}, nil
+	return renderCloudCoreUnit(ctx, unit, r.contract, r.profile)
 }
 
 func validateCloudCoreComponents(data []byte, path string) error {

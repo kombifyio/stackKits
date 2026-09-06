@@ -169,6 +169,10 @@ func NewProductRegistry() (*Registry, error) {
 	if err := registry.Register(cloudCoreCompose.contract, cloudCoreCompose); err != nil {
 		return nil, err
 	}
+	cloudStandaloneCoreCompose := newCloudStandaloneCoreComposeRenderer()
+	if err := registry.Register(cloudStandaloneCoreCompose.contract, cloudStandaloneCoreCompose); err != nil {
+		return nil, err
+	}
 	coolifyAdapter := newCoolifyRuntimeAdapterRenderer()
 	if err := registry.Register(coolifyAdapter.contract, coolifyAdapter); err != nil {
 		return nil, err

@@ -29,6 +29,7 @@ type applicationDeliveryTLS struct {
 // and capability bodies remain opaque to the renderer but are checked for
 // forbidden authority and remain covered by the artifact digest.
 type applicationDeliveryRoute struct {
+	CoreModuleRef         string                 `json:"coreModuleRef,omitempty"`
 	ID                    string                 `json:"id"`
 	ServiceRef            string                 `json:"serviceRef"`
 	ModuleRef             string                 `json:"moduleRef"`
@@ -57,6 +58,7 @@ type applicationDeliveryRoute struct {
 // ApplicationDeliveryRouteDescriptor is the non-secret route identity every
 // Coolify, Komodo, or standalone adapter must observe after Apply.
 type ApplicationDeliveryRouteDescriptor struct {
+	CoreModuleRef         string
 	ID                    string
 	ServiceRef            string
 	ModuleRef             string
@@ -275,7 +277,8 @@ func (route applicationDeliveryRoute) descriptor() ApplicationDeliveryRouteDescr
 		ingressAuth = "native"
 	}
 	return ApplicationDeliveryRouteDescriptor{
-		ID: route.ID, ServiceRef: route.ServiceRef, ModuleRef: route.ModuleRef,
+		CoreModuleRef: route.CoreModuleRef,
+		ID:            route.ID, ServiceRef: route.ServiceRef, ModuleRef: route.ModuleRef,
 		Exposure: route.Exposure, Protocol: route.Protocol, UpstreamProtocol: route.UpstreamProtocol,
 		HealthGateRef: route.HealthGateRef, BackendPoolRef: route.BackendPoolRef,
 		Host: route.Host, Path: route.Path, Port: route.Port, TargetPort: route.TargetPort,

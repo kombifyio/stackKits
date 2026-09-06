@@ -532,7 +532,11 @@ func newRuntimeObservation(input architectureV2RuntimeObservationInput, stackID 
 		)
 	}
 	if input.CloudVerify != nil {
-		links = append(links, runtimeobservation.EvidenceLink{Kind: "cloud-core-artifact", Ref: "platform/cloud-core/compose.yaml", Digest: input.CloudVerify.ArtifactDigest})
+		for _, artifact := range input.Plan.ApplyRequirements().Artifacts {
+			if artifact.ProviderRef == "stackkits-cloud-core" && artifact.Kind == "compose" && artifact.InstanceRef == input.CloudVerify.ProjectRef {
+				links = append(links, runtimeobservation.EvidenceLink{Kind: "cloud-core-artifact", Ref: artifact.OutputRef, Digest: input.CloudVerify.ArtifactDigest})
+			}
+		}
 	}
 	source := input.Source
 	if source != runtimeobservation.SourceVerifiedApplyEvidence && input.ProcessChannelRefs[scope.channel] {

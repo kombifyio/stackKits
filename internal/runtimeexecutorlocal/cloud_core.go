@@ -11,7 +11,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/kombifyio/stackkits/internal/architecturev2renderer"
 	"github.com/kombifyio/stackkits/internal/runtimeexecutorv2"
 )
 
@@ -27,6 +26,7 @@ const (
 )
 
 type CloudCoreProject struct {
+	ModuleRef                                         string
 	ProjectRef, SiteRef, NodeRef, ExecutionChannelRef string
 	ArtifactID, ArtifactDigest                        string
 	Definition                                        []byte
@@ -56,6 +56,7 @@ type CloudCoreAuthority struct {
 }
 
 type CloudCoreExecutor struct {
+	profile    cloudCoreExecutionProfile
 	identity   runtimeexecutor.ExecutorIdentity
 	binding    LocalTargetBinding
 	authority  CloudCoreAuthority
@@ -64,6 +65,12 @@ type CloudCoreExecutor struct {
 
 func NewCloudCoreExecutor(identity runtimeexecutor.ExecutorIdentity, binding LocalTargetBinding, authority CloudCoreAuthority, operations CloudCoreOperations) *CloudCoreExecutor {
 	return &CloudCoreExecutor{identity: identity, binding: binding, authority: cloneCloudCoreAuthority(authority), operations: operations}
+}
+
+func NewCloudStandaloneCoreExecutor(identity runtimeexecutor.ExecutorIdentity, binding LocalTargetBinding, authority CloudCoreAuthority, operations CloudCoreOperations) *CloudCoreExecutor {
+	executor := NewCloudCoreExecutor(identity, binding, authority, operations)
+	executor.profile = cloudCoreExecutionProfile{standalone: true}
+	return executor
 }
 
 // VerifyAppliedCloudCore verifies the exact Cloud core child contract retained
@@ -82,7 +89,8 @@ func VerifyAppliedCloudCore(ctx context.Context, request runtimeexecutor.Executi
 	if binding != expectedBinding || strings.TrimSpace(expectedBinding.SiteRef) == "" || strings.TrimSpace(expectedBinding.NodeRef) == "" || strings.TrimSpace(expectedBinding.ExecutionChannelRef) == "" {
 		return CloudCoreVerifyObservation{}, errors.New("applied Cloud core target differs from local owner custody")
 	}
-	_, _, project, err := validateCloudCoreRequest(child, binding, authority)
+	profile, _ := cloudCoreProfileForModule(child.RuntimeTargets[0].ModuleRef)
+	_, _, project, err := validateCloudCoreProfileRequest(child, binding, authority, profile)
 	if err != nil {
 		return CloudCoreVerifyObservation{}, err
 	}
@@ -99,8 +107,9 @@ func VerifyAppliedCloudCore(ctx context.Context, request runtimeexecutor.Executi
 func appliedCloudCoreRequest(root runtimeexecutor.ExecutionRequest) (runtimeexecutor.ExecutionRequest, LocalTargetBinding, CloudCoreAuthority, error) {
 	var targets []runtimeexecutor.RuntimeTarget
 	for _, target := range root.RuntimeTargets {
-		if target.OwnerKind == "module" && target.OwnerRef == cloudCoreModuleRef && target.ProviderRef == cloudCoreProviderRef &&
-			target.ModuleRef == cloudCoreModuleRef && target.UnitRef == cloudCoreUnitRef && target.WorkloadRef == cloudCoreWorkloadRef {
+		_, known := cloudCoreProfileForModule(target.ModuleRef)
+		if known && target.OwnerKind == "module" && target.OwnerRef == target.ModuleRef && target.ProviderRef == cloudCoreProviderRef &&
+			target.UnitRef == cloudCoreUnitRef && target.WorkloadRef == cloudCoreWorkloadRef {
 			targets = append(targets, target)
 		}
 	}
@@ -108,6 +117,7 @@ func appliedCloudCoreRequest(root runtimeexecutor.ExecutionRequest) (runtimeexec
 		return runtimeexecutor.ExecutionRequest{}, LocalTargetBinding{}, CloudCoreAuthority{}, errors.New("applied runtime custody requires exactly one Cloud core target")
 	}
 	target := targets[0]
+	profile, _ := cloudCoreProfileForModule(target.ModuleRef)
 	if len(target.SiteRefs) != 1 || len(target.NodeRefs) != 1 || strings.TrimSpace(target.ExecutionChannelRef) == "" {
 		return runtimeexecutor.ExecutionRequest{}, LocalTargetBinding{}, CloudCoreAuthority{}, errors.New("applied Cloud core target lacks one exact Site, node, and execution channel")
 	}
@@ -121,8 +131,8 @@ func appliedCloudCoreRequest(root runtimeexecutor.ExecutionRequest) (runtimeexec
 			artifacts = append(artifacts, artifact)
 		}
 	}
-	allowedHealth := make(map[string]struct{}, len(cloudCoreHealthSpecs))
-	for _, spec := range cloudCoreHealthSpecs {
+	allowedHealth := make(map[string]struct{}, len(profile.healthSpecs()))
+	for _, spec := range profile.healthSpecs() {
 		allowedHealth[spec.source] = struct{}{}
 	}
 	health := make([]runtimeexecutor.HealthTarget, 0, len(cloudCoreHealthSpecs))
@@ -130,7 +140,7 @@ func appliedCloudCoreRequest(root runtimeexecutor.ExecutionRequest) (runtimeexec
 	for _, item := range root.HealthTargets {
 		belongs := item.RuntimeRequirementID == target.RequirementID
 		if item.RuntimeRequirementID == "" {
-			belongs = item.TargetKind == "module" && item.TargetRef == cloudCoreModuleRef &&
+			belongs = item.TargetKind == "module" && item.TargetRef == profile.moduleRef() &&
 				slices.Equal(item.SiteRefs, target.SiteRefs) && slices.Equal(item.NodeRefs, target.NodeRefs)
 		}
 		if !belongs {
@@ -163,7 +173,7 @@ func (e *CloudCoreExecutor) Execute(ctx context.Context, request runtimeexecutor
 		!validCoreHostBootstrapDigest(e.authority.ModuleContractHash) || len(e.authority.HealthContractHashes) == 0 {
 		return runtimeexecutor.ExecutionOutcome{}, errors.New("Cloud core executor requires one explicit authenticated host authority")
 	}
-	target, health, project, err := validateCloudCoreRequest(request, e.binding, e.authority)
+	target, health, project, err := validateCloudCoreProfileRequest(request, e.binding, e.authority, e.profile)
 	if err != nil {
 		return runtimeexecutor.ExecutionOutcome{}, err
 	}
@@ -223,18 +233,23 @@ func cloneCloudCoreProject(project CloudCoreProject) CloudCoreProject {
 }
 
 func validateCloudCoreRequest(request runtimeexecutor.ExecutionRequest, binding LocalTargetBinding, authority CloudCoreAuthority) (runtimeexecutor.RuntimeTarget, []runtimeexecutor.HealthTarget, CloudCoreProject, error) {
+	return validateCloudCoreProfileRequest(request, binding, authority, cloudCoreExecutionProfile{})
+}
+
+func validateCloudCoreProfileRequest(request runtimeexecutor.ExecutionRequest, binding LocalTargetBinding, authority CloudCoreAuthority, profile cloudCoreExecutionProfile) (runtimeexecutor.RuntimeTarget, []runtimeexecutor.HealthTarget, CloudCoreProject, error) {
 	if len(request.RuntimeTargets) != 1 || len(request.AccessBindings) != 0 || len(request.HealthTargets) == 0 {
 		return runtimeexecutor.RuntimeTarget{}, nil, CloudCoreProject{}, errors.New("Cloud core requires one runtime, at least one health target, and no access binding")
 	}
 	target := request.RuntimeTargets[0]
-	contract := architecturev2renderer.CloudCoreComposeRendererContract()
+	contract := profile.contract()
+	imageRef, imageDigest := profile.image()
 	instanceRef := cloudCoreUnitRef + "-node-" + binding.NodeRef
-	artifactID := cloudCoreArtifactPrefix + instanceRef
-	if target.OwnerKind != "module" || target.OwnerRef != cloudCoreModuleRef || target.OwnerVersion != "" || target.ProviderRef != cloudCoreProviderRef ||
-		target.ProviderContractHash != authority.ProviderContractHash || target.ModuleRef != cloudCoreModuleRef || target.OwnerContractHash != authority.ModuleContractHash ||
+	artifactID := profile.artifactPrefix() + instanceRef
+	if target.OwnerKind != "module" || target.OwnerRef != profile.moduleRef() || target.OwnerVersion != "" || target.ProviderRef != cloudCoreProviderRef ||
+		target.ProviderContractHash != authority.ProviderContractHash || target.ModuleRef != profile.moduleRef() || target.OwnerContractHash != authority.ModuleContractHash ||
 		target.ModuleContractHash != authority.ModuleContractHash || target.UnitRef != cloudCoreUnitRef || target.UnitContractHash != contract.ContractHash ||
 		target.RuntimeKind != "container" || target.RuntimeDelivery != "stackkit" || target.RuntimeEngine != "docker" || target.InstanceRef != instanceRef ||
-		target.WorkloadRef != cloudCoreWorkloadRef || target.ImageRef != cloudCoreImageRef || target.ImageDigest != cloudCoreImageDigest ||
+		target.WorkloadRef != cloudCoreWorkloadRef || target.ImageRef != imageRef || target.ImageDigest != imageDigest ||
 		target.ExecutionChannelRef != binding.ExecutionChannelRef || !slices.Equal(target.SiteRefs, []string{binding.SiteRef}) ||
 		!slices.Equal(target.NodeRefs, []string{binding.NodeRef}) || len(target.DaemonBindings) != 0 || len(target.AccessCapabilities) != 0 ||
 		len(target.AccessBindingRefs) != 0 || len(target.BackupTargetCapabilities) != 0 || len(target.BackupTargetBindingRefs) != 0 ||
@@ -247,27 +262,27 @@ func validateCloudCoreRequest(request runtimeexecutor.ExecutionRequest, binding 
 	}
 	if artifact.ID != artifactID || artifact.Kind != "compose" || artifact.Format != "yaml" || artifact.Mode != "0640" ||
 		artifact.OwnerKind != "render-instance" || artifact.OwnerRef != instanceRef || artifact.OwnerContractHash != contract.ContractHash ||
-		artifact.ProviderRef != cloudCoreProviderRef || artifact.ProviderContractHash != authority.ProviderContractHash || artifact.ModuleRef != cloudCoreModuleRef ||
+		artifact.ProviderRef != cloudCoreProviderRef || artifact.ProviderContractHash != authority.ProviderContractHash || artifact.ModuleRef != profile.moduleRef() ||
 		artifact.ModuleContractHash != authority.ModuleContractHash || artifact.UnitRef != cloudCoreUnitRef || artifact.UnitContractHash != contract.ContractHash ||
-		artifact.InstanceRef != instanceRef || artifact.OutputRef != cloudCoreOutputRef || !slices.Equal(artifact.SiteRefs, target.SiteRefs) ||
+		artifact.InstanceRef != instanceRef || artifact.OutputRef != profile.outputRef() || !slices.Equal(artifact.SiteRefs, target.SiteRefs) ||
 		!slices.Equal(artifact.NodeRefs, target.NodeRefs) || len(artifact.Content) == 0 || len(artifact.Content) > basementCoreMaxArtifactBytes ||
-		!architecturev2renderer.ValidateCloudCoreComposeArtifact(artifact.Content) {
+		!profile.validArtifact(artifact.Content) {
 		return runtimeexecutor.RuntimeTarget{}, nil, CloudCoreProject{}, errors.New("artifact is not the exact generated Cloud core Compose definition")
 	}
 	sum := sha256.Sum256(artifact.Content)
 	if artifact.Digest != "sha256:"+hex.EncodeToString(sum[:]) {
 		return runtimeexecutor.RuntimeTarget{}, nil, CloudCoreProject{}, errors.New("Cloud core artifact digest does not match its immutable content")
 	}
-	health, expectations, err := exactCloudCoreHealth(request.HealthTargets, target, authority)
+	health, expectations, err := exactCloudCoreProfileHealth(request.HealthTargets, target, authority, profile)
 	if err != nil {
 		return runtimeexecutor.RuntimeTarget{}, nil, CloudCoreProject{}, err
 	}
-	contracts := architecturev2renderer.CloudCoreServiceContracts()
+	contracts := profile.services()
 	services := make([]BasementCoreServiceExpectation, len(contracts))
 	for index, contract := range contracts {
 		services[index] = BasementCoreServiceExpectation(contract)
 	}
-	return target, health, CloudCoreProject{ProjectRef: target.InstanceRef, SiteRef: binding.SiteRef, NodeRef: binding.NodeRef,
+	return target, health, CloudCoreProject{ModuleRef: profile.moduleRef(), ProjectRef: target.InstanceRef, SiteRef: binding.SiteRef, NodeRef: binding.NodeRef,
 		ExecutionChannelRef: binding.ExecutionChannelRef, ArtifactID: artifact.ID, ArtifactDigest: artifact.Digest,
 		Definition: append([]byte(nil), artifact.Content...), Services: services, Health: expectations}, nil
 }
@@ -289,7 +304,7 @@ var cloudCoreRouteHealthSources = map[string]string{
 	"cloud-tinyauth-public": "cloud-tinyauth-http",
 }
 
-func exactCloudCoreHealth(input []runtimeexecutor.HealthTarget, target runtimeexecutor.RuntimeTarget, authority CloudCoreAuthority) ([]runtimeexecutor.HealthTarget, []BasementCoreHealthExpectation, error) {
+func exactCloudCoreProfileHealth(input []runtimeexecutor.HealthTarget, target runtimeexecutor.RuntimeTarget, authority CloudCoreAuthority, profile cloudCoreExecutionProfile) ([]runtimeexecutor.HealthTarget, []BasementCoreHealthExpectation, error) {
 	bySource := make(map[string]runtimeexecutor.HealthTarget, len(input))
 	byRequirement := make(map[string]runtimeexecutor.HealthTarget, len(input))
 	for _, item := range input {
@@ -301,7 +316,7 @@ func exactCloudCoreHealth(input []runtimeexecutor.HealthTarget, target runtimeex
 	}
 	health := make([]runtimeexecutor.HealthTarget, 0, len(cloudCoreHealthSpecs))
 	expectations := make([]BasementCoreHealthExpectation, 0, len(cloudCoreHealthSpecs))
-	for _, spec := range cloudCoreHealthSpecs {
+	for _, spec := range profile.healthSpecs() {
 		item, ok := bySource[spec.source]
 		if !ok {
 			// The kit decides which core services it selects; a spec this plan
@@ -329,12 +344,12 @@ func exactCloudCoreHealth(input []runtimeexecutor.HealthTarget, target runtimeex
 		}
 		source, found := byRequirement[item.SourceRef]
 		sourceRef, knownRoute := cloudCoreRouteHealthSources[item.TargetRef]
-		spec, knownSource := cloudCoreHealthSpec(sourceRef)
+		spec, knownSource := profile.healthSpec(sourceRef)
 		hash, trusted := authority.HealthContractHashes[item.SourceRef]
 		if !found || !knownRoute || !knownSource || !trusted || !validCoreHostBootstrapDigest(hash) ||
 			item.ContractHash != hash || item.RuntimeRequirementID != target.RequirementID || item.Phase != "post-apply" ||
 			item.Kind != "http" || item.RouteRef != item.TargetRef || strings.TrimSpace(item.BackendPoolRef) == "" ||
-			source.SourceRef != sourceRef || source.TargetKind != "module" || source.TargetRef != cloudCoreModuleRef ||
+			source.SourceRef != sourceRef || source.TargetKind != "module" || source.TargetRef != profile.moduleRef() ||
 			!slices.Equal(item.SiteRefs, target.SiteRefs) || !slices.Equal(item.NodeRefs, target.NodeRefs) || item.Probe == nil ||
 			item.Probe.Protocol != "http" || item.Probe.Port != spec.port || item.Probe.TimeoutSeconds != spec.timeout ||
 			item.Probe.Method != "GET" || item.Probe.FollowRedirects || item.Probe.Path != spec.path ||
@@ -349,15 +364,6 @@ func exactCloudCoreHealth(input []runtimeexecutor.HealthTarget, target runtimeex
 		return nil, nil, errors.New("Cloud core health authority contains an unsupported target")
 	}
 	return health, expectations, nil
-}
-
-func cloudCoreHealthSpec(sourceRef string) (basementCoreHealthSpec, bool) {
-	for _, spec := range cloudCoreHealthSpecs {
-		if spec.source == sourceRef {
-			return spec, true
-		}
-	}
-	return basementCoreHealthSpec{}, false
 }
 
 func validateCloudCoreVerification(project CloudCoreProject, observation CloudCoreVerifyObservation) error {
