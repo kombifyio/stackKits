@@ -143,6 +143,13 @@ func Classify(text string) Classification {
 		return Classification{Class: ClassUnknown}
 	}
 	for _, candidate := range matchers {
+		// A transport signature alone cannot distinguish a registry from a
+		// workload API or Health endpoint. Keep unknown causes unattributed.
+		if candidate.class == ClassRegistryUnreachable && !containsAny(normalized, []string{
+			"registry", "/v2/", "failed to resolve reference", "pulling image", "pull image",
+		}) {
+			continue
+		}
 		if !containsAll(normalized, candidate.requires) {
 			continue
 		}

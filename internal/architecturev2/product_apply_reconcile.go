@@ -2,6 +2,8 @@ package architecturev2
 
 import (
 	"errors"
+	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 
@@ -104,6 +106,29 @@ func boundedProductApplyCause(err error) string {
 	var visit func(error)
 	visit = func(candidate error) {
 		if candidate == nil {
+			return
+		}
+		if request, ok := candidate.(*url.Error); ok {
+			// Unwrapping to a syscall alone loses which service failed. Keep
+			// only the HTTP operation and origin: paths, userinfo, query and
+			// fragments may contain owner material and must not enter evidence.
+			operation := strings.ToUpper(request.Op)
+			switch operation {
+			case http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut,
+				http.MethodPatch, http.MethodDelete, http.MethodOptions, http.MethodConnect, http.MethodTrace:
+			default:
+				operation = "HTTP"
+			}
+			origin := ""
+			if target, parseErr := url.Parse(request.URL); parseErr == nil &&
+				(target.Scheme == "http" || target.Scheme == "https") && target.Host != "" {
+				origin = " " + target.Scheme + "://" + target.Host
+			}
+			detail := operation + origin + ": " + boundedProductApplyCause(request.Err)
+			if !seen[detail] {
+				seen[detail] = true
+				leaves = append(leaves, detail)
+			}
 			return
 		}
 		children := make([]error, 0, 1)
